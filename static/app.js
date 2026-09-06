@@ -29,7 +29,6 @@
   var tractateSelect = document.getElementById("tractate");
   var langSwitch = document.getElementById("lang-switch");
   var installBanner = document.getElementById("install-banner");
-  var installText = document.getElementById("install-text");
   var installBtn = document.getElementById("install-btn");
   var installDismiss = document.getElementById("install-dismiss");
 
@@ -653,9 +652,8 @@
       installBanner.hidden = true;
       promptEvent.prompt();
     } else if (isIOS()) {
-      installText.setAttribute("data-i18n", "install.iosHint");
-      installText.textContent = t(locale, "install.iosHint");
-      installBtn.hidden = true;
+      installBtn.textContent = t(locale, "install.iosHint");
+      installBtn.disabled = true;
     }
   });
 
