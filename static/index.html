@@ -13,6 +13,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=Frank+Ruhl+Libre:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Shas Radar">
 </head>
 <body>
   <header class="header">
@@ -97,6 +103,10 @@
     </p>
     <p id="verse-count"></p>
     <p class="footer-note" data-i18n="footer.note">חיפוש זה בודק התאמה מדויקת, התאמה עם אותיות שימוש, וביטויים ברצף — ללא ניתוח דקדוקי מלא.</p>
+    <p class="footer-credit">
+      <span data-i18n="footer.credit">נבנה על ידי</span>
+      <a href="https://github.com/joka-7" rel="noopener noreferrer" target="_blank">joka-7</a>
+    </p>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
