@@ -382,6 +382,7 @@ body {
 .copy:active { transform: scale(.97); }
 .copy.done { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 
+.more-wrap { margin-top: .25rem; }
 .more {
   display: block;
   width: 100%;
@@ -393,6 +394,7 @@ body {
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
+.more:disabled { opacity: .6; cursor: default; }
 
 .empty, .error {
   background: var(--surface);

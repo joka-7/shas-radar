@@ -21,6 +21,10 @@
   var before = 5;
   var after = 5;
 
+  // Batch size for both the initial search and each "show more" page --
+  // matches the server's own default limit (app/search.py DEFAULT_LIMIT).
+  var PAGE_SIZE = 50;
+
   var inFlight = null;
 
   // --- Small helpers -----------------------------------------------------
@@ -178,7 +182,7 @@
     return card;
   }
 
-  function renderGroup(group) {
+  function renderGroup(group, snapshot) {
     if (!group.total) {
       return notice(
         'לא נמצאו תוצאות עבור "' + group.query + '"',
@@ -189,11 +193,8 @@
     var section = el("section", "group");
     var head = el("div", "group-head");
     head.appendChild(el("h3", "group-title", group.query));
-    var shown = group.results.length;
-    var label = shown < group.total
-      ? "מציג " + shown + " מתוך " + countPhrase(group.total, "תוצאה", "תוצאות")
-      : countPhrase(group.total, "תוצאה", "תוצאות");
-    head.appendChild(el("span", "group-count", label));
+    var countLabel = el("span", "group-count");
+    head.appendChild(countLabel);
     section.appendChild(head);
 
     if (!group.isPhrase && group.prefixTotal > 0) {
@@ -206,11 +207,84 @@
       section.appendChild(breakdown);
     }
 
+    var list = el("div", "group-results");
+    section.appendChild(list);
     group.results.forEach(function (result) {
-      section.appendChild(resultCard(result));
+      list.appendChild(resultCard(result));
     });
 
+    var shownCount = group.results.length;
+
+    function updateCountLabel() {
+      countLabel.textContent = shownCount < group.total
+        ? "מציג " + shownCount + " מתוך " + countPhrase(group.total, "תוצאה", "תוצאות")
+        : countPhrase(group.total, "תוצאה", "תוצאות");
+    }
+    updateCountLabel();
+
+    if (shownCount < group.total) {
+      section.appendChild(moreButton(group, snapshot, list, {
+        get shownCount() { return shownCount; },
+        addShown: function (n) { shownCount += n; updateCountLabel(); },
+      }));
+    }
+
     return section;
+  }
+
+  // A group's own "show more": re-searches the same single term with a
+  // growing `offset` and appends the next page, rather than being stuck
+  // with whatever the original search's `limit` capped at -- a common word
+  // like אביי or רבא has thousands of hits, far past any first page.
+  function moreButton(group, snapshot, list, state) {
+    var wrap = el("div", "more-wrap");
+    var button = el("button", "more");
+    button.type = "button";
+    wrap.appendChild(button);
+
+    function remaining() {
+      return group.total - state.shownCount;
+    }
+    function setLabel() {
+      button.disabled = false;
+      button.textContent = "הצג עוד " + Math.min(PAGE_SIZE, remaining());
+    }
+    setLabel();
+
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      button.textContent = "טוען…";
+
+      var params = new URLSearchParams({
+        q: group.query,
+        before: String(snapshot.before),
+        after: String(snapshot.after),
+        offset: String(state.shownCount),
+        limit: String(PAGE_SIZE),
+      });
+      if (snapshot.tractate) params.set("tractate", snapshot.tractate);
+
+      fetch("/api/search?" + params.toString())
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          var page = data.groups[0];
+          page.results.forEach(function (result) {
+            list.appendChild(resultCard(result));
+          });
+          state.addShown(page.results.length);
+          if (remaining() <= 0) {
+            wrap.remove();
+          } else {
+            setLabel();
+          }
+        })
+        .catch(function () {
+          button.disabled = false;
+          button.textContent = "השגיאה בטעינה — נסו שוב";
+        });
+    });
+
+    return wrap;
   }
 
   function notice(title, body, className) {
@@ -220,10 +294,10 @@
     return box;
   }
 
-  function render(data) {
+  function render(data, snapshot) {
     results.innerHTML = "";
     data.groups.forEach(function (group) {
-      results.appendChild(renderGroup(group));
+      results.appendChild(renderGroup(group, snapshot));
     });
   }
 
@@ -260,12 +334,18 @@
     renderSkeleton();
     var disarmWaking = armWaking();
 
+    // Snapshotted so a later "show more" click on this render keeps
+    // requesting with the same context/filter, even if the steppers or the
+    // tractate filter change in the meantime for the *next* search.
+    var snapshot = { before: before, after: after, tractate: tractateSelect.value };
+
     var params = new URLSearchParams({
       q: query,
-      before: String(before),
-      after: String(after),
+      before: String(snapshot.before),
+      after: String(snapshot.after),
+      limit: String(PAGE_SIZE),
     });
-    if (tractateSelect.value) params.set("tractate", tractateSelect.value);
+    if (snapshot.tractate) params.set("tractate", snapshot.tractate);
 
     fetch("/api/search?" + params.toString(), { signal: controller.signal })
       .then(function (response) {
@@ -275,7 +355,7 @@
         });
       })
       .then(function (data) {
-        render(data);
+        render(data, snapshot);
         results.scrollIntoView({ behavior: "smooth", block: "start" });
       })
       .catch(function (error) {

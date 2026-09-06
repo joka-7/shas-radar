@@ -145,6 +145,39 @@ class TestKwicContext:
         assert r["sefariaUrl"].startswith("https://www.sefaria.org/")
 
 
+class TestPagination:
+    """A group's own "show more": offset walks the same deterministic match
+    order, so paging through it never skips or repeats a result."""
+
+    def test_offset_skips_the_first_page_without_gaps_or_repeats(self, corpus):
+        # Two pages fetched separately must line up exactly with one fetch
+        # covering both -- proof that offset neither skips nor repeats a
+        # match, not just that the two pages happen to look different.
+        query = Query.parse("אביי")
+        first_page = search(corpus, [query], limit=20)["groups"][0]["results"]
+        second_page = search(corpus, [query], limit=20, offset=20)["groups"][0]["results"]
+        whole = search(corpus, [query], limit=40)["groups"][0]["results"]
+        assert whole == first_page + second_page
+
+    def test_total_is_unaffected_by_offset(self, corpus):
+        query = Query.parse("אביי")
+        total_at_zero = search(corpus, [query], offset=0)["groups"][0]["total"]
+        total_at_offset = search(corpus, [query], offset=1000)["groups"][0]["total"]
+        assert total_at_zero == total_at_offset
+
+    def test_offset_past_the_end_returns_no_results(self, corpus):
+        query = Query.parse("אביי")
+        group = search(corpus, [query], offset=10_000_000)["groups"][0]
+        assert group["results"] == []
+        assert group["total"] > 0
+
+    def test_negative_offset_is_clamped_to_zero(self, corpus):
+        query = Query.parse("אביי")
+        clamped = search(corpus, [query], limit=5, offset=-50)["groups"][0]["results"]
+        zero = search(corpus, [query], limit=5, offset=0)["groups"][0]["results"]
+        assert [r["citation"] for r in clamped] == [r["citation"] for r in zero]
+
+
 class TestMultiQuery:
     def test_comma_separates_independent_or_queries(self, corpus):
         queries = [Query.parse("אביי"), Query.parse("רבא")]
@@ -189,6 +222,14 @@ class TestApi:
         body = client.get("/api/search", params={"q": "אביי", "before": 999, "after": 0}).json()
         assert body["before"] == 50  # MAX_CONTEXT
         assert body["after"] == 1    # MIN_CONTEXT
+
+    def test_offset_pages_through_a_groups_own_results(self, client):
+        """The "show more" button's own request shape: same term, growing
+        offset, appended to what the first page already showed."""
+        first = client.get("/api/search", params={"q": "אביי", "limit": 20}).json()
+        second = client.get("/api/search", params={"q": "אביי", "limit": 20, "offset": 20}).json()
+        assert first["groups"][0]["results"] != second["groups"][0]["results"]
+        assert first["groups"][0]["total"] == second["groups"][0]["total"]
 
     def test_empty_query_is_rejected(self, client):
         response = client.get("/api/search", params={"q": "  ,  "})
