@@ -4,11 +4,21 @@
  * Plain ES2020, no build step and no framework. The server does the matching
  * and returns the context window already sliced, so this file is only
  * concerned with asking, rendering, and the small interactions around a
- * result (copy, expand to full paragraph).
+ * result (copy, expand to full paragraph, language switching).
+ *
+ * The UI supports Hebrew, English and French (see i18n.js, loaded before
+ * this file). The Talmud text itself -- KWIC context, the full paragraph,
+ * and the citation -- is never translated; it stays in the original
+ * Hebrew/Aramaic in every locale, same as פסוק לשם never translates a verse.
  */
 
 (function () {
   "use strict";
+
+  var t = I18N.t;
+  var plural = I18N.plural;
+
+  var LOCALE_STORAGE_KEY = "shas-radar:locale";
 
   var form = document.getElementById("search-form");
   var input = document.getElementById("q");
@@ -17,6 +27,7 @@
   var toastEl = document.getElementById("toast");
   var wakingEl = document.getElementById("waking");
   var tractateSelect = document.getElementById("tractate");
+  var langSwitch = document.getElementById("lang-switch");
 
   var before = 5;
   var after = 5;
@@ -27,12 +38,57 @@
 
   var inFlight = null;
 
+  // The current UI language, and enough state to redraw without a network
+  // round-trip when it changes: the last successful search response (plus
+  // the before/after/tractate it was made with), the tractate list (its
+  // option labels are locale-dependent), and the footer's word/tractate
+  // totals.
+  var locale = loadLocale();
+  var lastSearchData = null;
+  var lastSnapshot = null;
+  var lastTractates = null;
+  var lastHealth = null;
+
+  function loadLocale() {
+    try {
+      var stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+      if (stored && I18N.isSupported(stored)) return stored;
+    } catch (err) {
+      /* private browsing / storage disabled -- fall through to the default */
+    }
+    return I18N.DEFAULT_LOCALE;
+  }
+
+  function saveLocale(value) {
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, value);
+    } catch (err) {
+      /* not persisted this session; the switcher still works */
+    }
+  }
+
+  var DIR = { he: "rtl", en: "ltr", fr: "ltr" };
+
   // --- Small helpers -----------------------------------------------------
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
     if (text != null) node.textContent = text;
+    return node;
+  }
+
+  /*
+   * A run of Hebrew/Aramaic text (a citation, the search term itself)
+   * embedded inside a page that may currently be laid out left-to-right.
+   * Isolating it keeps the bidi algorithm from reordering it around
+   * neighbouring punctuation -- without this, a citation like "ברכות ה."
+   * can render with the period on the wrong side once the page itself is
+   * ltr for en/fr.
+   */
+  function hebrewSpan(tag, className, text) {
+    var node = el(tag, className, text);
+    node.setAttribute("dir", "rtl");
     return node;
   }
 
@@ -45,9 +101,12 @@
     }, 1900);
   }
 
-  function countPhrase(n, singular, plural) {
-    if (n === 1) return "1 " + singular;
-    return n.toLocaleString("he-IL") + " " + plural;
+  // Tractate/seder names switch with the locale using the English name
+  // already carried on every match and in /api/tractates. There's no
+  // separate set of French names, so French falls back to English rather
+  // than leaving just this one label in Hebrew.
+  function localizedName(he, en) {
+    return locale === "he" ? he : (en || he);
   }
 
   // Free hosts sleep the server when idle; show a notice only once a request
@@ -98,7 +157,7 @@
   // --- Rendering -----------------------------------------------------------
 
   function copyButton(result) {
-    var button = el("button", "copy", "העתקה");
+    var button = el("button", "copy", t(locale, "copy.button"));
     button.type = "button";
 
     button.addEventListener("click", function () {
@@ -106,11 +165,11 @@
       var payload = '"...' + quote.trim() + '..." (' + result.citation + ")";
 
       function done() {
-        button.textContent = "✓ הועתק";
+        button.textContent = t(locale, "copy.done");
         button.classList.add("done");
-        toast("הציטוט הועתק");
+        toast(t(locale, "copy.toastCopied"));
         setTimeout(function () {
-          button.textContent = "העתקה";
+          button.textContent = t(locale, "copy.button");
           button.classList.remove("done");
         }, 1900);
       }
@@ -127,7 +186,7 @@
           document.execCommand("copy");
           done();
         } catch (err) {
-          toast("ההעתקה נכשלה");
+          toast(t(locale, "copy.toastFailed"));
         }
         document.body.removeChild(area);
       }
@@ -146,9 +205,9 @@
     var card = el("article", "card");
 
     var head = el("div", "card-head");
-    head.appendChild(el("span", "badge badge-tractate", result.tractate.he));
-    head.appendChild(el("span", "badge", result.citation));
-    var kindLabel = result.kind === "exact" ? "התאמה מדויקת" : "עם אות שימוש";
+    head.appendChild(el("span", "badge badge-tractate", localizedName(result.tractate.he, result.tractate.en)));
+    head.appendChild(hebrewSpan("span", "badge", result.citation));
+    var kindLabel = t(locale, result.kind === "exact" ? "matchKind.exact" : "matchKind.withPrefix");
     head.appendChild(el("span", "badge", kindLabel));
     card.appendChild(head);
 
@@ -162,10 +221,9 @@
     var details = document.createElement("details");
     details.className = "paragraph";
     var summary = document.createElement("summary");
-    summary.textContent = "הצג קטע מלא";
+    summary.textContent = t(locale, "result.showFullParagraph");
     details.appendChild(summary);
-    var full = el("p", "paragraph-text", result.fullParagraph);
-    details.appendChild(full);
+    details.appendChild(hebrewSpan("p", "paragraph-text", result.fullParagraph));
     card.appendChild(details);
 
     var foot = el("div", "card-foot");
@@ -175,7 +233,7 @@
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.className = "copy";
-    link.textContent = "פתח בספריא ↗";
+    link.textContent = t(locale, "openInSefaria");
     foot.appendChild(link);
     card.appendChild(foot);
 
@@ -185,22 +243,22 @@
   function renderGroup(group, snapshot) {
     if (!group.total) {
       return notice(
-        'לא נמצאו תוצאות עבור "' + group.query + '"',
-        "נסו מילה אחרת, או בדקו את האיות."
+        t(locale, "result.empty.title", { query: group.query }),
+        t(locale, "result.empty.body")
       );
     }
 
     var section = el("section", "group");
     var head = el("div", "group-head");
-    head.appendChild(el("h3", "group-title", group.query));
+    head.appendChild(hebrewSpan("h3", "group-title", group.query));
     var countLabel = el("span", "group-count");
     head.appendChild(countLabel);
     section.appendChild(head);
 
     if (!group.isPhrase && group.prefixTotal > 0) {
       var breakdown = el("p", "group-breakdown");
-      var exactSpan = el("span", "tag-exact", group.exactTotal + " מדויק");
-      var prefixSpan = el("span", "tag-prefix", group.prefixTotal + " עם אות שימוש");
+      var exactSpan = el("span", "tag-exact", t(locale, "matchKind.exactTag", { n: I18N.formatNumber(locale, group.exactTotal) }));
+      var prefixSpan = el("span", "tag-prefix", t(locale, "matchKind.withPrefixTag", { n: I18N.formatNumber(locale, group.prefixTotal) }));
       breakdown.appendChild(exactSpan);
       breakdown.appendChild(document.createTextNode(" · "));
       breakdown.appendChild(prefixSpan);
@@ -217,8 +275,8 @@
 
     function updateCountLabel() {
       countLabel.textContent = shownCount < group.total
-        ? "מציג " + shownCount + " מתוך " + countPhrase(group.total, "תוצאה", "תוצאות")
-        : countPhrase(group.total, "תוצאה", "תוצאות");
+        ? t(locale, "result.showingOf", { shown: I18N.formatNumber(locale, shownCount), totalPhrase: plural(locale, "result.total", group.total) })
+        : plural(locale, "result.total", group.total);
     }
     updateCountLabel();
 
@@ -247,13 +305,13 @@
     }
     function setLabel() {
       button.disabled = false;
-      button.textContent = "הצג עוד " + Math.min(PAGE_SIZE, remaining());
+      button.textContent = t(locale, "more.button", { n: I18N.formatNumber(locale, Math.min(PAGE_SIZE, remaining())) });
     }
     setLabel();
 
     button.addEventListener("click", function () {
       button.disabled = true;
-      button.textContent = "טוען…";
+      button.textContent = t(locale, "more.loading");
 
       var params = new URLSearchParams({
         q: group.query,
@@ -280,7 +338,7 @@
         })
         .catch(function () {
           button.disabled = false;
-          button.textContent = "השגיאה בטעינה — נסו שוב";
+          button.textContent = t(locale, "more.error");
         });
     });
 
@@ -309,6 +367,67 @@
       results.appendChild(card);
     }
   }
+
+  // --- Language switching ------------------------------------------------
+
+  function applyStaticTranslations() {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = DIR[locale];
+    document.title = t(locale, "doc.title");
+    document.getElementById("meta-description").setAttribute("content", t(locale, "meta.description"));
+
+    var nodes = document.querySelectorAll("[data-i18n]");
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].textContent = t(locale, nodes[i].getAttribute("data-i18n"));
+    }
+    var ariaNodes = document.querySelectorAll("[data-i18n-aria-label]");
+    for (var j = 0; j < ariaNodes.length; j++) {
+      ariaNodes[j].setAttribute("aria-label", t(locale, ariaNodes[j].getAttribute("data-i18n-aria-label")));
+    }
+
+    input.placeholder = t(locale, "search.placeholder", { example: I18N.PLACEHOLDER_EXAMPLE });
+
+    document.getElementById("footer-attribution").innerHTML = t(locale, "footer.attributionHtml");
+    renderFooterCount();
+
+    if (lastTractates) populateTractateSelect(lastTractates);
+
+    var buttons = langSwitch.querySelectorAll(".lang-btn");
+    for (var k = 0; k < buttons.length; k++) {
+      var isActive = buttons[k].dataset.lang === locale;
+      buttons[k].classList.toggle("active", isActive);
+      buttons[k].setAttribute("aria-pressed", isActive ? "true" : "false");
+    }
+  }
+
+  function renderFooterCount() {
+    var target = document.getElementById("verse-count");
+    if (!lastHealth) {
+      target.textContent = "";
+      return;
+    }
+    target.textContent = t(locale, "footer.summary", {
+      wordsPhrase: plural(locale, "footer.words", lastHealth.words),
+      tractatesPhrase: plural(locale, "footer.tractates", lastHealth.tractates),
+    });
+  }
+
+  function setLocale(next) {
+    if (!I18N.isSupported(next) || next === locale) return;
+    locale = next;
+    saveLocale(locale);
+    applyStaticTranslations();
+    // Redraw the current results in the new language without a network
+    // round-trip -- the data itself doesn't change, only its labels. Any
+    // "show more" pages loaded before the switch reset to the first page,
+    // the same simplification פסוק לשם makes for its own "show more".
+    if (lastSearchData) render(lastSearchData, lastSnapshot);
+  }
+
+  langSwitch.addEventListener("click", function (event) {
+    var button = event.target.closest(".lang-btn");
+    if (button) setLocale(button.dataset.lang);
+  });
 
   // --- Searching -------------------------------------------------------------
 
@@ -350,18 +469,24 @@
     fetch("/api/search?" + params.toString(), { signal: controller.signal })
       .then(function (response) {
         return response.json().then(function (body) {
-          if (!response.ok) throw new Error(body.error || "החיפוש נכשל");
+          if (!response.ok) {
+            var message = (body.code && t(locale, "error.code." + body.code)) || t(locale, "error.generic");
+            throw new Error(message);
+          }
           return body;
         });
       })
       .then(function (data) {
+        lastSearchData = data;
+        lastSnapshot = snapshot;
         render(data, snapshot);
         results.scrollIntoView({ behavior: "smooth", block: "start" });
       })
       .catch(function (error) {
         if (error.name === "AbortError") return;
+        lastSearchData = null;
         results.innerHTML = "";
-        results.appendChild(notice("שגיאה", error.message, "error"));
+        results.appendChild(notice(t(locale, "error.title"), error.message, "error"));
       })
       .then(function () {
         if (inFlight === controller) {
@@ -396,41 +521,59 @@
     if (query) runSearch(query, false);
   });
 
-  // Populate the tractate filter, grouped by seder.
+  // Populate the tractate filter, grouped by seder. Re-callable so a
+  // language switch can relabel the options (tractate/seder names switch
+  // with the locale) without a new network request, while keeping whatever
+  // was selected -- option values are always the Hebrew name, unaffected
+  // by locale.
+  function populateTractateSelect(data) {
+    lastTractates = data;
+    var previousValue = tractateSelect.value;
+
+    tractateSelect.querySelectorAll("optgroup").forEach(function (group) {
+      group.remove();
+    });
+
+    var bySeder = {};
+    var order = [];
+    data.tractates.forEach(function (tr) {
+      var seder = localizedName(tr.sederHe, tr.sederEn);
+      if (!bySeder[seder]) {
+        bySeder[seder] = [];
+        order.push(seder);
+      }
+      bySeder[seder].push(tr);
+    });
+    order.forEach(function (seder) {
+      var group = document.createElement("optgroup");
+      group.label = seder;
+      bySeder[seder].forEach(function (tr) {
+        var option = document.createElement("option");
+        option.value = tr.he;
+        option.textContent = localizedName(tr.he, tr.en);
+        group.appendChild(option);
+      });
+      tractateSelect.appendChild(group);
+    });
+
+    tractateSelect.value = previousValue;
+  }
+
   var disarmTractateWaking = armWaking();
   fetch("/api/tractates")
     .then(function (r) { return r.json(); })
-    .then(function (data) {
-      var bySeder = {};
-      var order = [];
-      data.tractates.forEach(function (t) {
-        if (!bySeder[t.sederHe]) {
-          bySeder[t.sederHe] = [];
-          order.push(t.sederHe);
-        }
-        bySeder[t.sederHe].push(t);
-      });
-      order.forEach(function (seder) {
-        var group = document.createElement("optgroup");
-        group.label = seder;
-        bySeder[seder].forEach(function (t) {
-          var option = document.createElement("option");
-          option.value = t.he;
-          option.textContent = t.he;
-          group.appendChild(option);
-        });
-        tractateSelect.appendChild(group);
-      });
-    })
+    .then(populateTractateSelect)
     .catch(function () { /* the filter just stays at "all of Shas" */ })
     .then(disarmTractateWaking);
+
+  applyStaticTranslations();
 
   var disarmHealthWaking = armWaking();
   fetch("/api/health")
     .then(function (r) { return r.json(); })
     .then(function (health) {
-      document.getElementById("verse-count").textContent =
-        health.words.toLocaleString("he-IL") + " מילים, " + health.tractates + " מסכתות.";
+      lastHealth = health;
+      renderFooterCount();
     })
     .catch(function () { /* the footer count is decorative */ })
     .then(disarmHealthWaking);

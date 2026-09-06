@@ -15,7 +15,7 @@ network.
 ┌── static/ ────────────┐        ┌── app/ ──────────────────┐
 │  index.html           │  same  │  main.py    HTTP API      │
 │  styles.css           │◄──────►│  search.py  matching, KWIC│
-│  app.js               │ origin │  corpus.py  index         │
+│  app.js, i18n.js       │ origin │  corpus.py  index         │
 └───────────────────────┘        │  hebrew.py  normalization │
                                  └──────────┬────────────────┘
                                             │ loaded once at boot
@@ -191,9 +191,10 @@ stable string for the frontend.
 
 ## UI
 
-Mobile-first, Hebrew-only (no i18n — the corpus itself is Hebrew/Aramaic, so
-there's no audience for translating the UI chrome independently), RTL
-throughout:
+Mobile-first, available in Hebrew, English and French (`static/i18n.js`, the
+same plain string-table pattern as פסוק לשם — `{token}` interpolation and
+one/two/other pluralization, Hebrew's dual form included), RTL for Hebrew and
+LTR for English/French.
 
 - One search field, comma hint, and example chips.
 - Stepper controls for words-before/words-after (±1, clamped 1–50) rather than
@@ -201,12 +202,36 @@ throughout:
   tap-targets.
 - An optional tractate/seder filter.
 - Each result: tractate + citation badges, the KWIC line with the match
-  highlighted, a "הצג קטע מלא" (show full paragraph) disclosure, a copy-quote
-  button (`"...before match after..." (citation)`, clipboard API with a
+  highlighted, a "show full paragraph" disclosure, a copy-quote button
+  (`"...before match after..." (citation)`, clipboard API with a
   `document.execCommand` fallback for older mobile Safari), and a direct
   Sefaria link.
 - A "waking the server" notice if a request is still pending after 2.5s
   (`armWaking`/`disarmWaking` in `static/app.js`) — see **Deploying** below.
+
+### Language
+
+Two things never translate, on purpose, the same as in פסוק לשם: **the
+Talmud text** (the KWIC context, the expanded paragraph) and **its
+citation** (e.g. `ברכות ה.`) — always the original Hebrew/Aramaic, gematria
+included, regardless of the UI language. The search field only ever accepts
+Hebrew/Aramaic input too, so the example chips and the placeholder's example
+text stay Hebrew in every locale as well.
+
+Tractate and seder names *do* switch with the locale, using the English name
+already carried on every match and in `/api/tractates` — but only for
+Hebrew/English. There's no separate set of French tractate names to source,
+so the French UI falls back to the English name (`localizedName()` in
+`static/app.js`) rather than leave just that one label in Hebrew. The tractate filter's `<option>` *value* is always the Hebrew name
+regardless of locale, since that's what the API filters on — only the
+displayed label changes.
+
+Switching language re-renders the current results from the last response
+already in hand, with no new request to the server — the same as פסוק לשם.
+A group's own "show more" progress resets to its first page on a language
+switch, the same simplification פסוק לשם makes for its own "show more".
+
+The chosen language persists in `localStorage` and defaults to Hebrew.
 - Search state lives in the URL hash (`#q=אביי`), so a result is shareable and
   back/forward works.
 
@@ -259,7 +284,7 @@ app/corpus.py           gzip load + per-tractate token stream and word index
 app/search.py           exact/prefix/phrase/proximity matching, KWIC context
 app/main.py             FastAPI routes; mounts static/ at "/"
 scripts/build_dataset.py   Sefaria export -> data/shas.json.gz (build-time)
-static/                 the UI: one page, one stylesheet, one script
+static/                 the UI: one page, one stylesheet, one script, one translation table
 tests/                  pytest, against the real corpus
 ```
 
