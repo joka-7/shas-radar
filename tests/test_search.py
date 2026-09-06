@@ -1,0 +1,219 @@
+"""Tests for the corpus, matching logic, and API -- against the real
+committed corpus rather than a fixture, the same way פסוק לשם's tests do.
+"""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.corpus import load_corpus
+from app.main import app
+from app.search import Query, find_exact_word, find_phrase, find_proximity, find_with_prefix, search
+
+
+@pytest.fixture(scope="session")
+def corpus():
+    return load_corpus()
+
+
+@pytest.fixture(scope="session")
+def client():
+    return TestClient(app)
+
+
+class TestCorpus:
+    def test_tractate_count(self, corpus):
+        assert len(corpus.tractates) == 37
+
+    def test_word_count_matches_the_committed_dataset(self, corpus):
+        # ~1.9M, in the range the Talmud is generally described as (~1.8M).
+        assert 1_800_000 < len(corpus) < 2_000_000
+
+    def test_canonical_order_starts_with_berakhot(self, corpus):
+        assert corpus.tractates[0].he == "ברכות"
+        assert corpus.tractates[0].en == "Berakhot"
+
+    def test_berakhot_ends_at_the_traditional_64a(self, corpus):
+        berakhot = corpus.tractate_by_name("ברכות")
+        last_daf = max(berakhot.token_daf)
+        assert last_daf == 64
+
+    def test_every_tractate_has_tokens(self, corpus):
+        assert all(len(t) > 0 for t in corpus.tractates)
+
+    def test_citation_format(self, corpus):
+        berakhot = corpus.tractate_by_name("ברכות")
+        assert berakhot.citation(0) == "ברכות ב."  # token 0 is the start of 2a
+
+
+class TestTokenization:
+    """The niqqud-fragmentation bug, guarded against regressing."""
+
+    def test_a_vocalized_multi_syllable_word_is_one_token(self, corpus):
+        berakhot = corpus.tractate_by_name("ברכות")
+        # The Gemara's opening word, מֵאֵימָתַי, is one token, not fragments
+        # split at each of its vowel points.
+        assert berakhot.tokens[0] == "מאימתי"
+        assert berakhot.tokens_raw[0] == "מֵאֵימָתַי"
+
+    def test_raw_form_keeps_niqqud(self, corpus):
+        berakhot = corpus.tractate_by_name("ברכות")
+        assert any(0x05B0 <= ord(ch) <= 0x05C7 for ch in berakhot.tokens_raw[0])
+
+    def test_normalized_form_has_no_niqqud(self, corpus):
+        berakhot = corpus.tractate_by_name("ברכות")
+        assert not any(0x05B0 <= ord(ch) <= 0x05C7 for ch in berakhot.tokens[0])
+
+
+class TestFindExactWord:
+    def test_known_sage_names_have_plausible_counts(self, corpus):
+        # Abaye and Rava are among the most-cited Amoraim in the Bavli --
+        # thousands of mentions each is the expected order of magnitude.
+        assert len(find_exact_word(corpus, "אביי")) > 2000
+        assert len(find_exact_word(corpus, "רבא")) > 3500
+
+    def test_unknown_word_has_no_matches(self, corpus):
+        assert find_exact_word(corpus, "זזזזזזז") == []
+
+
+class TestFindWithPrefix:
+    def test_attached_prefixes_are_found(self, corpus):
+        """The example from the spec: אביי should also find דאביי/לאביי/ואביי."""
+        matches = find_with_prefix(corpus, "אביי")
+        found_words = {m.tractate.tokens[m.start] for m in matches}
+        assert "לאביי" in found_words
+        assert "ואביי" in found_words
+        assert "דאביי" in found_words
+
+    def test_exact_matches_are_excluded(self, corpus):
+        """The two tiers never overlap: an exact hit isn't also a prefix hit."""
+        matches = find_with_prefix(corpus, "אביי")
+        assert all(m.tractate.tokens[m.start] != "אביי" for m in matches)
+
+    def test_unrelated_words_are_not_matched(self, corpus):
+        """A word ending in similar-but-different letters must not match."""
+        matches = find_with_prefix(corpus, "אביי")
+        found_words = {m.tractate.tokens[m.start] for m in matches}
+        assert "אבי" not in found_words  # missing the second י -- not a match
+
+
+class TestFindPhrase:
+    def test_exact_phrase_matches_consecutive_words_only(self, corpus):
+        matches = find_phrase(corpus, ("אמר", "רבא"))
+        assert len(matches) > 500
+        for m in matches[:20]:
+            assert m.tractate.tokens[m.start] == "אמר"
+            assert m.tractate.tokens[m.start + 1] == "רבא"
+
+    def test_phrase_length_is_reported(self, corpus):
+        matches = find_phrase(corpus, ("אמר", "רבא"))
+        assert matches[0].length == 2
+
+
+class TestProximity:
+    def test_within_distance_finds_pairs(self, corpus):
+        pairs = find_proximity(corpus, "אביי", "רבא", within=6)
+        assert len(pairs) > 0
+        for pair in pairs[:20]:
+            assert abs(pair["posA"] - pair["posB"]) <= 6
+
+    def test_tighter_distance_finds_fewer_pairs(self, corpus):
+        loose = find_proximity(corpus, "אביי", "רבא", within=20)
+        tight = find_proximity(corpus, "אביי", "רבא", within=2)
+        assert len(tight) <= len(loose)
+
+
+class TestKwicContext:
+    def test_context_window_respects_before_after_counts(self, corpus):
+        query = Query.parse("אביי")
+        result = search(corpus, [query], before=3, after=7)
+        group = result["groups"][0]
+        for r in group["results"][:10]:
+            assert len(r["before"].split()) <= 3
+            assert len(r["after"].split()) <= 7
+
+    def test_full_paragraph_contains_the_match(self, corpus):
+        query = Query.parse("אביי")
+        result = search(corpus, [query], before=5, after=5, limit=5)
+        for r in result["groups"][0]["results"]:
+            assert r["match"] in r["fullParagraph"]
+
+    def test_citation_and_link_are_present(self, corpus):
+        query = Query.parse("אביי")
+        result = search(corpus, [query], limit=1)
+        r = result["groups"][0]["results"][0]
+        assert r["citation"].startswith(r["tractate"]["he"])
+        assert r["sefariaUrl"].startswith("https://www.sefaria.org/")
+
+
+class TestMultiQuery:
+    def test_comma_separates_independent_or_queries(self, corpus):
+        queries = [Query.parse("אביי"), Query.parse("רבא")]
+        result = search(corpus, queries)
+        assert len(result["groups"]) == 2
+        assert result["groups"][0]["query"] == "אביי"
+        assert result["groups"][1]["query"] == "רבא"
+
+    def test_tractate_filter_restricts_results(self, corpus):
+        query = Query.parse("אביי")
+        unfiltered = search(corpus, [query])["groups"][0]["total"]
+        filtered = search(corpus, [query], tractate_filter="ברכות")["groups"][0]["total"]
+        assert 0 < filtered < unfiltered
+
+
+class TestApi:
+    def test_health(self, client):
+        body = client.get("/api/health").json()
+        assert body["status"] == "ok"
+        assert body["tractates"] == 37
+        assert body["license"] == "Public Domain"
+
+    def test_tractates_endpoint(self, client):
+        body = client.get("/api/tractates").json()
+        assert len(body["tractates"]) == 37
+        assert body["tractates"][0]["he"] == "ברכות"
+
+    def test_search_single_word(self, client):
+        body = client.get("/api/search", params={"q": "אביי"}).json()
+        assert len(body["groups"]) == 1
+        assert body["groups"][0]["total"] > 2000
+
+    def test_search_multi_term(self, client):
+        body = client.get("/api/search", params={"q": "אביי, רבא"}).json()
+        assert len(body["groups"]) == 2
+
+    def test_search_phrase(self, client):
+        body = client.get("/api/search", params={"q": "אמר רבא"}).json()
+        assert body["groups"][0]["isPhrase"] is True
+
+    def test_before_after_are_clamped(self, client):
+        body = client.get("/api/search", params={"q": "אביי", "before": 999, "after": 0}).json()
+        assert body["before"] == 50  # MAX_CONTEXT
+        assert body["after"] == 1    # MIN_CONTEXT
+
+    def test_empty_query_is_rejected(self, client):
+        response = client.get("/api/search", params={"q": "  ,  "})
+        assert response.status_code == 400
+        assert response.json()["code"] == "empty"
+
+    def test_non_hebrew_is_rejected(self, client):
+        response = client.get("/api/search", params={"q": "abc"})
+        assert response.status_code == 400
+        assert response.json()["code"] == "invalid_query"
+
+    def test_too_many_terms_are_rejected(self, client):
+        response = client.get("/api/search", params={"q": "א, ב, ג, ד, ה, ו"})
+        assert response.status_code == 400
+        assert response.json()["code"] == "too_many"
+
+    def test_proximity_endpoint(self, client):
+        body = client.get("/api/proximity", params={"a": "אביי", "b": "רבא", "within": 6}).json()
+        assert body["total"] > 0
+
+    def test_static_assets_force_revalidation(self, client):
+        response = client.get("/")
+        assert response.headers["cache-control"] == "no-cache"
+
+    def test_spa_is_served_at_the_root(self, client):
+        response = client.get("/")
+        assert response.status_code == 200
+        assert 'dir="rtl"' in response.text
