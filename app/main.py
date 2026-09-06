@@ -127,10 +127,13 @@ def search_endpoint(
     after: int = Query(DEFAULT_CONTEXT, description="Words of context after the match; clamped to the allowed range"),
     limit: int = Query(DEFAULT_LIMIT, description="Max results per group; clamped to the allowed range"),
     tractate: str | None = Query(None, description="Restrict to one tractate (Hebrew name)"),
+    offset: int = Query(0, description="Skip this many matches per group, for a group's own 'show more'; clamped to >= 0"),
 ) -> dict:
     corpus = load_corpus()
     queries = parse_queries(q)
-    return search(corpus, queries, before=before, after=after, limit=limit, tractate_filter=tractate)
+    return search(
+        corpus, queries, before=before, after=after, limit=limit, tractate_filter=tractate, offset=offset
+    )
 
 
 @app.get("/api/proximity")

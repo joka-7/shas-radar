@@ -174,8 +174,18 @@ def search_one(
     after: int,
     limit: int,
     tractate_filter: str | None = None,
+    offset: int = 0,
 ) -> dict:
-    """Run one query (a word or a phrase) and shape its result group."""
+    """Run one query (a word or a phrase) and shape its result group.
+
+    ``offset`` skips this many matches before taking ``limit`` -- what lets
+    a group's own "show more" button fetch the next page of the *same*
+    query instead of being stuck with whatever the first request capped at.
+    Matches are sorted deterministically (exact tier, then with-prefix, each
+    in the same corpus-scan order every time), so repeated calls with a
+    growing offset walk the same sequence without skipping or repeating a
+    result.
+    """
     if query.is_phrase:
         matches = find_phrase(corpus, query.words_norm)
     else:
@@ -190,7 +200,7 @@ def search_one(
     matches.sort(key=lambda m: 0 if m.kind == "exact" else 1)
 
     total = len(matches)
-    shown = matches[:limit]
+    shown = matches[offset:offset + limit]
     return {
         "query": query.raw,
         "isPhrase": query.is_phrase,
@@ -208,13 +218,17 @@ def search(
     after: int = DEFAULT_CONTEXT,
     limit: int = DEFAULT_LIMIT,
     tractate_filter: str | None = None,
+    offset: int = 0,
 ) -> dict:
     """Run every comma-separated query independently (OR)."""
     before = max(MIN_CONTEXT, min(before, MAX_CONTEXT))
     after = max(MIN_CONTEXT, min(after, MAX_CONTEXT))
     limit = max(1, min(limit, MAX_LIMIT))
+    offset = max(0, offset)
     return {
         "before": before,
         "after": after,
-        "groups": [search_one(corpus, q, before, after, limit, tractate_filter) for q in queries],
+        "groups": [
+            search_one(corpus, q, before, after, limit, tractate_filter, offset) for q in queries
+        ],
     }
