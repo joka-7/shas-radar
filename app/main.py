@@ -157,7 +157,7 @@ def proximity_endpoint(
     for pair in shown:
         tr = pair["tractate"]
         lo, hi = sorted((pair["posA"], pair["posB"]))
-        daf, amud = tr.token_daf[lo], tr.token_amud[lo]
+        daf, amud = tr.token_daf[lo], tr.amud_at(lo)
         results.append(
             {
                 "text": " ".join(tr.tokens_raw[lo : hi + 1]),

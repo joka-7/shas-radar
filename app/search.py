@@ -145,7 +145,7 @@ def serialize_match(corpus: Corpus, match: Match, before: int, after: int) -> di
     matched_text = " ".join(tr.tokens_raw[start:end])
     context_after = " ".join(tr.tokens_raw[end:end + after])
 
-    daf, amud = tr.token_daf[start], tr.token_amud[start]
+    daf, amud = tr.token_daf[start], tr.amud_at(start)
     segment = tr.segment_at(start)
 
     return {
