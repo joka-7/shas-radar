@@ -299,8 +299,8 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: .4rem .6rem;
-  background: var(--gold-soft);
-  border-bottom: 1px solid var(--gold);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--accent);
   color: var(--text);
   font-size: .85rem;
   padding: .6rem max(1rem, env(safe-area-inset-right)) .6rem max(1rem, env(safe-area-inset-left));
@@ -320,11 +320,12 @@ body {
   flex: 0 0 auto;
   font: 700 .82rem var(--font);
   color: #fff;
-  background: var(--gold);
+  background: var(--accent);
   border: 0;
   border-radius: var(--radius-sm);
   padding: .4rem .8rem;
-  min-height: 34px;
+  min-height: 44px;
+  touch-action: manipulation;
   cursor: pointer;
 }
 .install-dismiss {
@@ -335,8 +336,9 @@ body {
   background: transparent;
   border: 0;
   padding: .3rem;
-  min-width: 30px;
-  min-height: 30px;
+  min-width: 44px;
+  min-height: 44px;
+  touch-action: manipulation;
   cursor: pointer;
 }
 
