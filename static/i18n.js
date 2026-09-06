@@ -89,7 +89,6 @@ var I18N = (function () {
       "footer.note": "חיפוש זה בודק התאמה מדויקת, התאמה עם אותיות שימוש, וביטויים ברצף — ללא ניתוח דקדוקי מלא.",
       "footer.credit": "נבנה על ידי",
 
-      "install.prompt": "התקינו את האפליקציה למסך הבית לגישה מהירה",
       "install.button": "התקנה",
       "install.dismiss": "סגור",
       "install.iosHint": "כדי להתקין: הקישו על כפתור השיתוף, ואז \"הוסף למסך הבית\".",
@@ -159,7 +158,6 @@ var I18N = (function () {
       "footer.note": "This search checks exact matches, matches with an attached prefix, and consecutive phrases — without full grammatical analysis.",
       "footer.credit": "Built by",
 
-      "install.prompt": "Install the app on your home screen for quick access",
       "install.button": "Install",
       "install.dismiss": "Dismiss",
       "install.iosHint": "To install: tap the Share button, then \"Add to Home Screen\".",
@@ -229,7 +227,6 @@ var I18N = (function () {
       "footer.note": "Cette recherche vérifie les correspondances exactes, les correspondances avec une lettre de liaison, et les expressions consécutives — sans analyse grammaticale complète.",
       "footer.credit": "Créé par",
 
-      "install.prompt": "Installez l'application sur votre écran d'accueil pour un accès rapide",
       "install.button": "Installer",
       "install.dismiss": "Fermer",
       "install.iosHint": "Pour installer : appuyez sur le bouton Partager, puis « Sur l'écran d'accueil ».",
