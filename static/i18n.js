@@ -87,6 +87,7 @@ var I18N = (function () {
       "footer.words": { one: "מילה אחת", two: "שתי מילים", other: "{n} מילים" },
       "footer.tractates": { one: "מסכת אחת", two: "שתי מסכתות", other: "{n} מסכתות" },
       "footer.note": "חיפוש זה בודק התאמה מדויקת, התאמה עם אותיות שימוש, וביטויים ברצף — ללא ניתוח דקדוקי מלא.",
+      "footer.credit": "נבנה על ידי",
     },
 
     en: {
@@ -151,6 +152,7 @@ var I18N = (function () {
       "footer.words": { one: "1 word", other: "{n} words" },
       "footer.tractates": { one: "1 tractate", other: "{n} tractates" },
       "footer.note": "This search checks exact matches, matches with an attached prefix, and consecutive phrases — without full grammatical analysis.",
+      "footer.credit": "Built by",
     },
 
     fr: {
@@ -215,6 +217,7 @@ var I18N = (function () {
       "footer.words": { one: "1 mot", other: "{n} mots" },
       "footer.tractates": { one: "1 traité", other: "{n} traités" },
       "footer.note": "Cette recherche vérifie les correspondances exactes, les correspondances avec une lettre de liaison, et les expressions consécutives — sans analyse grammaticale complète.",
+      "footer.credit": "Créé par",
     },
   };
 

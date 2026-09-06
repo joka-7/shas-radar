@@ -491,6 +491,14 @@ body {
 #footer-attribution { margin-bottom: .2rem; }
 #verse-count { margin-top: 0; }
 .footer-note { margin-bottom: 0; }
+.footer-credit {
+  margin-top: .9rem;
+  margin-bottom: 0;
+  font-size: .75rem;
+  color: var(--text-faint);
+}
+.footer-credit a { color: var(--text-faint); text-decoration: underline; }
+.footer-credit a:hover { color: var(--accent-text); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
