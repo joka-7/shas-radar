@@ -27,9 +27,9 @@ var I18N = (function () {
   var STRINGS = {
     he: {
       "meta.description": "חיפוש מילים, שמות וביטויים בכל הש״ס, עם הקשר מתכוונן של מילים לפני ואחרי.",
-      "doc.title": "Shas Radar — חיפוש בש״ס",
+      "doc.title": "ש״ס רדאר — חיפוש בש״ס",
 
-      "header.title": "Shas Radar",
+      "header.title": "ש״ס רדאר",
       "header.subtitle": "חיפוש מילים, שמות וביטויים בכל הש״ס — עם הקשר לפני ואחרי",
 
       "search.label": "מילה, שם, ביטוי, או כמה מופרדים בפסיק",
