@@ -28,9 +28,6 @@
   var wakingEl = document.getElementById("waking");
   var tractateSelect = document.getElementById("tractate");
   var langSwitch = document.getElementById("lang-switch");
-  var installBanner = document.getElementById("install-banner");
-  var installBtn = document.getElementById("install-btn");
-  var installDismiss = document.getElementById("install-dismiss");
 
   var before = 5;
   var after = 5;
@@ -600,79 +597,6 @@
     })
     .catch(function () { /* the footer count is decorative */ })
     .then(disarmHealthWaking);
-
-  // --- App install (Add to Home Screen) -----------------------------------
-
-  // Bumped (v2) to give everyone a clean slate -- rules out a stale
-  // dismissal saved during earlier debugging as the cause of the banner
-  // no longer appearing.
-  var INSTALL_DISMISSED_KEY = "shas-radar:install-dismissed:v2";
-  var deferredInstallPrompt = null;
-
-  function isStandalone() {
-    return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-  }
-  function isIOS() {
-    return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-  }
-  function installDismissed() {
-    try {
-      return localStorage.getItem(INSTALL_DISMISSED_KEY) === "1";
-    } catch (err) {
-      return false;
-    }
-  }
-  function dismissInstallBanner() {
-    installBanner.hidden = true;
-    try {
-      localStorage.setItem(INSTALL_DISMISSED_KEY, "1");
-    } catch (err) {
-      /* not persisted; the banner just reappears next visit */
-    }
-  }
-
-  if (!isStandalone() && !installDismissed()) {
-    // Chrome/Edge/Android: this fires only once the manifest + icons +
-    // the rest of the installability criteria are met (static/manifest.json).
-    // preventDefault() suppresses Chrome's own mini-infobar so this banner
-    // is the only install prompt shown.
-    window.addEventListener("beforeinstallprompt", function (event) {
-      event.preventDefault();
-      deferredInstallPrompt = event;
-      installBanner.hidden = false;
-    });
-
-    // iOS Safari never fires beforeinstallprompt and has no programmatic
-    // install API at all -- the only way in is Share -> Add to Home Screen,
-    // so the button just explains that instead of triggering anything.
-    if (isIOS()) installBanner.hidden = false;
-  }
-
-  installBtn.addEventListener("click", function () {
-    if (deferredInstallPrompt) {
-      var promptEvent = deferredInstallPrompt;
-      deferredInstallPrompt = null;
-      // Wait for the native prompt to actually resolve before hiding our
-      // own button -- if the browser rejects it (e.g. too much time has
-      // passed since the event fired) the click otherwise looks like it
-      // did nothing at all, banner gone and no dialog shown.
-      promptEvent.prompt().then(
-        function () { installBanner.hidden = true; },
-        function () { toast(t(locale, "install.unavailable")); }
-      );
-    } else if (isIOS()) {
-      installBtn.textContent = t(locale, "install.iosHint");
-      installBtn.disabled = true;
-    } else {
-      // No deferred prompt on a non-iOS browser: beforeinstallprompt either
-      // hasn't fired yet or Chrome has stopped offering it for this site.
-      // Say so instead of the click silently doing nothing.
-      toast(t(locale, "install.unavailable"));
-    }
-  });
-
-  installDismiss.addEventListener("click", dismissInstallBanner);
-  window.addEventListener("appinstalled", dismissInstallBanner);
 
   var initial = fromHash();
   if (initial) runSearch(initial, false);
