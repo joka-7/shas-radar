@@ -88,11 +88,6 @@ var I18N = (function () {
       "footer.tractates": { one: "מסכת אחת", two: "שתי מסכתות", other: "{n} מסכתות" },
       "footer.note": "חיפוש זה בודק התאמה מדויקת, התאמה עם אותיות שימוש, וביטויים ברצף — ללא ניתוח דקדוקי מלא.",
       "footer.credit": "נבנה על ידי",
-
-      "install.button": "התקנה",
-      "install.dismiss": "סגור",
-      "install.iosHint": "כדי להתקין: הקישו על כפתור השיתוף, ואז \"הוסף למסך הבית\".",
-      "install.unavailable": "ההתקנה לא זמינה כרגע. רעננו את הדף ונסו שוב.",
     },
 
     en: {
@@ -158,11 +153,6 @@ var I18N = (function () {
       "footer.tractates": { one: "1 tractate", other: "{n} tractates" },
       "footer.note": "This search checks exact matches, matches with an attached prefix, and consecutive phrases — without full grammatical analysis.",
       "footer.credit": "Built by",
-
-      "install.button": "Install",
-      "install.dismiss": "Dismiss",
-      "install.iosHint": "To install: tap the Share button, then \"Add to Home Screen\".",
-      "install.unavailable": "Install isn't available right now. Reload the page and try again.",
     },
 
     fr: {
@@ -228,11 +218,6 @@ var I18N = (function () {
       "footer.tractates": { one: "1 traité", other: "{n} traités" },
       "footer.note": "Cette recherche vérifie les correspondances exactes, les correspondances avec une lettre de liaison, et les expressions consécutives — sans analyse grammaticale complète.",
       "footer.credit": "Créé par",
-
-      "install.button": "Installer",
-      "install.dismiss": "Fermer",
-      "install.iosHint": "Pour installer : appuyez sur le bouton Partager, puis « Sur l'écran d'accueil ».",
-      "install.unavailable": "L'installation n'est pas disponible pour le moment. Rechargez la page et réessayez.",
     },
   };
 
