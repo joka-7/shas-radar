@@ -51,6 +51,9 @@ var I18N = (function () {
 
       "examples.ariaLabel": "דוגמאות",
 
+      "install.button": "התקנה",
+      "install.iosHint": "כדי להתקין: הקישו על כפתור השיתוף ↗ בסרגל הכלים, ואז \"הוסף למסך הבית\".",
+
       "waking.message": "מעיר את השרת… בפעם הראשונה אחרי זמן מנוחה זה עלול לקחת כדקה.",
 
       "result.empty.title": 'לא נמצאו תוצאות עבור "{query}"',
@@ -116,6 +119,9 @@ var I18N = (function () {
 
       "examples.ariaLabel": "Examples",
 
+      "install.button": "Install",
+      "install.iosHint": "To install: tap the Share button ↗ in the toolbar, then \"Add to Home Screen\".",
+
       "waking.message": "Waking up the server… the first request after a while can take up to a minute.",
 
       "result.empty.title": 'No results found for "{query}"',
@@ -180,6 +186,9 @@ var I18N = (function () {
       "howItWorks.p3": "Une virgule sépare plusieurs termes indépendants à rechercher (jusqu'à 5 à la fois).",
 
       "examples.ariaLabel": "Exemples",
+
+      "install.button": "Installer",
+      "install.iosHint": "Pour installer : appuyez sur le bouton Partager ↗ dans la barre d'outils, puis « Sur l'écran d'accueil ».",
 
       "waking.message": "Réveil du serveur… la première requête après une pause peut prendre jusqu'à une minute.",
 
