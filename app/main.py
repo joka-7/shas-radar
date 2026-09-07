@@ -6,6 +6,7 @@ there is no CORS involved -- the page and the API it calls share a host.
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -92,6 +93,13 @@ def parse_queries(raw: str) -> list[SearchQuery]:
 
 @app.get("/api/health")
 def health() -> dict:
+    """Liveness check that also reports what corpus is loaded.
+
+    ``commit`` echoes Render's own RENDER_GIT_COMMIT env var (set
+    automatically on every deploy) so the footer can show which commit is
+    actually running -- a plain, unambiguous way to tell whether a given
+    fix has really been deployed, rather than inferring it from behavior.
+    """
     corpus = load_corpus()
     return {
         "status": "ok",
@@ -99,6 +107,7 @@ def health() -> dict:
         "tractates": len(corpus.tractates),
         "source": corpus.source,
         "license": corpus.license,
+        "commit": os.environ.get("RENDER_GIT_COMMIT", "dev")[:7],
     }
 
 
