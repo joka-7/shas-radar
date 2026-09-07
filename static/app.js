@@ -447,14 +447,16 @@
     if (button) setLocale(button.dataset.lang);
   });
 
-  // --- Install prompt (Add to Home Screen) --------------------------------
+  // --- Install (Add to Home Screen) ---------------------------------------
   //
-  // Chrome/Android (and desktop Chrome/Edge) fire `beforeinstallprompt`
-  // themselves when the page qualifies (manifest + service worker); we just
-  // hold onto that event and replay it on the button's own click, since the
-  // browser's own mini-infobar is easy to miss on a phone. iOS Safari never
-  // fires that event at all -- there, tapping the button just explains the
-  // manual Share-sheet steps instead of triggering anything.
+  // Always shown as soon as the page isn't already running standalone,
+  // rather than waiting on `beforeinstallprompt` to decide whether the
+  // button even exists -- that event is unreliable in practice (browser
+  // engagement heuristics, non-Chrome browsers, in-app webviews), and a
+  // button that only sometimes appears is indistinguishable from a broken
+  // one. Every tap does *something*: the native prompt when it's been
+  // captured, an iOS-specific hint otherwise, or a generic "check your
+  // browser's menu" hint as the last resort -- never a silent no-op.
 
   var deferredInstallPrompt = null;
 
@@ -466,22 +468,27 @@
     return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
   }
 
-  if (!isStandalone() && isIOS()) installBtn.hidden = false;
+  if (!isStandalone()) installBtn.hidden = false;
 
   window.addEventListener("beforeinstallprompt", function (event) {
     event.preventDefault();
     deferredInstallPrompt = event;
-    if (!isStandalone()) installBtn.hidden = false;
   });
 
   installBtn.addEventListener("click", function () {
     if (deferredInstallPrompt) {
       var prompt = deferredInstallPrompt;
       deferredInstallPrompt = null;
-      installBtn.hidden = true;
       prompt.prompt();
+      prompt.userChoice
+        .then(function (choice) {
+          if (choice.outcome === "accepted") installBtn.hidden = true;
+        })
+        .catch(function () { /* left visible -- tapping again just retries */ });
     } else if (isIOS()) {
       toast(t(locale, "install.iosHint"));
+    } else {
+      toast(t(locale, "install.genericHint"));
     }
   });
 

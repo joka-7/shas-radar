@@ -53,6 +53,7 @@ var I18N = (function () {
 
       "install.button": "התקנה",
       "install.iosHint": "כדי להתקין: הקישו על כפתור השיתוף ↗ בסרגל הכלים, ואז \"הוסף למסך הבית\".",
+      "install.genericHint": "כדי להתקין: פתחו את תפריט הדפדפן (⋮) ובחרו \"התקנת אפליקציה\" או \"הוספה למסך הבית\".",
 
       "waking.message": "מעיר את השרת… בפעם הראשונה אחרי זמן מנוחה זה עלול לקחת כדקה.",
 
@@ -121,6 +122,7 @@ var I18N = (function () {
 
       "install.button": "Install",
       "install.iosHint": "To install: tap the Share button ↗ in the toolbar, then \"Add to Home Screen\".",
+      "install.genericHint": "To install: open your browser's menu (⋮) and choose \"Install app\" or \"Add to Home Screen\".",
 
       "waking.message": "Waking up the server… the first request after a while can take up to a minute.",
 
@@ -189,6 +191,7 @@ var I18N = (function () {
 
       "install.button": "Installer",
       "install.iosHint": "Pour installer : appuyez sur le bouton Partager ↗ dans la barre d'outils, puis « Sur l'écran d'accueil ».",
+      "install.genericHint": "Pour installer : ouvrez le menu du navigateur (⋮) et choisissez « Installer l'application » ou « Ajouter à l'écran d'accueil ».",
 
       "waking.message": "Réveil du serveur… la première requête après une pause peut prendre jusqu'à une minute.",
 
