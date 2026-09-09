@@ -129,7 +129,6 @@
       <a href="https://github.com/joka-7" rel="noopener noreferrer" target="_blank">joka-7</a>
     </p>
     <button type="button" class="footer-ai-settings" id="footer-ai-settings" data-i18n="aiSettings.openButton">הגדרות AI</button>
-    <p class="footer-build" id="footer-build"></p>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -167,6 +166,22 @@
         </p>
         <div id="ai-external-links" class="external-links"></div>
       </div>
+    </form>
+  </dialog>
+
+  <!--
+    Step-by-step "how to install" -- replaces the old plain-toast hint.
+    Same native-<dialog> shell as the AI settings one above; only the steps
+    (iOS Share-then-Add vs. a generic browser-menu path) are built by app.js,
+    since which set applies depends on the visitor's own browser.
+  -->
+  <dialog id="install-help-dialog" class="ai-settings-dialog install-help-dialog">
+    <form method="dialog" class="ai-settings-form">
+      <div class="ai-settings-head">
+        <h2 data-i18n="install.helpHeading">איך להתקין</h2>
+        <button type="submit" class="dialog-close" data-i18n-aria-label="aiSettings.close" aria-label="סגירה">✕</button>
+      </div>
+      <ol id="install-help-steps" class="install-help-steps"></ol>
     </form>
   </dialog>
 

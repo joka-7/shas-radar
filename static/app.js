@@ -424,15 +424,19 @@
     return loadAiKeyMap()[providerId] || [];
   }
 
+  /* "added" | "empty" | "duplicate" -- a return value the caller can always
+   * turn into visible feedback, so pressing Add is never a silent no-op
+   * (an empty field or a key already saved for this provider used to fail
+   * with nothing on screen to explain why). */
   function addAiKey(providerId, rawKey) {
     var trimmed = (rawKey || "").trim();
-    if (!trimmed) return false;
+    if (!trimmed) return "empty";
     var map = loadAiKeyMap();
     var existing = map[providerId] || [];
-    if (existing.indexOf(trimmed) !== -1) return false;
+    if (existing.indexOf(trimmed) !== -1) return "duplicate";
     map[providerId] = existing.concat([trimmed]);
     saveAiKeyMap(map);
-    return true;
+    return "added";
   }
 
   function removeAiKey(providerId, key) {
@@ -543,10 +547,16 @@
     var addBtn = el("button", "ai-key-addbtn", t(locale, "aiSettings.addKey"));
     addBtn.type = "button";
     function doAdd() {
-      if (addAiKey(provider.id, keyInput.value)) {
+      var outcome = addAiKey(provider.id, keyInput.value);
+      if (outcome === "added") {
         toast(t(locale, "aiSettings.keySavedToast"));
         keyInput.value = "";
         renderAiProviderPanel();
+      } else if (outcome === "duplicate") {
+        toast(t(locale, "aiSettings.keyDuplicateToast"));
+      } else {
+        toast(t(locale, "aiSettings.keyEmptyToast"));
+        keyInput.focus();
       }
     }
     addBtn.addEventListener("click", doAdd);
@@ -663,16 +673,19 @@
 
   // --- AI connections (optional) ------------------------------------------
   //
-  // Only meaningful with more than one group -- "find connections between
-  // the results" needs plural results to connect in the first place. Posts
-  // the groups already on screen (server-side capped further in app/ai.py)
-  // rather than re-searching, so what gets analyzed always matches what the
-  // user is actually looking at, plus any BYOK credentials saved above.
-  // A server with no shared key still works as long as the visitor supplied
-  // their own; a request that fails either way surfaces a plain inline
-  // error, with a nudge toward AI settings and the external-AI fallback for
-  // the failure codes that mean "our own AI path can't serve this" (see
-  // NEEDS_KEY_CODES below).
+  // Meaningful whenever there are at least 2 individual result rows to
+  // relate to each other -- that's true both for a single search term with
+  // several occurrences (look for a pattern across them) and for several
+  // comma-separated terms (look for what links them), so the gate is on
+  // total result count, not on how many groups the query happened to have
+  // (see hasEnoughToConnect below). Posts the groups already on screen
+  // (server-side capped further in app/ai.py) rather than re-searching, so
+  // what gets analyzed always matches what the user is actually looking at,
+  // plus any BYOK credentials saved above. A server with no shared key
+  // still works as long as the visitor supplied their own; a request that
+  // fails either way surfaces a plain inline error, with a nudge toward AI
+  // settings and the external-AI fallback for the failure codes that mean
+  // "our own AI path can't serve this" (see NEEDS_KEY_CODES below).
 
   // provider_invalid is included alongside authentication_error because at
   // least one real vendor (Gemini) returns a plain 400 for an invalid key
@@ -777,14 +790,25 @@
     return section;
   }
 
+  function hasEnoughToConnect(data) {
+    var total = 0;
+    for (var i = 0; i < data.groups.length; i++) {
+      total += data.groups[i].total;
+      if (total >= 2) return true;
+    }
+    return false;
+  }
+
   function render(data, snapshot) {
     results.innerHTML = "";
+    // Above the results, not below: it's the first thing offered on a
+    // search worth analyzing, not an afterthought scrolled past.
+    if (hasEnoughToConnect(data)) {
+      results.appendChild(connectionsSection(data));
+    }
     data.groups.forEach(function (group) {
       results.appendChild(renderGroup(group, snapshot));
     });
-    if (data.groups.length >= 2) {
-      results.appendChild(connectionsSection(data));
-    }
   }
 
   function renderSkeleton() {
@@ -829,6 +853,7 @@
       renderAiProviderPanel();
       renderAiExternalLinks();
     }
+    if (installHelpDialog.open) openInstallHelp();
 
     var buttons = langSwitch.querySelectorAll(".lang-btn");
     for (var k = 0; k < buttons.length; k++) {
@@ -875,10 +900,23 @@
   // engagement heuristics, non-Chrome browsers, in-app webviews), and a
   // button that only sometimes appears is indistinguishable from a broken
   // one. Every tap does *something*: the native prompt when it's been
-  // captured, an iOS-specific hint otherwise, or a generic "check your
-  // browser's menu" hint as the last resort -- never a silent no-op.
+  // captured, or a step-by-step "how to install" dialog otherwise (iOS
+  // Share-then-Add-to-Home-Screen, or a generic browser-menu path) --
+  // never a silent no-op or a bare one-line toast that's gone before it's
+  // read twice.
+  //
+  // Fixed position (not in the header's normal flow) is deliberate, not an
+  // oversight: an in-flow install control was tried twice before (see git
+  // history on this repo and on פסוק לשם) and taps went unresponsive on
+  // real devices, most likely from sharing a stacking context with
+  // .search's negative-margin overlap onto the header. Staying fixed, in
+  // its own stacking context, sidesteps that whole class of problem --
+  // styles.css repositions it for wider viewports via a media query
+  // instead, which changes nothing about *how* it's positioned.
 
   var deferredInstallPrompt = null;
+  var installHelpDialog = document.getElementById("install-help-dialog");
+  var installHelpSteps = document.getElementById("install-help-steps");
 
   function isStandalone() {
     return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -886,6 +924,19 @@
 
   function isIOS() {
     return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  }
+
+  function openInstallHelp() {
+    var step1 = t(locale, isIOS() ? "install.iosStep1" : "install.genericStep1");
+    var step2 = t(locale, isIOS() ? "install.iosStep2" : "install.genericStep2");
+    installHelpSteps.innerHTML = "";
+    installHelpSteps.appendChild(el("li", null, step1));
+    installHelpSteps.appendChild(el("li", null, step2));
+    if (typeof installHelpDialog.showModal === "function") {
+      installHelpDialog.showModal();
+    } else {
+      installHelpDialog.setAttribute("open", "");
+    }
   }
 
   if (!isStandalone()) installBtn.hidden = false;
@@ -905,10 +956,8 @@
           if (choice.outcome === "accepted") installBtn.hidden = true;
         })
         .catch(function () { /* left visible -- tapping again just retries */ });
-    } else if (isIOS()) {
-      toast(t(locale, "install.iosHint"));
     } else {
-      toast(t(locale, "install.genericHint"));
+      openInstallHelp();
     }
   });
 
@@ -1068,9 +1117,6 @@
     .then(function (health) {
       lastHealth = health;
       renderFooterCount();
-      // Not localized -- this is a plain diagnostic (which commit is
-      // actually deployed), not user-facing copy.
-      document.getElementById("footer-build").textContent = "build " + health.commit;
     })
     .catch(function () { /* the footer count is decorative */ })
     .then(disarmHealthWaking);
