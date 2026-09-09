@@ -154,6 +154,21 @@ body {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  /* Forces its own GPU-composited layer. Without this, mobile Safari (and
+     some Android browsers) visibly bounce/drift a `position: fixed`
+     element up and down while scrolling, because the browser's own
+     address-bar show/hide animation repaints it against a stale layout
+     viewport for a frame or two instead of tracking the true visual
+     viewport smoothly -- a rendering quirk of the fixed-position
+     implementation itself, not of this element's own positioning rules
+     (which were already plain `position: fixed`, not scroll-driven by any
+     JS in this app). Promoting the element to its own layer up front is
+     the standard mitigation for that jitter.
+     https://bugs.webkit.org/show_bug.cgi?id=196428 */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 .install-fab:not([hidden]) { display: flex; }
 /* Wider (laptop/desktop) viewports: vertically centered on the edge rather
@@ -166,7 +181,8 @@ body {
 @media (min-width: 900px) {
   .install-fab {
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%) translateZ(0);
+    -webkit-transform: translateY(-50%) translateZ(0);
   }
 }
 .install-fab svg {
