@@ -264,21 +264,6 @@
   function resultCard(result, query, selection) {
     var card = el("article", "card");
 
-    var selectRow = el("label", "card-select");
-    var checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = selection.isSelected(query, result);
-    checkbox.addEventListener("change", function () {
-      var ok = selection.toggle(query, result, checkbox.checked);
-      if (!ok) {
-        checkbox.checked = false; // reverted -- the cap was already reached
-        toast(t(locale, "connections.selectionCapToast", { n: SELECTION_CAP }));
-      }
-    });
-    selectRow.appendChild(checkbox);
-    selectRow.appendChild(el("span", "card-select-label", t(locale, "connections.selectForAi")));
-    card.appendChild(selectRow);
-
     var head = el("div", "card-head");
     head.appendChild(el("span", "badge badge-tractate", localizedName(result.tractate.he, result.tractate.en)));
     head.appendChild(hebrewSpan("span", "badge", result.citation));
@@ -310,6 +295,26 @@
     link.className = "copy";
     link.textContent = t(locale, "openInSefaria");
     foot.appendChild(link);
+    // Same row, same size, as copy/Sefaria above -- a third pill-shaped
+    // control rather than a separate label sitting above the card, which
+    // read as unrelated to this card's own actions.
+    var selectBtn = el("label", "copy select-ai");
+    var checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "select-ai-checkbox";
+    checkbox.checked = selection.isSelected(query, result);
+    if (checkbox.checked) selectBtn.classList.add("checked");
+    checkbox.addEventListener("change", function () {
+      var ok = selection.toggle(query, result, checkbox.checked);
+      if (!ok) {
+        checkbox.checked = false; // reverted -- the cap was already reached
+        toast(t(locale, "connections.selectionCapToast", { n: SELECTION_CAP }));
+      }
+      selectBtn.classList.toggle("checked", checkbox.checked);
+    });
+    selectBtn.appendChild(checkbox);
+    selectBtn.appendChild(document.createTextNode(t(locale, "connections.selectForAi")));
+    foot.appendChild(selectBtn);
     card.appendChild(foot);
 
     return card;

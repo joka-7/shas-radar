@@ -402,23 +402,6 @@ body {
   padding: .9rem 1rem 1rem;
   margin-bottom: .75rem;
 }
-.card-select {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  margin-bottom: .5rem;
-  font: 500 .8rem var(--font);
-  color: var(--text-soft);
-  cursor: pointer;
-  user-select: none;
-}
-.card-select input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--gold);
-  cursor: pointer;
-  flex-shrink: 0;
-}
 .card-head {
   display: flex;
   align-items: center;
@@ -474,7 +457,9 @@ body {
 
 .card-foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
+  gap: .5rem;
   margin-top: .6rem;
 }
 .copy {
@@ -493,6 +478,21 @@ body {
 }
 .copy:active { transform: scale(.97); }
 .copy.done { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+/* .select-ai is a `.copy` too -- same pill, same 38px row, same spot in
+   card-foot as the copy/Sefaria buttons (moved here from a separate label
+   above the card, which read as unrelated to this card's other actions). */
+.select-ai {
+  user-select: none;
+}
+.select-ai .select-ai-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.select-ai.checked { color: var(--gold); border-color: var(--gold); background: var(--gold-soft); }
 
 .more-wrap { margin-top: .25rem; }
 .more {
@@ -520,8 +520,14 @@ body {
 .error { border-color: var(--gold); }
 
 .connections { margin-top: .5rem; margin-bottom: 2rem; }
+/* :not([hidden]) rather than an unconditional `display` -- same reason as
+   .install-fab below: an author rule that sets `display` unconditionally
+   beats the UA stylesheet's own `[hidden] { display: none }` (author styles
+   always outrank UA styles, regardless of selector specificity), so setting
+   el.hidden = true from JS silently did nothing and the button was stuck
+   showing "מחפש קשר…" long after the request had actually finished. */
+.connections-btn:not([hidden]) { display: block; }
 .connections-btn {
-  display: block;
   width: 100%;
   min-height: 44px;
   font: 500 .9rem var(--font);
@@ -532,6 +538,7 @@ body {
   cursor: pointer;
 }
 .connections-btn:disabled { opacity: .6; cursor: default; }
+.connections-hint:not([hidden]) { display: block; }
 .connections-hint {
   margin: 0 0 .5rem;
   font-size: .82rem;
@@ -548,8 +555,8 @@ body {
 }
 .connections-text { margin: 0; line-height: 1.7; color: var(--text); }
 
+.connections-links:not([hidden]) { display: flex; }
 .connections-links {
-  display: flex;
   flex-wrap: wrap;
   gap: .5rem 1rem;
   margin-top: .5rem;
