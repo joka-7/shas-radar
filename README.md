@@ -199,8 +199,13 @@ stable string for the frontend.
 
 **"Find connections between results"**, shown above the results (not
 scrolled past below them) whenever a search turns up at least 2 individual
-matches, sends the top few of them to a language model and asks it to find
-what connects them. That's meaningful in two shapes:
+matches, sends a language model whichever results the visitor has actually
+checked and asks it to find what connects them. Every visible result card
+carries its own checkbox (none checked by default -- it's opt-in, not an
+automatic "send everything"); only cards currently on screen can be
+selected, and the button itself only enables once at least 2 are checked
+(a single row has nothing to connect to), capped at 15 total across every
+group at once. That's meaningful in two shapes:
 
 - **One search term with several occurrences** — look for a pattern across
   them: a recurring context, a halachic theme, a particular group of sages
@@ -241,6 +246,14 @@ since there's no auth here) protects against runaway cost, tunable via
 (defaults: 10 / 20,000 / 200,000); once spent, `/api/analyze` answers a
 `quota_exceeded` error until the window resets rather than calling the
 model.
+
+ModelDispatcher's provider adapters set no HTTP timeout of their own on
+the vendor client they construct, so a stuck connection or a slow vendor
+API can otherwise hang for as long as that SDK's own default allows —
+observed live, that's minutes, not seconds. `app/ai.py` bounds every
+dispatch to `AI_REQUEST_DEADLINE_SECONDS` (default 30) on its own small
+thread pool; past that, `/api/analyze` answers a `timeout` error instead
+of leaving the visitor watching a spinner.
 
 ### Bring your own key (per visitor)
 
