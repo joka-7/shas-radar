@@ -157,6 +157,7 @@ GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות
 GET /api/proximity?a=אביי&b=רבא&within=6
 GET /api/tractates
 GET /api/health
+POST /api/analyze   {"groups": [...], "locale": "he"}   -- see "AI connections" below
 ```
 
 `q` accepts one term, a phrase, or several comma/semicolon-separated terms
@@ -188,6 +189,44 @@ stable string for the frontend.
   ]
 }
 ```
+
+## AI connections (optional)
+
+A comma-separated search (up to 5 terms) already puts several result groups
+side by side; **"Find connections between results"**, shown once a search
+returns 2+ groups, sends the top few results of each group to a language
+model and asks it what connects them — a shared sugya, a recurring dispute,
+amoraim who appear together, a plausible reason to search these terms
+together. Answers in the UI's current language (Hebrew/English/French); the
+Talmud text quoted in the prompt stays Hebrew/Aramaic, same as everywhere
+else in this app.
+
+This is the **one** thing in the app that makes an outbound network call —
+everything else (see "How the Talmud is packaged and loaded" above) runs off
+the bundled, offline corpus, on purpose. The feature is entirely optional and
+quietly disables itself with no crash and no error in the UI beyond the
+button simply not working if clicked: `app/ai.py` builds a
+[ModelDispatcher](https://github.com/joka-7/ModelDispatcher) gateway that
+registers one provider per vendor whose API key is actually set in the
+environment, and `/api/analyze` answers `503 ai_not_configured` when none is.
+A fresh clone with no keys set runs the rest of the app exactly as before.
+
+To turn it on, set any one (or more, for cross-provider fallback) of:
+
+| Env var | Vendor | Default model |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | Google Gemini | `gemini-2.5-flash` (override: `GEMINI_MODEL`) |
+| `OPENAI_API_KEY` | OpenAI | `gpt-4o-mini` (override: `OPENAI_MODEL`) |
+| `ANTHROPIC_API_KEY` | Anthropic | `claude-opus-4-8` (override: `ANTHROPIC_MODEL`) |
+
+With more than one key set, ModelDispatcher's own router/fallback chain
+tries the cheaper model first and transparently escalates on failure — no
+extra wiring needed for that. An app-wide token budget (not per-visitor,
+since there's no auth here) protects against runaway cost, tunable via
+`AI_REQUESTS_PER_MIN` / `AI_TOKENS_PER_MIN` / `AI_TOKENS_PER_DAY`
+(defaults: 10 / 20,000 / 200,000); once spent, `/api/analyze` answers a
+`quota_exceeded` error until the window resets rather than calling the
+model.
 
 ## UI
 
@@ -242,13 +281,16 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-49 tests, run against the real committed corpus rather than a fixture — the
+63 tests, run against the real committed corpus rather than a fixture — the
 point of most of them is that the actual Talmud gives the expected answer:
 `אביי` and `רבא` each turn up thousands of times, `אמר רבא` matches hundreds
 of consecutive occurrences, and Berakhot really does end at the traditional
 64a. Includes explicit regression tests for the two bugs that only showed up
 against real data: niqqud fragmenting a vocalized word into several tokens,
-and a mark range wide enough to accidentally swallow maqaf.
+and a mark range wide enough to accidentally swallow maqaf. The AI
+connections feature (`tests/test_ai.py`) is tested against ModelDispatcher's
+own keyless `MockProvider`, so the suite never makes a real network call or
+needs an API key.
 
 ## Deploying
 
@@ -264,7 +306,8 @@ start (up to ~a minute); the UI accounts for this itself with the "waking the
 server" notice described above.
 
 **Docker** — the corpus is baked into the image, so the container needs no
-network access:
+network access to run the core search (only the optional AI connections
+feature above ever calls out, and only once a provider key is set):
 
 ```bash
 docker build -t shas-radar .
@@ -282,6 +325,7 @@ the corpus load would run on every cold start.
 app/hebrew.py           normalization, tokenization, Hebrew numerals  (no deps)
 app/corpus.py           gzip load + per-tractate token stream and word index
 app/search.py           exact/prefix/phrase/proximity matching, KWIC context
+app/ai.py                optional "find connections" feature via ModelDispatcher
 app/main.py             FastAPI routes; mounts static/ at "/"
 scripts/build_dataset.py   Sefaria export -> data/shas.json.gz (build-time)
 static/                 the UI: one page, one stylesheet, one script, one translation table
