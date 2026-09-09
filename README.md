@@ -242,6 +242,14 @@ since there's no auth here) protects against runaway cost, tunable via
 `quota_exceeded` error until the window resets rather than calling the
 model.
 
+ModelDispatcher's provider adapters set no HTTP timeout of their own on
+the vendor client they construct, so a stuck connection or a slow vendor
+API can otherwise hang for as long as that SDK's own default allows —
+observed live, that's minutes, not seconds. `app/ai.py` bounds every
+dispatch to `AI_REQUEST_DEADLINE_SECONDS` (default 30) on its own small
+thread pool; past that, `/api/analyze` answers a `timeout` error instead
+of leaving the visitor watching a spinner.
+
 ### Bring your own key (per visitor)
 
 **⚙ AI settings** (in the footer, and next to the connections button once

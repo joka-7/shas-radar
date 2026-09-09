@@ -42,6 +42,7 @@ would have worked.
 
 from __future__ import annotations
 
+import concurrent.futures
 import os
 from dataclasses import dataclass
 
@@ -98,6 +99,31 @@ _PROVIDER_SPECS: dict[str, tuple[type[ModelProvider], str, str, str]] = {
 # (see _build_registry), the quota bookkeeping does not.
 _QUOTA_STORE = InMemoryQuotaStore()
 
+# None of ModelDispatcher's provider adapters set an HTTP timeout on the
+# vendor client they construct (checked directly against the library's
+# source -- there's no `timeout` knob anywhere in it), so a stuck TCP
+# connection or a slow vendor API can otherwise hang for as long as that
+# SDK's own default allows (observed live: ~2 minutes before Render's own
+# proxy finally cut it, not this app choosing to give up). A dispatch is
+# run on this small dedicated pool and bounded with .result(timeout=...)
+# instead, so a hang always surfaces here, fast and on our own terms,
+# rather than the visitor just watching a spinner. This still leaves the
+# one worker thread running in the background until the underlying socket
+# itself eventually errors or completes -- acceptable for this app's
+# traffic, not something worth an async rewrite to avoid.
+_DEFAULT_DEADLINE_SECONDS = 30.0
+_DISPATCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai-dispatch")
+
+
+def _deadline_seconds() -> float:
+    raw = os.environ.get("AI_REQUEST_DEADLINE_SECONDS")
+    if not raw:
+        return _DEFAULT_DEADLINE_SECONDS
+    try:
+        return float(raw)
+    except ValueError:
+        return _DEFAULT_DEADLINE_SECONDS
+
 # ModelDispatcher's default routing floor reserves STANDARD+ tier models for
 # anything triaged above SIMPLE -- tuned for general agentic/coding work.
 # This feature's own prompts are short and capped (MAX_GROUPS x
@@ -146,6 +172,14 @@ class NoCredentialError(RuntimeError):
     Raised before any network call is attempted -- callers map this onto a
     fast, cheap error (see app/main.py) rather than letting a doomed request
     reach a vendor's API.
+    """
+
+
+class RequestTimeoutError(RuntimeError):
+    """The dispatch to the model provider didn't finish within the deadline.
+
+    See the ``_DISPATCH_EXECUTOR`` comment above for why this exists --
+    ModelDispatcher's provider adapters set no HTTP timeout of their own.
     """
 
 
@@ -246,6 +280,9 @@ def analyze_connections(
         NoCredentialError: Neither the server nor ``credentials`` has a key
             for any vendor -- callers should answer a fast, cheap error
             instead of letting a doomed request reach a vendor's API.
+        RequestTimeoutError: The dispatch didn't finish within
+            ``AI_REQUEST_DEADLINE_SECONDS`` (default 30s) -- see the
+            ``_DISPATCH_EXECUTOR`` module comment for why this exists.
         model_dispatcher.exceptions.ModelDispatcherError: Any dispatch
             failure (quota, bad key, all providers exhausted, etc.) --
             these already carry the right HTTP status for a web layer to
@@ -280,7 +317,14 @@ def analyze_connections(
         tenant=tenant.tenant_id,
         max_tokens=500,
     )
-    result = active_gateway.dispatch(request, tenant)
+    try:
+        result = _DISPATCH_EXECUTOR.submit(active_gateway.dispatch, request, tenant).result(
+            timeout=_deadline_seconds()
+        )
+    except concurrent.futures.TimeoutError:
+        raise RequestTimeoutError(
+            f"the AI provider did not respond within {_deadline_seconds():.0f}s"
+        ) from None
 
     served_by = "unknown"
     for step in reversed(result.steps):

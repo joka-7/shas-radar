@@ -149,6 +149,26 @@ class TestAnalyzeConnections:
             for _ in range(50):
                 ai.analyze_connections(_sample_groups(), gateway=gateway)
 
+    def test_raises_timeout_error_when_the_dispatch_hangs(self, monkeypatch):
+        """ModelDispatcher's provider adapters set no HTTP timeout of their
+        own (checked directly against the library's source) -- a stuck
+        connection could otherwise hang for as long as the vendor SDK's own
+        default allows. This is the ai.py-level guard against that: a slow
+        provider.complete() must not out-wait a short deadline."""
+        import time
+
+        class SlowProvider(MockProvider):
+            def complete(self, request, *, api_key=None):  # type: ignore[override]
+                time.sleep(0.5)
+                return super().complete(request, api_key=api_key)
+
+        monkeypatch.setenv("AI_REQUEST_DEADLINE_SECONDS", "0.05")
+        provider = SlowProvider("mock:free", tier=ModelTier.FREE)
+        gateway = _make_gateway(provider)
+
+        with pytest.raises(ai.RequestTimeoutError):
+            ai.analyze_connections(_sample_groups(), gateway=gateway)
+
     def test_raises_no_credential_error_with_nothing_configured(self, no_server_keys):
         with pytest.raises(ai.NoCredentialError):
             ai.analyze_connections(_sample_groups())
@@ -204,6 +224,17 @@ class TestAnalyzeEndpoint:
 
         assert response.status_code == 400
         assert response.json()["code"] == "no_credential"
+
+    def test_maps_timeout_to_504(self, client, monkeypatch):
+        def fake_analyze(groups, locale="he", **kw):
+            raise ai.RequestTimeoutError("the AI provider did not respond within 30s")
+
+        monkeypatch.setattr(ai, "analyze_connections", fake_analyze)
+
+        response = client.post("/api/analyze", json={"groups": [{"query": "אביי", "results": []}]})
+
+        assert response.status_code == 504
+        assert response.json()["code"] == "timeout"
 
     def test_rejects_more_groups_than_a_search_can_produce(self, client):
         body = {"groups": [{"query": f"q{i}", "results": []} for i in range(6)]}

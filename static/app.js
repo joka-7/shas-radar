@@ -610,10 +610,16 @@
       buildUrl: function (q) { return "https://claude.ai/new?" + new URLSearchParams({ q: q }); },
     },
     {
-      id: "gemini", name: "Gemini",
-      // gemini.google.com has no known prefill parameter; Google Search's AI
-      // Mode (udm=50) does, and is the more reliable target for one.
-      homeUrl: "https://www.google.com/",
+      // The actual Gemini app -- gemini.google.com has no known prefill
+      // parameter (unlike ChatGPT/Claude above), so this one has no
+      // buildUrl; externalChatLinks still copies the question to the
+      // clipboard first so it's ready to paste once the app opens. Not to
+      // be confused with Google Search's "AI Mode" below, which *is*
+      // pre-fillable but is a different product from Gemini itself.
+      id: "gemini", name: "Gemini", homeUrl: "https://gemini.google.com/app", buildUrl: null,
+    },
+    {
+      id: "google-ai-mode", nameKey: "external.googleAiMode", homeUrl: "https://www.google.com/",
       buildUrl: function (q) { return "https://www.google.com/search?" + new URLSearchParams({ q: q, udm: "50" }); },
     },
   ];
@@ -628,12 +634,11 @@
 
   /* Plain-text version of the same question app/ai.py asks the model --
    * doesn't need to match its engineered prompt verbatim, just give an
-   * external chat enough context to work with. */
+   * external chat enough context to work with. Localized to the current UI
+   * language (the intro line only -- the Talmud text and citations inside
+   * it stay Hebrew/Aramaic regardless, same as everywhere else in this app). */
   function externalQuestionText(data) {
-    var lines = [
-      "Here are search results from the Babylonian Talmud for a few terms searched together. What connects them?",
-      "",
-    ];
+    var lines = [t(locale, "external.questionIntro"), ""];
     data.groups.slice(0, 5).forEach(function (group) {
       lines.push("Query: " + group.query);
       group.results.slice(0, 6).forEach(function (result) {
@@ -644,27 +649,27 @@
     return lines.join("\n").trim();
   }
 
-  /* A row of provider links. With `question`, each link opens pre-filled
-   * (where the provider supports it) and copies the question to the
-   * clipboard first; with `question` omitted (the settings dialog's
-   * generic "no key at all" list, not tied to any particular search), each
-   * link just opens the plain homepage. */
+  /* A row of provider links. With `question`, a link that supports a
+   * prefill parameter opens pre-filled; every link (prefillable or not)
+   * copies the question to the clipboard first, so a provider like Gemini
+   * with no known prefill parameter still opens ready to paste into. With
+   * `question` omitted (the settings dialog's generic "no key at all"
+   * list, not tied to any particular search), every link just opens the
+   * plain homepage and nothing is copied. */
   function externalChatLinks(question) {
     var wrap = el("div", "external-links");
     EXTERNAL_CHAT_PROVIDERS.forEach(function (provider) {
       var link = document.createElement("a");
       link.className = "external-link";
-      link.textContent = provider.name;
+      link.textContent = provider.nameKey ? t(locale, provider.nameKey) : provider.name;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
+      link.href = (question && provider.buildUrl) ? provider.buildUrl(question) : provider.homeUrl;
       if (question) {
-        link.href = provider.buildUrl(question);
         link.addEventListener("click", function () {
           copyToClipboard(question);
           toast(t(locale, "external.copiedToast"));
         });
-      } else {
-        link.href = provider.homeUrl;
       }
       wrap.appendChild(link);
     });
@@ -691,9 +696,10 @@
   // least one real vendor (Gemini) returns a plain 400 for an invalid key
   // rather than 401/403 -- ModelDispatcher classifies that as INVALID, not
   // AUTH, so it surfaces under this code instead (confirmed against the
-  // real API, not assumed).
+  // real API, not assumed). timeout is included too: whatever's slow, the
+  // external-AI fallback answers immediately either way.
   var NEEDS_KEY_CODES = [
-    "no_credential", "authentication_error", "provider_invalid", "quota_exceeded", "all_providers_exhausted",
+    "no_credential", "authentication_error", "provider_invalid", "quota_exceeded", "all_providers_exhausted", "timeout",
   ];
 
   function connectionsSection(data) {

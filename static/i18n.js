@@ -88,6 +88,7 @@ var I18N = (function () {
       "connections.error.code.no_credential": "אין מפתח AI זמין",
       "connections.error.code.authentication_error": "המפתח שהוזן לא תקין",
       "connections.error.code.provider_invalid": "הספק דחה את הבקשה — ייתכן שהמפתח שגוי",
+      "connections.error.code.timeout": "הבקשה ל-AI ארכה יותר מדי זמן — נסו שוב",
       "connections.error.code.quota_exceeded": "המכסה היומית לניתוח AI נוצלה — נסו שוב מאוחר יותר",
       "connections.error.code.all_providers_exhausted": "שירותי ה-AI אינם זמינים כרגע — נסו שוב מאוחר יותר",
       "connections.error.tryOwnKey": "פתחו את הגדרות ה-AI כדי להוסיף מפתח משלכם, או שאלו AI חיצוני:",
@@ -114,6 +115,8 @@ var I18N = (function () {
       "aiSettings.keyEmptyToast": "הקלידו מפתח לפני ההוספה",
 
       "external.copiedToast": "השאלה הועתקה — הדביקו אותה בצ'אט שנפתח",
+      "external.questionIntro": "הנה תוצאות חיפוש מתוך הש״ס. מה מחבר ביניהן?",
+      "external.googleAiMode": "מצב AI של גוגל",
 
       "error.title": "שגיאה",
       "error.generic": "החיפוש נכשל",
@@ -195,6 +198,7 @@ var I18N = (function () {
       "connections.error.code.no_credential": "No AI key is available",
       "connections.error.code.authentication_error": "That key didn't work",
       "connections.error.code.provider_invalid": "The provider rejected the request — the key may be wrong",
+      "connections.error.code.timeout": "The AI request took too long — try again",
       "connections.error.code.quota_exceeded": "Today's AI analysis quota is used up — try again later",
       "connections.error.code.all_providers_exhausted": "AI services are unavailable right now — try again later",
       "connections.error.tryOwnKey": "Open AI settings to add your own key, or ask an external AI instead:",
@@ -221,6 +225,8 @@ var I18N = (function () {
       "aiSettings.keyEmptyToast": "Type a key before adding it",
 
       "external.copiedToast": "Question copied — paste it into the chat that opens",
+      "external.questionIntro": "Here are search results from the Babylonian Talmud. What connects them?",
+      "external.googleAiMode": "Google AI Mode",
 
       "error.title": "Error",
       "error.generic": "Search failed",
@@ -302,6 +308,7 @@ var I18N = (function () {
       "connections.error.code.no_credential": "Aucune clé IA n'est disponible",
       "connections.error.code.authentication_error": "Cette clé n'a pas fonctionné",
       "connections.error.code.provider_invalid": "Le fournisseur a rejeté la requête — la clé est peut-être incorrecte",
+      "connections.error.code.timeout": "La requête IA a pris trop de temps — réessayez",
       "connections.error.code.quota_exceeded": "Le quota d'analyse IA du jour est épuisé — réessayez plus tard",
       "connections.error.code.all_providers_exhausted": "Les services d'IA sont indisponibles pour le moment — réessayez plus tard",
       "connections.error.tryOwnKey": "Ouvrez les paramètres IA pour ajouter votre propre clé, ou demandez à une IA externe :",
@@ -328,6 +335,8 @@ var I18N = (function () {
       "aiSettings.keyEmptyToast": "Saisissez une clé avant de l'ajouter",
 
       "external.copiedToast": "Question copiée — collez-la dans le chat qui s'ouvre",
+      "external.questionIntro": "Voici des résultats de recherche dans le Talmud de Babylone. Qu'est-ce qui les relie ?",
+      "external.googleAiMode": "Mode IA de Google",
 
       "error.title": "Erreur",
       "error.generic": "La recherche a échoué",

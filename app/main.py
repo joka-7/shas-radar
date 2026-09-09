@@ -259,6 +259,11 @@ def analyze_endpoint(body: AnalyzeBody) -> JSONResponse:
             status_code=400,
             content={"error": "אין מפתח AI זמין — הוסיפו מפתח משלכם בהגדרות ה-AI", "code": "no_credential"},
         )
+    except ai.RequestTimeoutError:
+        return JSONResponse(
+            status_code=504,
+            content={"error": "הבקשה ל-AI ארכה יותר מדי זמן — נסו שוב", "code": "timeout"},
+        )
     except ModelDispatcherError as exc:
         # Reshaped into this app's own {"error", "code"} convention (the same
         # one http_exception_handler below produces) rather than exposing
