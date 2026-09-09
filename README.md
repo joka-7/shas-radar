@@ -107,14 +107,18 @@ Three ways a query can match a word in the corpus:
 | --- | --- | --- |
 | **Exact** | the query, normalized, equals the word | `אביי` matches `אביי` |
 | **With an attached prefix** | the word *ends with* the query | `אביי` also finds `דאביי`, `לאביי`, `ואביי` |
-| **Exact phrase** | a multi-word query matches only that consecutive sequence | `אמר רבא` matches only that order, adjacent |
+| **Exact phrase** | a multi-word query matches that consecutive sequence | `אמר רבא` matches only that order, adjacent |
+| **Phrase, prefixed first word** | same, but the phrase's *first* word also gets the attached-prefix treatment | `אמר רבא` also finds `ואמר רבא`, `דאמר רבא` |
 
 The "prefix" search is named for the grammar being matched (Hebrew/Aramaic
 clitics — ו/ה/ב/כ/ל/מ/ש, and combinations — attach to the *front* of a word),
 not the string operation used: a word matches when it *ends with* the query,
-so `find_with_prefix` is really a suffix scan. Exact and attached-prefix
-matches are reported separately (`exactTotal`/`prefixTotal` per group) and
-never overlap.
+so `find_with_prefix` is really a suffix scan. A multi-word query gets this
+treatment too, but only on its first word — a clitic attaches to whichever
+word actually starts the sentence, so the words after it in the phrase still
+have to match exactly (`find_phrase_with_prefix` in `app/search.py`). Exact
+and attached-prefix matches are reported separately (`exactTotal`/
+`prefixTotal` per group, phrase or not) and never overlap.
 
 A comma (or semicolon) separates independent queries, OR'd together and each
 reported as its own result group — up to 5 at once. There's no letter-matching

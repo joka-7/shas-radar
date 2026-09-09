@@ -262,7 +262,7 @@
     head.appendChild(countLabel);
     section.appendChild(head);
 
-    if (!group.isPhrase && group.prefixTotal > 0) {
+    if (group.prefixTotal > 0) {
       var breakdown = el("p", "group-breakdown");
       var exactSpan = el("span", "tag-exact", t(locale, "matchKind.exactTag", { n: I18N.formatNumber(locale, group.exactTotal) }));
       var prefixSpan = el("span", "tag-prefix", t(locale, "matchKind.withPrefixTag", { n: I18N.formatNumber(locale, group.prefixTotal) }));

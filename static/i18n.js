@@ -26,13 +26,13 @@ var I18N = (function () {
 
   var STRINGS = {
     he: {
-      "meta.description": "חיפוש מילים, שמות וביטויים בכל הש״ס, עם הקשר מתכוונן של מילים לפני ואחרי.",
+      "meta.description": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס, עם הקשר מתכוונן של מילים לפני ואחרי.",
       "doc.title": "ש״ס רדאר — חיפוש בש״ס",
 
       "header.title": "ש״ס רדאר",
-      "header.subtitle": "חיפוש מילים, שמות וביטויים בכל הש״ס — עם הקשר לפני ואחרי",
+      "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס — עם הקשר לפני ואחרי",
 
-      "search.label": "מילה, שם, ביטוי, או כמה מופרדים בפסיק",
+      "search.label": "מילה בודדת, מילים ברצף או מופרדות בפסיק",
       "search.placeholder": "לדוגמה: {example}",
       "search.button": "חיפוש",
 
@@ -46,7 +46,7 @@ var I18N = (function () {
 
       "howItWorks.title": "איך זה עובד?",
       "howItWorks.p1": "מילה בודדת — נמצאת גם עם אותיות שימוש בתחילתה (ד/ל/ו/כ/ב וכו׳), כגון שחיפוש \"אביי\" מוצא גם \"דאביי\" ו\"לאביי\".",
-      "howItWorks.p2": "כמה מילים ברצף (ללא פסיק) — נמצא הביטוי המדויק ברצף הזה בלבד.",
+      "howItWorks.p2": "כמה מילים ברצף (ללא פסיק) — נמצא ברצף הזה, כולל כשלמילה הראשונה יש אות שימוש בתחילתה.",
       "howItWorks.p3": "פסיק מפריד בין כמה מונחים נפרדים לחיפוש (עד 5 בבת אחת).",
 
       "examples.ariaLabel": "דוגמאות",
@@ -148,7 +148,7 @@ var I18N = (function () {
 
       "howItWorks.title": "How does this work?",
       "howItWorks.p1": "A single word — also found with an attached clitic (ד/ל/ו/כ/ב, etc.) at the front, so searching \"אביי\" also finds \"דאביי\" and \"לאביי\".",
-      "howItWorks.p2": "Several words in a row (no comma) — matches only that exact consecutive phrase.",
+      "howItWorks.p2": "Several words in a row (no comma) — matches that consecutive phrase, including when the first word carries an attached clitic.",
       "howItWorks.p3": "A comma separates several independent terms to search (up to 5 at once).",
 
       "examples.ariaLabel": "Examples",
@@ -250,7 +250,7 @@ var I18N = (function () {
 
       "howItWorks.title": "Comment ça marche ?",
       "howItWorks.p1": "Un seul mot — trouvé aussi avec une lettre de liaison attachée au début (ד/ל/ו/כ/ב, etc.), par exemple une recherche de « אביי » trouve aussi « דאביי » et « לאביי ».",
-      "howItWorks.p2": "Plusieurs mots à la suite (sans virgule) — ne trouve que cette expression exacte et consécutive.",
+      "howItWorks.p2": "Plusieurs mots à la suite (sans virgule) — trouve cette expression consécutive, y compris quand le premier mot porte une lettre de liaison attachée.",
       "howItWorks.p3": "Une virgule sépare plusieurs termes indépendants à rechercher (jusqu'à 5 à la fois).",
 
       "examples.ariaLabel": "Exemples",

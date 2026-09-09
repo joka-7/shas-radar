@@ -7,7 +7,15 @@ from fastapi.testclient import TestClient
 
 from app.corpus import load_corpus
 from app.main import app
-from app.search import Query, find_exact_word, find_phrase, find_proximity, find_with_prefix, search
+from app.search import (
+    Query,
+    find_exact_word,
+    find_phrase,
+    find_phrase_with_prefix,
+    find_proximity,
+    find_with_prefix,
+    search,
+)
 
 
 @pytest.fixture(scope="session")
@@ -107,6 +115,33 @@ class TestFindPhrase:
     def test_phrase_length_is_reported(self, corpus):
         matches = find_phrase(corpus, ("אמר", "רבא"))
         assert matches[0].length == 2
+
+
+class TestFindPhraseWithPrefix:
+    """Only the phrase's *first* word gets the attached-prefix treatment --
+    e.g. "אמר רבא" also finds "ואמר רבא"/"דאמר רבא" -- every word after it
+    still has to match exactly, same as an ordinary exact phrase."""
+
+    def test_prefixed_first_word_is_found(self, corpus):
+        matches = find_phrase_with_prefix(corpus, ("אמר", "רבא"))
+        assert len(matches) > 100
+        found_first_words = {m.tractate.tokens[m.start] for m in matches}
+        assert "ואמר" in found_first_words
+        assert "דאמר" in found_first_words
+
+    def test_second_word_still_must_match_exactly(self, corpus):
+        matches = find_phrase_with_prefix(corpus, ("אמר", "רבא"))
+        for m in matches[:50]:
+            assert m.tractate.tokens[m.start + 1] == "רבא"
+
+    def test_exact_first_word_is_excluded(self, corpus):
+        """The two tiers never overlap, same as the single-word case."""
+        matches = find_phrase_with_prefix(corpus, ("אמר", "רבא"))
+        assert all(m.tractate.tokens[m.start] != "אמר" for m in matches)
+
+    def test_kind_is_with_prefix(self, corpus):
+        matches = find_phrase_with_prefix(corpus, ("אמר", "רבא"))
+        assert all(m.kind == "withPrefix" for m in matches)
 
 
 class TestProximity:
@@ -217,6 +252,24 @@ class TestApi:
     def test_search_phrase(self, client):
         body = client.get("/api/search", params={"q": "אמר רבא"}).json()
         assert body["groups"][0]["isPhrase"] is True
+
+    def test_search_phrase_includes_prefixed_first_word_matches(self, client):
+        """A phrase group can carry both tiers now, same as a single word --
+        "אמר רבא" also reports the "ואמר רבא"/"דאמר רבא" matches, even
+        though (like the single-word case) exact matches sort first, so a
+        first page well within the exact tier's own size shows only "exact"."""
+        body = client.get("/api/search", params={"q": "אמר רבא", "limit": 200}).json()
+        group = body["groups"][0]
+        assert group["exactTotal"] > 0
+        assert group["prefixTotal"] > 0
+        assert group["total"] == group["exactTotal"] + group["prefixTotal"]
+        assert all(r["kind"] == "exact" for r in group["results"])
+
+        # Page past the entire exact tier to reach into the with-prefix one.
+        tail = client.get(
+            "/api/search", params={"q": "אמר רבא", "limit": 5, "offset": group["exactTotal"]}
+        ).json()["groups"][0]
+        assert all(r["kind"] == "withPrefix" for r in tail["results"])
 
     def test_before_after_are_clamped(self, client):
         body = client.get("/api/search", params={"q": "אביי", "before": 999, "after": 0}).json()

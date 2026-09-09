@@ -9,8 +9,12 @@ Three ways a query can match a word in the corpus:
    the query is a suffix of the word, not a prefix of it, despite the
    traditional name for this ("prefix search") describing the grammar being
    matched rather than the string operation used to match it.
-3. **Exact phrase** — a query of more than one word matches only that exact
-   consecutive sequence.
+3. **Exact phrase** — a query of more than one word matches that exact
+   consecutive sequence. The *first* word of the phrase also gets the
+   attached-prefix treatment from (2) — "אמר רבא" also finds "ואמר רבא" —
+   but every word after it still has to match exactly; a clitic can attach
+   to whichever word actually starts the sentence, so loosening only the
+   first word (not the whole phrase) is what the grammar itself calls for.
 
 A comma separates independent queries (OR), each one searched and reported
 as its own group — mirroring how משמע/פסוק לשם's search box works, but
@@ -100,7 +104,7 @@ def find_with_prefix(corpus: Corpus, word_norm: str) -> list[Match]:
 
 
 def find_phrase(corpus: Corpus, words_norm: tuple[str, ...]) -> list[Match]:
-    """Consecutive-word matches for a multi-word query."""
+    """Consecutive-word matches for a multi-word query, first word exact."""
     first, rest = words_norm[0], words_norm[1:]
     matches = []
     for tr in corpus.tractates:
@@ -110,6 +114,31 @@ def find_phrase(corpus: Corpus, words_norm: tuple[str, ...]) -> list[Match]:
                 continue
             if all(tr.tokens[pos + offset] == rest[offset - 1] for offset in range(1, len(words_norm))):
                 matches.append(Match(tractate=tr, start=pos, length=len(words_norm), kind="exact"))
+    return matches
+
+
+def find_phrase_with_prefix(corpus: Corpus, words_norm: tuple[str, ...]) -> list[Match]:
+    """Phrase matches where the *first* word carries an attached prefix.
+
+    Same "ends with" clitic rule as :func:`find_with_prefix`, applied only
+    to the phrase's first word -- every word after it still has to match
+    exactly, the same way :func:`find_phrase` requires. A linear scan over
+    each tractate's distinct vocabulary, same cost profile as
+    :func:`find_with_prefix` (tens of thousands of words, not the whole
+    corpus), with a phrase check tacked on per candidate position.
+    """
+    first, rest = words_norm[0], words_norm[1:]
+    matches = []
+    for tr in corpus.tractates:
+        for candidate, positions in tr.by_word.items():
+            if candidate == first or not candidate.endswith(first):
+                continue
+            for pos in positions:
+                end = pos + len(words_norm)
+                if end > len(tr):
+                    continue
+                if all(tr.tokens[pos + offset] == rest[offset - 1] for offset in range(1, len(words_norm))):
+                    matches.append(Match(tractate=tr, start=pos, length=len(words_norm), kind="withPrefix"))
     return matches
 
 
@@ -187,7 +216,7 @@ def search_one(
     result.
     """
     if query.is_phrase:
-        matches = find_phrase(corpus, query.words_norm)
+        matches = find_phrase(corpus, query.words_norm) + find_phrase_with_prefix(corpus, query.words_norm)
     else:
         word = query.words_norm[0]
         matches = find_exact_word(corpus, word) + find_with_prefix(corpus, word)
