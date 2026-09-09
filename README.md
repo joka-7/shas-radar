@@ -197,14 +197,22 @@ stable string for the frontend.
 
 ## AI connections (optional)
 
-A comma-separated search (up to 5 terms) already puts several result groups
-side by side; **"Find connections between results"**, shown once a search
-returns 2+ groups, sends the top few results of each group to a language
-model and asks it what connects them — a shared sugya, a recurring dispute,
-amoraim who appear together, a plausible reason to search these terms
-together. Answers in the UI's current language (Hebrew/English/French); the
-Talmud text quoted in the prompt stays Hebrew/Aramaic, same as everywhere
-else in this app.
+**"Find connections between results"**, shown above the results (not
+scrolled past below them) whenever a search turns up at least 2 individual
+matches, sends the top few of them to a language model and asks it to find
+what connects them. That's meaningful in two shapes:
+
+- **One search term with several occurrences** — look for a pattern across
+  them: a recurring context, a halachic theme, a particular group of sages
+  who use it a specific way, a shift in meaning across tractates.
+- **A comma-separated search (up to 5 terms)**, already putting several
+  result groups side by side — look for what links the *terms*: a shared
+  sugya, a recurring dispute, amoraim who appear together, a plausible
+  reason to search these together.
+
+Answers in the UI's current language (Hebrew/English/French); the Talmud
+text quoted in the prompt stays Hebrew/Aramaic, same as everywhere else in
+this app.
 
 This is the **one** thing in the app that makes an outbound network call —
 everything else (see "How the Talmud is packaged and loaded" above) runs off

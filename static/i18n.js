@@ -52,8 +52,11 @@ var I18N = (function () {
       "examples.ariaLabel": "דוגמאות",
 
       "install.button": "התקנה",
-      "install.iosHint": "כדי להתקין: הקישו על כפתור השיתוף ↗ בסרגל הכלים, ואז \"הוסף למסך הבית\".",
-      "install.genericHint": "כדי להתקין: פתחו את תפריט הדפדפן (⋮) ובחרו \"התקנת אפליקציה\" או \"הוספה למסך הבית\".",
+      "install.helpHeading": "איך להתקין",
+      "install.iosStep1": "הקישו על כפתור השיתוף ⬆️ בסרגל הכלים",
+      "install.iosStep2": "גללו ובחרו ״הוסף למסך הבית״",
+      "install.genericStep1": "פתחו את תפריט הדפדפן (⋮ או ≡)",
+      "install.genericStep2": "בחרו ״התקנת אפליקציה״ או ״הוספה למסך הבית״",
 
       "waking.message": "מעיר את השרת… בפעם הראשונה אחרי זמן מנוחה זה עלול לקחת כדקה.",
 
@@ -107,6 +110,8 @@ var I18N = (function () {
       "aiSettings.hideAria": "הסתר את המפתח",
       "aiSettings.keySavedToast": "המפתח נשמר בדפדפן שלכם",
       "aiSettings.keyRemovedToast": "המפתח הוסר",
+      "aiSettings.keyDuplicateToast": "המפתח הזה כבר שמור",
+      "aiSettings.keyEmptyToast": "הקלידו מפתח לפני ההוספה",
 
       "external.copiedToast": "השאלה הועתקה — הדביקו אותה בצ'אט שנפתח",
 
@@ -154,8 +159,11 @@ var I18N = (function () {
       "examples.ariaLabel": "Examples",
 
       "install.button": "Install",
-      "install.iosHint": "To install: tap the Share button ↗ in the toolbar, then \"Add to Home Screen\".",
-      "install.genericHint": "To install: open your browser's menu (⋮) and choose \"Install app\" or \"Add to Home Screen\".",
+      "install.helpHeading": "How to install",
+      "install.iosStep1": "Tap the Share button ⬆️ in the toolbar",
+      "install.iosStep2": "Scroll down and choose \"Add to Home Screen\"",
+      "install.genericStep1": "Open your browser's menu (⋮ or ≡)",
+      "install.genericStep2": "Choose \"Install app\" or \"Add to Home Screen\"",
 
       "waking.message": "Waking up the server… the first request after a while can take up to a minute.",
 
@@ -209,6 +217,8 @@ var I18N = (function () {
       "aiSettings.hideAria": "Hide the key",
       "aiSettings.keySavedToast": "Key saved in your browser",
       "aiSettings.keyRemovedToast": "Key removed",
+      "aiSettings.keyDuplicateToast": "That key is already saved",
+      "aiSettings.keyEmptyToast": "Type a key before adding it",
 
       "external.copiedToast": "Question copied — paste it into the chat that opens",
 
@@ -256,8 +266,11 @@ var I18N = (function () {
       "examples.ariaLabel": "Exemples",
 
       "install.button": "Installer",
-      "install.iosHint": "Pour installer : appuyez sur le bouton Partager ↗ dans la barre d'outils, puis « Sur l'écran d'accueil ».",
-      "install.genericHint": "Pour installer : ouvrez le menu du navigateur (⋮) et choisissez « Installer l'application » ou « Ajouter à l'écran d'accueil ».",
+      "install.helpHeading": "Comment installer",
+      "install.iosStep1": "Appuyez sur le bouton Partager ⬆️ dans la barre d'outils",
+      "install.iosStep2": "Faites défiler et choisissez « Sur l'écran d'accueil »",
+      "install.genericStep1": "Ouvrez le menu du navigateur (⋮ ou ≡)",
+      "install.genericStep2": "Choisissez « Installer l'application » ou « Ajouter à l'écran d'accueil »",
 
       "waking.message": "Réveil du serveur… la première requête après une pause peut prendre jusqu'à une minute.",
 
@@ -311,6 +324,8 @@ var I18N = (function () {
       "aiSettings.hideAria": "Masquer la clé",
       "aiSettings.keySavedToast": "Clé enregistrée dans votre navigateur",
       "aiSettings.keyRemovedToast": "Clé supprimée",
+      "aiSettings.keyDuplicateToast": "Cette clé est déjà enregistrée",
+      "aiSettings.keyEmptyToast": "Saisissez une clé avant de l'ajouter",
 
       "external.copiedToast": "Question copiée — collez-la dans le chat qui s'ouvre",
 
