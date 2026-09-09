@@ -199,8 +199,13 @@ stable string for the frontend.
 
 **"Find connections between results"**, shown above the results (not
 scrolled past below them) whenever a search turns up at least 2 individual
-matches, sends the top few of them to a language model and asks it to find
-what connects them. That's meaningful in two shapes:
+matches, sends a language model whichever results the visitor has actually
+checked and asks it to find what connects them. Every visible result card
+carries its own checkbox (none checked by default -- it's opt-in, not an
+automatic "send everything"); only cards currently on screen can be
+selected, and the button itself only enables once at least 2 are checked
+(a single row has nothing to connect to), capped at 15 total across every
+group at once. That's meaningful in two shapes:
 
 - **One search term with several occurrences** — look for a pattern across
   them: a recurring context, a halachic theme, a particular group of sages

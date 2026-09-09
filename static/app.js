@@ -208,8 +208,76 @@
     return button;
   }
 
-  function resultCard(result) {
+  // --- AI-connections selection --------------------------------------------
+  //
+  // Opt-in: every result card carries its own checkbox (see resultCard),
+  // none checked by default. Only cards actually rendered on screen can be
+  // selected at all -- there's no "select everything, including results not
+  // yet loaded" shortcut, so what gets sent to the AI is always exactly what
+  // the visitor can see and has chosen. Capped at SELECTION_CAP total across
+  // every group, matching app/ai.py's own per-request prompt-size caps.
+  var SELECTION_CAP = 15;
+
+  function createSelection() {
+    var byQuery = {}; // query -> array of result refs, insertion order
+    var order = []; // query insertion order, so groups() has a stable shape
+    var listeners = [];
+
+    function count() {
+      var total = 0;
+      for (var q in byQuery) total += byQuery[q].length;
+      return total;
+    }
+
+    var api = {
+      toggle: function (query, result, checked) {
+        var arr = byQuery[query];
+        if (!arr) {
+          arr = byQuery[query] = [];
+          order.push(query);
+        }
+        var idx = arr.indexOf(result);
+        if (checked && idx === -1) {
+          if (count() >= SELECTION_CAP) return false; // cap reached, not applied
+          arr.push(result);
+        } else if (!checked && idx !== -1) {
+          arr.splice(idx, 1);
+        }
+        listeners.forEach(function (fn) { fn(); });
+        return true;
+      },
+      isSelected: function (query, result) {
+        var arr = byQuery[query];
+        return !!arr && arr.indexOf(result) !== -1;
+      },
+      count: count,
+      groups: function () {
+        return order
+          .map(function (q) { return { query: q, results: byQuery[q].slice() }; })
+          .filter(function (g) { return g.results.length > 0; });
+      },
+      onChange: function (fn) { listeners.push(fn); },
+    };
+    return api;
+  }
+
+  function resultCard(result, query, selection) {
     var card = el("article", "card");
+
+    var selectRow = el("label", "card-select");
+    var checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = selection.isSelected(query, result);
+    checkbox.addEventListener("change", function () {
+      var ok = selection.toggle(query, result, checkbox.checked);
+      if (!ok) {
+        checkbox.checked = false; // reverted -- the cap was already reached
+        toast(t(locale, "connections.selectionCapToast", { n: SELECTION_CAP }));
+      }
+    });
+    selectRow.appendChild(checkbox);
+    selectRow.appendChild(el("span", "card-select-label", t(locale, "connections.selectForAi")));
+    card.appendChild(selectRow);
 
     var head = el("div", "card-head");
     head.appendChild(el("span", "badge badge-tractate", localizedName(result.tractate.he, result.tractate.en)));
@@ -247,7 +315,7 @@
     return card;
   }
 
-  function renderGroup(group, snapshot) {
+  function renderGroup(group, snapshot, selection) {
     if (!group.total) {
       return notice(
         t(locale, "result.empty.title", { query: group.query }),
@@ -280,7 +348,7 @@
     // with-prefix boundary -- matches are already sorted exact-first, but
     // that boundary can fall in the middle of any page, not just the first.
     var kindSoFar = { last: null };
-    appendResults(list, group.results, kindSoFar);
+    appendResults(list, group.results, kindSoFar, group.query, selection);
 
     var shownCount = group.results.length;
 
@@ -292,7 +360,7 @@
     updateCountLabel();
 
     if (shownCount < group.total) {
-      section.appendChild(moreButton(group, snapshot, list, kindSoFar, {
+      section.appendChild(moreButton(group, snapshot, list, kindSoFar, selection, {
         get shownCount() { return shownCount; },
         addShown: function (n) { shownCount += n; updateCountLabel(); },
       }));
@@ -305,13 +373,16 @@
   // the list crosses from exact matches into with-prefix ones -- otherwise
   // the two kinds run together with nothing but each card's own small badge
   // to tell them apart, even though the breakdown line above already
-  // promises they're two distinct groups.
-  function appendResults(list, results, kindSoFar) {
+  // promises they're two distinct groups. `query`/`selection` let each
+  // card's own AI-selection checkbox (see resultCard) participate in the
+  // same selection regardless of whether it came from the initial page or
+  // a later "show more" page.
+  function appendResults(list, results, kindSoFar, query, selection) {
     results.forEach(function (result) {
       if (kindSoFar.last === "exact" && result.kind === "withPrefix") {
         list.appendChild(el("h4", "group-subheading", t(locale, "matchKind.withPrefix")));
       }
-      list.appendChild(resultCard(result));
+      list.appendChild(resultCard(result, query, selection));
       kindSoFar.last = result.kind;
     });
   }
@@ -320,7 +391,7 @@
   // growing `offset` and appends the next page, rather than being stuck
   // with whatever the original search's `limit` capped at -- a common word
   // like אביי or רבא has thousands of hits, far past any first page.
-  function moreButton(group, snapshot, list, kindSoFar, state) {
+  function moreButton(group, snapshot, list, kindSoFar, selection, state) {
     var wrap = el("div", "more-wrap");
     var button = el("button", "more");
     button.type = "button";
@@ -352,7 +423,7 @@
         .then(function (response) { return response.json(); })
         .then(function (data) {
           var page = data.groups[0];
-          appendResults(list, page.results, kindSoFar);
+          appendResults(list, page.results, kindSoFar, group.query, selection);
           state.addShown(page.results.length);
           if (remaining() <= 0) {
             wrap.remove();
@@ -637,9 +708,9 @@
    * external chat enough context to work with. Localized to the current UI
    * language (the intro line only -- the Talmud text and citations inside
    * it stay Hebrew/Aramaic regardless, same as everywhere else in this app). */
-  function externalQuestionText(data) {
+  function externalQuestionText(groups) {
     var lines = [t(locale, "external.questionIntro"), ""];
-    data.groups.slice(0, 5).forEach(function (group) {
+    groups.slice(0, 5).forEach(function (group) {
       lines.push("Query: " + group.query);
       group.results.slice(0, 6).forEach(function (result) {
         lines.push("- (" + result.citation + ") " + result.before + " " + result.match + " " + result.after);
@@ -678,19 +749,24 @@
 
   // --- AI connections (optional) ------------------------------------------
   //
-  // Meaningful whenever there are at least 2 individual result rows to
-  // relate to each other -- that's true both for a single search term with
-  // several occurrences (look for a pattern across them) and for several
-  // comma-separated terms (look for what links them), so the gate is on
-  // total result count, not on how many groups the query happened to have
-  // (see hasEnoughToConnect below). Posts the groups already on screen
-  // (server-side capped further in app/ai.py) rather than re-searching, so
-  // what gets analyzed always matches what the user is actually looking at,
-  // plus any BYOK credentials saved above. A server with no shared key
-  // still works as long as the visitor supplied their own; a request that
-  // fails either way surfaces a plain inline error, with a nudge toward AI
-  // settings and the external-AI fallback for the failure codes that mean
-  // "our own AI path can't serve this" (see NEEDS_KEY_CODES below).
+  // Section itself renders whenever there are at least 2 individual result
+  // rows on screen to relate to each other -- true both for a single search
+  // term with several occurrences (look for a pattern across them) and for
+  // several comma-separated terms (look for what links them), so the gate is
+  // on total result count, not on how many groups the query happened to have
+  // (see hasEnoughToConnect below). What actually gets sent is opt-in, not
+  // automatic: each visible result card has its own checkbox (none checked
+  // by default -- see resultCard/createSelection), only cards currently
+  // rendered on screen can be checked at all, and the button itself stays
+  // disabled until at least 2 are (a single row has nothing to connect to).
+  // Posts exactly the checked rows -- selection.groups() -- rather than
+  // re-searching or auto-including everything on screen, so what gets
+  // analyzed is always what the visitor actually chose, plus any BYOK
+  // credentials saved above. A server with no shared key still works as
+  // long as the visitor supplied their own; a request that fails either way
+  // surfaces a plain inline error, with a nudge toward AI settings and the
+  // external-AI fallback for the failure codes that mean "our own AI path
+  // can't serve this" (see NEEDS_KEY_CODES below).
 
   // provider_invalid is included alongside authentication_error because at
   // least one real vendor (Gemini) returns a plain 400 for an invalid key
@@ -702,10 +778,15 @@
     "no_credential", "authentication_error", "provider_invalid", "quota_exceeded", "all_providers_exhausted", "timeout",
   ];
 
-  function connectionsSection(data) {
+  function connectionsSection(data, selection) {
     var section = el("section", "connections");
+
+    var hint = el("p", "connections-hint");
+    section.appendChild(hint);
+
     var button = el("button", "connections-btn", t(locale, "connections.button"));
     button.type = "button";
+    button.disabled = true;
 
     var linksRow = el("div", "connections-links");
     var settingsLink = el("button", "connections-settings-link", t(locale, "connections.settingsLink"));
@@ -720,7 +801,7 @@
     externalToggle.addEventListener("click", function () {
       if (externalWrap.hidden) {
         externalWrap.innerHTML = "";
-        externalWrap.appendChild(externalChatLinks(externalQuestionText(data)));
+        externalWrap.appendChild(externalChatLinks(externalQuestionText(selection.groups())));
         externalWrap.hidden = false;
       } else {
         externalWrap.hidden = true;
@@ -736,7 +817,28 @@
     section.appendChild(externalWrap);
     section.appendChild(body);
 
+    // Live hint + button enablement, driven by every checkbox toggle across
+    // every group's cards (including ones loaded later via "show more") --
+    // selection is a single object shared by reference with every
+    // resultCard, so this fires regardless of where the toggle happened.
+    function updateState() {
+      var n = selection.count();
+      button.disabled = n < 2;
+      if (n === 0) {
+        hint.textContent = t(locale, "connections.selectHint");
+      } else if (n === 1) {
+        hint.textContent = t(locale, "connections.selectHintOneMore");
+      } else {
+        hint.textContent = plural(locale, "connections.selectedCount", n);
+      }
+    }
+    selection.onChange(updateState);
+    updateState();
+
     button.addEventListener("click", function () {
+      var groups = selection.groups();
+      if (groups.length === 0) return; // button is disabled below 2, but be defensive
+
       button.disabled = true;
       button.textContent = t(locale, "connections.loading");
       body.hidden = true;
@@ -744,9 +846,7 @@
 
       var payload = {
         locale: locale,
-        groups: data.groups.map(function (g) {
-          return { query: g.query, results: g.results };
-        }),
+        groups: groups,
         credentials: getAllAiCredentials(),
       };
 
@@ -774,6 +874,7 @@
           button.hidden = true;
           linksRow.hidden = true;
           externalWrap.hidden = true;
+          hint.hidden = true;
         })
         .catch(function (err) {
           body.appendChild(notice(t(locale, "error.title"), err.message, "error"));
@@ -784,11 +885,11 @@
             openSettingsBtn.type = "button";
             openSettingsBtn.addEventListener("click", openAiSettings);
             help.appendChild(openSettingsBtn);
-            help.appendChild(externalChatLinks(externalQuestionText(data)));
+            help.appendChild(externalChatLinks(externalQuestionText(groups)));
             body.appendChild(help);
           }
           body.hidden = false;
-          button.disabled = false;
+          button.disabled = selection.count() < 2;
           button.textContent = t(locale, "connections.button");
         });
     });
@@ -807,13 +908,17 @@
 
   function render(data, snapshot) {
     results.innerHTML = "";
+    // One selection, shared by reference between the connections section
+    // and every card in every group (including cards from a later "show
+    // more" page) -- a single source of truth for what's currently checked.
+    var selection = createSelection();
     // Above the results, not below: it's the first thing offered on a
     // search worth analyzing, not an afterthought scrolled past.
     if (hasEnoughToConnect(data)) {
-      results.appendChild(connectionsSection(data));
+      results.appendChild(connectionsSection(data, selection));
     }
     data.groups.forEach(function (group) {
-      results.appendChild(renderGroup(group, snapshot));
+      results.appendChild(renderGroup(group, snapshot, selection));
     });
   }
 

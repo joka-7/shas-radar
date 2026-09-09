@@ -402,6 +402,23 @@ body {
   padding: .9rem 1rem 1rem;
   margin-bottom: .75rem;
 }
+.card-select {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin-bottom: .5rem;
+  font: 500 .8rem var(--font);
+  color: var(--text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.card-select input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
 .card-head {
   display: flex;
   align-items: center;
@@ -515,6 +532,12 @@ body {
   cursor: pointer;
 }
 .connections-btn:disabled { opacity: .6; cursor: default; }
+.connections-hint {
+  margin: 0 0 .5rem;
+  font-size: .82rem;
+  color: var(--text-soft);
+  text-align: center;
+}
 .connections-body { margin-top: .75rem; }
 .connections.answered .connections-body {
   background: var(--surface);
