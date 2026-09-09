@@ -9,12 +9,13 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from model_dispatcher.exceptions import ModelDispatcherError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import ai
 from .corpus import load_corpus
@@ -198,12 +199,43 @@ class AnalyzeGroup(BaseModel):
     results: list[AnalyzeResultItem] = Field(default_factory=list)
 
 
+class AnalyzeCredential(BaseModel):
+    """A visitor's own key(s) for one vendor -- "bring your own key" (BYOK).
+
+    Never persisted: threaded straight into the one ModelDispatcher
+    dispatch this request makes (see app/ai.py) and discarded afterwards.
+    Several keys for the same vendor are pooled -- ModelDispatcher rotates
+    through them on a rate limit before giving up on that vendor.
+    """
+
+    # Capped defensively (an unbounded list/string in a request body costs
+    # nothing to send but shouldn't cost us anything to accept either) --
+    # nobody legitimately pools more than a handful of keys for one vendor,
+    # and no real API key is anywhere near 200 characters.
+    model_config = ConfigDict(str_max_length=200)
+
+    provider: Literal["gemini", "openai", "anthropic"]
+    apiKeys: list[str] = Field(default_factory=list, max_length=5)
+
+
 class AnalyzeBody(BaseModel):
     # Same cap as a search's own comma-separated term limit (MAX_QUERIES) --
     # an analysis can never legitimately cover more groups than one search
     # response can contain.
     groups: list[AnalyzeGroup] = Field(min_length=1, max_length=MAX_QUERIES)
     locale: str = "he"
+    credentials: list[AnalyzeCredential] = Field(default_factory=list, max_length=3)
+
+
+@app.get("/api/ai-status")
+def ai_status_endpoint() -> dict:
+    """Which vendors already have a shared server key -- for the AI settings UI.
+
+    Lets the settings panel tell a visitor "no key needed for this one" per
+    vendor, versus "bring your own" for the rest.
+    """
+    configured = ai.server_configured_providers()
+    return {"providers": {name: name in configured for name in ("gemini", "openai", "anthropic")}}
 
 
 @app.post("/api/analyze")
@@ -212,18 +244,21 @@ def analyze_endpoint(body: AnalyzeBody) -> JSONResponse:
 
     The one endpoint in this app that makes an outbound network call (see
     app/ai.py) -- everything else runs off the bundled, offline corpus.
-    Quietly unavailable (503) rather than a crash when no provider API key
-    is configured in the environment.
+    Works from a server-configured key, a visitor's own (``body.credentials``),
+    or both; answers a clean 400 ``no_credential`` rather than a crash when
+    neither is available for any vendor.
     """
-    if not ai.is_configured():
-        raise HTTPException(
-            status_code=503,
-            detail=error("ai_not_configured", "ניתוח קשרים אינו מוגדר בשרת זה"),
-        )
-
     groups = [g.model_dump() for g in body.groups]
+    credentials = {
+        cred.provider: [key.strip() for key in cred.apiKeys if key.strip()] for cred in body.credentials
+    }
     try:
-        result = ai.analyze_connections(groups, body.locale)
+        result = ai.analyze_connections(groups, body.locale, credentials=credentials)
+    except ai.NoCredentialError:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "אין מפתח AI זמין — הוסיפו מפתח משלכם בהגדרות ה-AI", "code": "no_credential"},
+        )
     except ModelDispatcherError as exc:
         # Reshaped into this app's own {"error", "code"} convention (the same
         # one http_exception_handler below produces) rather than exposing

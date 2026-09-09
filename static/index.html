@@ -125,10 +125,47 @@
       <span data-i18n="footer.credit">נבנה על ידי</span>
       <a href="https://github.com/joka-7" rel="noopener noreferrer" target="_blank">joka-7</a>
     </p>
+    <button type="button" class="footer-ai-settings" id="footer-ai-settings" data-i18n="aiSettings.openButton">הגדרות AI</button>
     <p class="footer-build" id="footer-build"></p>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!--
+    Native <dialog> rather than a hand-rolled overlay: focus trapping,
+    Escape-to-close, and the ::backdrop all come for free. `method="dialog"`
+    on the form means the close (✕) button needs no JS handler at all.
+    Content beyond this static shell (the provider tabs, key lists, the
+    external-AI links) is built by app.js -- three near-identical vendor
+    panels aren't worth tripling in markup just to carry per-locale text
+    that data-i18n can't reach inside dynamically-swapped content anyway.
+  -->
+  <dialog id="ai-settings-dialog" class="ai-settings-dialog">
+    <form method="dialog" class="ai-settings-form">
+      <div class="ai-settings-head">
+        <h2 data-i18n="aiSettings.heading">הגדרות AI</h2>
+        <button type="submit" class="dialog-close" data-i18n-aria-label="aiSettings.close" aria-label="סגירה">✕</button>
+      </div>
+      <p class="ai-settings-desc" data-i18n="aiSettings.description">
+        מצא קשר בין תוצאות החיפוש נעזר במודל שפה (AI). אפשר להשתמש במפתח משותף של
+        השרת (אם קיים) או להוסיף מפתח אישי משלכם — חינמי אצל כמה מהספקים.
+      </p>
+      <p class="ai-settings-trust" data-i18n="aiSettings.trustNote">
+        מפתח שתוסיפו נשלח רק לשרת של האפליקציה הזו, ומועבר משם לספק שבחרתם — הוא
+        לעולם לא נשמר בשרת ולא מופיע ביומן.
+      </p>
+
+      <div id="ai-provider-tabs" class="ai-provider-tabs" role="tablist"></div>
+      <div id="ai-provider-panel" class="ai-provider-panel"></div>
+
+      <div class="ai-settings-external">
+        <p class="ai-settings-external-heading" data-i18n="aiSettings.externalHeading">
+          בלי מפתח בכלל? אפשר לשאול AI חיצוני ישירות:
+        </p>
+        <div id="ai-external-links" class="external-links"></div>
+      </div>
+    </form>
+  </dialog>
 
   <script src="/i18n.js"></script>
   <script src="/app.js"></script>

@@ -157,7 +157,8 @@ GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות
 GET /api/proximity?a=אביי&b=רבא&within=6
 GET /api/tractates
 GET /api/health
-POST /api/analyze   {"groups": [...], "locale": "he"}   -- see "AI connections" below
+POST /api/analyze   {"groups": [...], "locale": "he", "credentials": [...]}   -- see "AI connections" below
+GET /api/ai-status   -- which vendors have a shared server key, for the AI settings panel
 ```
 
 `q` accepts one term, a phrase, or several comma/semicolon-separated terms
@@ -203,15 +204,16 @@ else in this app.
 
 This is the **one** thing in the app that makes an outbound network call —
 everything else (see "How the Talmud is packaged and loaded" above) runs off
-the bundled, offline corpus, on purpose. The feature is entirely optional and
-quietly disables itself with no crash and no error in the UI beyond the
-button simply not working if clicked: `app/ai.py` builds a
-[ModelDispatcher](https://github.com/joka-7/ModelDispatcher) gateway that
-registers one provider per vendor whose API key is actually set in the
-environment, and `/api/analyze` answers `503 ai_not_configured` when none is.
-A fresh clone with no keys set runs the rest of the app exactly as before.
+the bundled, offline corpus, on purpose. `app/ai.py` builds a
+[ModelDispatcher](https://github.com/joka-7/ModelDispatcher) gateway from
+whichever credentials actually exist for *this* request — server-side, a
+visitor's own, or both — and answers a clean `400 no_credential` rather than
+a crash when neither is available for any vendor. A fresh clone with no keys
+set anywhere runs the rest of the app exactly as before.
 
-To turn it on, set any one (or more, for cross-provider fallback) of:
+### Server-side keys (shared across every visitor)
+
+Set any one (or more, for cross-provider fallback) of:
 
 | Env var | Vendor | Default model |
 | --- | --- | --- |
@@ -227,6 +229,48 @@ since there's no auth here) protects against runaway cost, tunable via
 (defaults: 10 / 20,000 / 200,000); once spent, `/api/analyze` answers a
 `quota_exceeded` error until the window resets rather than calling the
 model.
+
+### Bring your own key (per visitor)
+
+**⚙ AI settings** (in the footer, and next to the connections button once
+it's shown) opens a panel where a visitor can paste their own key for
+Gemini, OpenAI, or Anthropic — several keys per vendor if they like, pooled
+for redundancy (ModelDispatcher rotates through them on a rate limit before
+giving up on that vendor). `/api/ai-status` tells the panel which vendors
+already have a shared server key, so it can say "optional" versus "bring
+your own" per vendor.
+
+A key a visitor adds:
+
+- Is stored **only** in that browser's `localStorage`
+  (`shas-radar:ai-keys`) — never sent anywhere but this app's own `/api/analyze`.
+- Is **never** persisted server-side or logged; it's threaded straight into
+  the one ModelDispatcher dispatch the request makes and discarded
+  afterwards (`AnalyzeCredential` in `app/main.py`, `credentials` param on
+  `ai.analyze_connections`).
+- Always takes precedence over the shared server key **for that vendor**
+  (ModelDispatcher's own credential precedence) — different vendors can mix,
+  e.g. the server has a Gemini key, a visitor adds their own Anthropic key,
+  and both participate in the same cost-tiered fallback chain for that one
+  request.
+
+The registry is rebuilt per request rather than once at startup, specifically
+so a vendor with *no* key at all for a given request (neither server nor
+visitor) is left out of it entirely — ModelDispatcher treats an auth failure
+as terminal, not fallback-worthy, so a keyless vendor sitting ahead of one
+the visitor actually gave a key for would otherwise hard-fail the whole
+request before ever reaching the one that would have worked. See the
+docstring at the top of `app/ai.py` for the full reasoning.
+
+### No key at all
+
+Every failure mode that means "this app's own AI path can't serve this
+request" (`no_credential`, a rejected key, quota exhaustion, every provider
+failing) surfaces a nudge toward **⚙ AI settings**, plus **"ask an external
+AI"** links to ChatGPT, Claude, and Google's AI-mode search — the same
+question, copied to the clipboard and opened pre-filled in a new tab where
+the target supports it. No key, no backend call: just a deep link into a
+product the visitor can already use for free.
 
 ## UI
 
@@ -281,7 +325,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-63 tests, run against the real committed corpus rather than a fixture — the
+72 tests, run against the real committed corpus rather than a fixture — the
 point of most of them is that the actual Talmud gives the expected answer:
 `אביי` and `רבא` each turn up thousands of times, `אמר רבא` matches hundreds
 of consecutive occurrences, and Berakhot really does end at the traditional

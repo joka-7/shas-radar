@@ -512,6 +512,45 @@ body {
 }
 .connections-text { margin: 0; line-height: 1.7; color: var(--text); }
 
+.connections-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  margin-top: .5rem;
+  justify-content: center;
+}
+.connections-settings-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: 500 .8rem var(--font);
+  color: var(--text-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.connections-settings-link:hover { color: var(--accent-text); }
+.connections-external-wrap { margin-top: .6rem; }
+.connections-help {
+  margin-top: .75rem;
+  padding-top: .75rem;
+  border-top: 1px dashed var(--line);
+}
+.connections-help p { margin: 0 0 .5rem; font-size: .82rem; color: var(--text-soft); }
+.connections-help .connections-settings-link { display: block; margin-bottom: .6rem; }
+
+.external-links { display: flex; flex-wrap: wrap; gap: .5rem; }
+.external-link {
+  display: inline-flex;
+  align-items: center;
+  font: 500 .82rem var(--font);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: .3rem .8rem;
+  text-decoration: none;
+}
+.external-link:hover { opacity: .85; }
+
 .skeleton .line {
   height: 1rem;
   border-radius: 6px;
@@ -576,6 +615,168 @@ body {
 /* Which commit is actually running, plain and unambiguous -- so "is this
    fix even deployed yet" is a glance at the page, not a guess. */
 .footer-build { margin-top: .4rem; margin-bottom: 0; font-size: .65rem; opacity: .6; direction: ltr; }
+
+.footer-ai-settings {
+  display: inline-block;
+  margin-top: .6rem;
+  background: none;
+  border: none;
+  padding: .2rem 0;
+  font: 500 .75rem var(--font);
+  color: var(--text-faint);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.footer-ai-settings:hover { color: var(--accent-text); }
+
+/* --- AI settings dialog --- */
+
+.ai-settings-dialog {
+  width: min(92vw, 30rem);
+  max-height: min(88vh, 40rem);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: var(--surface);
+  color: var(--text);
+}
+.ai-settings-dialog::backdrop { background: rgba(20, 16, 8, .5); }
+.ai-settings-form { padding: 1.25rem; overflow-y: auto; }
+
+.ai-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .6rem;
+}
+.ai-settings-head h2 { margin: 0; font-family: var(--font-verse); font-size: 1.2rem; }
+.dialog-close {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  font-size: .9rem;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.ai-settings-desc, .ai-settings-trust {
+  font-size: .82rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+  margin: 0 0 .6rem;
+}
+.ai-settings-trust { font-size: .75rem; color: var(--text-faint); }
+
+.ai-provider-tabs {
+  display: flex;
+  gap: .3rem;
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: .25rem;
+  margin: .9rem 0 .8rem;
+}
+.ai-provider-tab {
+  flex: 1;
+  font: 500 .78rem var(--font);
+  color: var(--text-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: .4rem .5rem;
+  min-height: 32px;
+  cursor: pointer;
+}
+.ai-provider-tab.active { background: var(--surface); color: var(--accent-text); font-weight: 700; box-shadow: var(--shadow); }
+
+.ai-provider-status {
+  font-size: .8rem;
+  border-radius: var(--radius-sm);
+  padding: .5rem .7rem;
+  margin: 0 0 .6rem;
+}
+.ai-provider-status.available { background: var(--accent-soft); color: var(--accent-text); }
+.ai-provider-status.unavailable { background: var(--surface-2); color: var(--text-soft); }
+
+.ai-provider-getkey { font-size: .8rem; color: var(--text-soft); margin: 0 0 .7rem; }
+.ai-provider-getkey a { color: var(--accent-text); }
+.free-tag {
+  display: inline-block;
+  background: var(--exact-bg);
+  color: var(--exact);
+  border-radius: 999px;
+  padding: .05rem .5rem;
+  font-weight: 600;
+  font-size: .72rem;
+}
+
+.ai-key-list { display: flex; flex-direction: column; gap: .4rem; margin-bottom: .6rem; }
+.ai-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: .35rem .6rem;
+}
+.ai-key-masked { font-family: monospace; font-size: .8rem; color: var(--text-soft); direction: ltr; }
+.ai-key-remove {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: .85rem;
+  min-height: 28px;
+  padding: 0 .3rem;
+}
+.ai-key-remove:hover { color: var(--gold); }
+.ai-key-empty { font-size: .78rem; color: var(--text-faint); margin: 0 0 .6rem; }
+
+.ai-key-add { display: flex; gap: .4rem; align-items: center; }
+.ai-key-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 .6rem;
+  font: 400 .85rem var(--font);
+  background: var(--surface);
+  color: var(--text);
+  direction: ltr;
+}
+.ai-key-show {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  min-width: 40px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.ai-key-addbtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0 .9rem;
+  min-height: 40px;
+  font: 600 .82rem var(--font);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ai-key-addbtn:hover { opacity: .9; }
+
+.ai-settings-external {
+  margin-top: 1rem;
+  padding-top: .9rem;
+  border-top: 1px dashed var(--line);
+}
+.ai-settings-external-heading { font-size: .8rem; color: var(--text-soft); margin: 0 0 .5rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
