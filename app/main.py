@@ -13,7 +13,10 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from model_dispatcher.exceptions import ModelDispatcherError
+from pydantic import BaseModel, Field
 
+from . import ai
 from .corpus import load_corpus
 from .hebrew import daf_citation
 from .search import (
@@ -179,6 +182,59 @@ def proximity_endpoint(
             }
         )
     return {"total": total, "results": results}
+
+
+class AnalyzeResultItem(BaseModel):
+    """The subset of a search result the analysis prompt actually needs."""
+
+    citation: str = ""
+    before: str = ""
+    match: str = ""
+    after: str = ""
+
+
+class AnalyzeGroup(BaseModel):
+    query: str
+    results: list[AnalyzeResultItem] = Field(default_factory=list)
+
+
+class AnalyzeBody(BaseModel):
+    # Same cap as a search's own comma-separated term limit (MAX_QUERIES) --
+    # an analysis can never legitimately cover more groups than one search
+    # response can contain.
+    groups: list[AnalyzeGroup] = Field(min_length=1, max_length=MAX_QUERIES)
+    locale: str = "he"
+
+
+@app.post("/api/analyze")
+def analyze_endpoint(body: AnalyzeBody) -> JSONResponse:
+    """AI-assisted: look for a connection across the groups' top results.
+
+    The one endpoint in this app that makes an outbound network call (see
+    app/ai.py) -- everything else runs off the bundled, offline corpus.
+    Quietly unavailable (503) rather than a crash when no provider API key
+    is configured in the environment.
+    """
+    if not ai.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=error("ai_not_configured", "ניתוח קשרים אינו מוגדר בשרת זה"),
+        )
+
+    groups = [g.model_dump() for g in body.groups]
+    try:
+        result = ai.analyze_connections(groups, body.locale)
+    except ModelDispatcherError as exc:
+        # Reshaped into this app's own {"error", "code"} convention (the same
+        # one http_exception_handler below produces) rather than exposing
+        # ModelDispatcher's own {"error", "detail"} payload shape verbatim --
+        # so the frontend's existing `error.code.*` lookup pattern just works.
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={"error": exc.message, "code": exc.error_code},
+        )
+
+    return JSONResponse(content={"connection": result.text, "provider": result.provider})
 
 
 @app.exception_handler(HTTPException)

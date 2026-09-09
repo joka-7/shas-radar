@@ -77,6 +77,13 @@ var I18N = (function () {
       "more.loading": "טוען…",
       "more.error": "שגיאה בטעינה — נסו שוב",
 
+      "connections.button": "מצא קשר בין התוצאות",
+      "connections.loading": "מחפש קשר…",
+      "connections.error.generic": "לא ניתן היה למצוא קשר כרגע",
+      "connections.error.code.ai_not_configured": "התכונה הזו אינה מוגדרת בשרת הזה",
+      "connections.error.code.quota_exceeded": "המכסה היומית לניתוח AI נוצלה — נסו שוב מאוחר יותר",
+      "connections.error.code.all_providers_exhausted": "שירותי ה-AI אינם זמינים כרגע — נסו שוב מאוחר יותר",
+
       "error.title": "שגיאה",
       "error.generic": "החיפוש נכשל",
       "error.code.empty": "יש להזין מילה, שם או ביטוי לחיפוש",
@@ -146,6 +153,13 @@ var I18N = (function () {
       "more.loading": "Loading…",
       "more.error": "Failed to load — try again",
 
+      "connections.button": "Find connections between results",
+      "connections.loading": "Looking for connections…",
+      "connections.error.generic": "Couldn't find a connection right now",
+      "connections.error.code.ai_not_configured": "This feature isn't configured on this server",
+      "connections.error.code.quota_exceeded": "Today's AI analysis quota is used up — try again later",
+      "connections.error.code.all_providers_exhausted": "AI services are unavailable right now — try again later",
+
       "error.title": "Error",
       "error.generic": "Search failed",
       "error.code.empty": "Enter a word, name, or phrase to search",
@@ -214,6 +228,13 @@ var I18N = (function () {
       "more.button": "Afficher {n} de plus",
       "more.loading": "Chargement…",
       "more.error": "Échec du chargement — réessayez",
+
+      "connections.button": "Trouver des liens entre les résultats",
+      "connections.loading": "Recherche de liens…",
+      "connections.error.generic": "Impossible de trouver un lien pour le moment",
+      "connections.error.code.ai_not_configured": "Cette fonctionnalité n'est pas configurée sur ce serveur",
+      "connections.error.code.quota_exceeded": "Le quota d'analyse IA du jour est épuisé — réessayez plus tard",
+      "connections.error.code.all_providers_exhausted": "Les services d'IA sont indisponibles pour le moment — réessayez plus tard",
 
       "error.title": "Erreur",
       "error.generic": "La recherche a échoué",

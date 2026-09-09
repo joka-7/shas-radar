@@ -370,11 +370,77 @@
     return box;
   }
 
+  // --- AI connections (optional) ------------------------------------------
+  //
+  // Only meaningful with more than one group -- "find connections between
+  // the results" needs plural results to connect in the first place. Posts
+  // the groups already on screen (server-side capped further in app/ai.py)
+  // rather than re-searching, so what gets analyzed always matches what the
+  // user is actually looking at. Server-side "not configured" (a fresh clone
+  // with no AI provider key set) surfaces as a plain inline error, same as
+  // any other failed request -- the button itself doesn't know in advance.
+
+  function connectionsSection(data) {
+    var section = el("section", "connections");
+    var button = el("button", "connections-btn", t(locale, "connections.button"));
+    button.type = "button";
+    var body = el("div", "connections-body");
+    body.hidden = true;
+    section.appendChild(button);
+    section.appendChild(body);
+
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      button.textContent = t(locale, "connections.loading");
+      body.hidden = true;
+      body.innerHTML = "";
+
+      var payload = {
+        locale: locale,
+        groups: data.groups.map(function (g) {
+          return { query: g.query, results: g.results };
+        }),
+      };
+
+      fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then(function (response) {
+          return response.json().then(function (result) {
+            if (!response.ok) {
+              var message = (result.code && t(locale, "connections.error.code." + result.code)) || t(locale, "connections.error.generic");
+              throw new Error(message);
+            }
+            return result;
+          });
+        })
+        .then(function (result) {
+          body.appendChild(el("p", "connections-text", result.connection));
+          body.hidden = false;
+          section.classList.add("answered");
+          button.hidden = true;
+        })
+        .catch(function (err) {
+          body.appendChild(notice(t(locale, "error.title"), err.message, "error"));
+          body.hidden = false;
+          button.disabled = false;
+          button.textContent = t(locale, "connections.button");
+        });
+    });
+
+    return section;
+  }
+
   function render(data, snapshot) {
     results.innerHTML = "";
     data.groups.forEach(function (group) {
       results.appendChild(renderGroup(group, snapshot));
     });
+    if (data.groups.length >= 2) {
+      results.appendChild(connectionsSection(data));
+    }
   }
 
   function renderSkeleton() {
