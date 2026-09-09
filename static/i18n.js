@@ -26,13 +26,13 @@ var I18N = (function () {
 
   var STRINGS = {
     he: {
-      "meta.description": "חיפוש מילים, שמות וביטויים בכל הש״ס, עם הקשר מתכוונן של מילים לפני ואחרי.",
+      "meta.description": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס, עם הקשר מתכוונן של מילים לפני ואחרי.",
       "doc.title": "ש״ס רדאר — חיפוש בש״ס",
 
       "header.title": "ש״ס רדאר",
-      "header.subtitle": "חיפוש מילים, שמות וביטויים בכל הש״ס — עם הקשר לפני ואחרי",
+      "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס — עם הקשר לפני ואחרי",
 
-      "search.label": "מילה, שם, ביטוי, או כמה מופרדים בפסיק",
+      "search.label": "מילה בודדת, מילים ברצף או מופרדות בפסיק",
       "search.placeholder": "לדוגמה: {example}",
       "search.button": "חיפוש",
 
@@ -46,7 +46,7 @@ var I18N = (function () {
 
       "howItWorks.title": "איך זה עובד?",
       "howItWorks.p1": "מילה בודדת — נמצאת גם עם אותיות שימוש בתחילתה (ד/ל/ו/כ/ב וכו׳), כגון שחיפוש \"אביי\" מוצא גם \"דאביי\" ו\"לאביי\".",
-      "howItWorks.p2": "כמה מילים ברצף (ללא פסיק) — נמצא הביטוי המדויק ברצף הזה בלבד.",
+      "howItWorks.p2": "כמה מילים ברצף (ללא פסיק) — נמצא ברצף הזה, כולל כשלמילה הראשונה יש אות שימוש בתחילתה.",
       "howItWorks.p3": "פסיק מפריד בין כמה מונחים נפרדים לחיפוש (עד 5 בבת אחת).",
 
       "examples.ariaLabel": "דוגמאות",
@@ -79,10 +79,36 @@ var I18N = (function () {
 
       "connections.button": "מצא קשר בין התוצאות",
       "connections.loading": "מחפש קשר…",
+      "connections.settingsLink": "⚙ הגדרות AI",
+      "connections.orExternal": "או שאלו AI חיצוני ↗",
       "connections.error.generic": "לא ניתן היה למצוא קשר כרגע",
-      "connections.error.code.ai_not_configured": "התכונה הזו אינה מוגדרת בשרת הזה",
+      "connections.error.code.no_credential": "אין מפתח AI זמין",
+      "connections.error.code.authentication_error": "המפתח שהוזן לא תקין",
+      "connections.error.code.provider_invalid": "הספק דחה את הבקשה — ייתכן שהמפתח שגוי",
       "connections.error.code.quota_exceeded": "המכסה היומית לניתוח AI נוצלה — נסו שוב מאוחר יותר",
       "connections.error.code.all_providers_exhausted": "שירותי ה-AI אינם זמינים כרגע — נסו שוב מאוחר יותר",
+      "connections.error.tryOwnKey": "פתחו את הגדרות ה-AI כדי להוסיף מפתח משלכם, או שאלו AI חיצוני:",
+
+      "aiSettings.openButton": "⚙ הגדרות AI",
+      "aiSettings.heading": "הגדרות AI",
+      "aiSettings.close": "סגירה",
+      "aiSettings.description": "\"מצא קשר בין התוצאות\" נעזר במודל שפה (AI). אפשר להשתמש במפתח משותף של השרת (אם מוגדר) או להוסיף מפתח אישי משלכם — חינמי אצל כמה מהספקים.",
+      "aiSettings.trustNote": "מפתח שתוסיפו נשלח רק לשרת של האפליקציה הזו, ומועבר משם לספק שבחרתם בלבד — הוא לעולם לא נשמר בשרת ולא מופיע ביומן. השמירה עצמה היא רק בדפדפן שלכם (localStorage).",
+      "aiSettings.externalHeading": "בלי מפתח בכלל? אפשר לשאול AI חיצוני ישירות:",
+      "aiSettings.serverAvailable": "✓ מפתח משותף זמין בשרת — לא חובה מפתח משלכם",
+      "aiSettings.serverUnavailable": "אין מפתח משותף לספק הזה בשרת — הוסיפו משלכם",
+      "aiSettings.freeTag": "חינמי",
+      "aiSettings.getKeyPrefix": "קבלו מפתח ב־",
+      "aiSettings.keyPlaceholder": "מפתח API…",
+      "aiSettings.addKey": "הוספה",
+      "aiSettings.noKeysYet": "לא נשמרו מפתחות לספק זה",
+      "aiSettings.removeAria": "הסרת המפתח {key}",
+      "aiSettings.showAria": "הצג את המפתח",
+      "aiSettings.hideAria": "הסתר את המפתח",
+      "aiSettings.keySavedToast": "המפתח נשמר בדפדפן שלכם",
+      "aiSettings.keyRemovedToast": "המפתח הוסר",
+
+      "external.copiedToast": "השאלה הועתקה — הדביקו אותה בצ'אט שנפתח",
 
       "error.title": "שגיאה",
       "error.generic": "החיפוש נכשל",
@@ -122,7 +148,7 @@ var I18N = (function () {
 
       "howItWorks.title": "How does this work?",
       "howItWorks.p1": "A single word — also found with an attached clitic (ד/ל/ו/כ/ב, etc.) at the front, so searching \"אביי\" also finds \"דאביי\" and \"לאביי\".",
-      "howItWorks.p2": "Several words in a row (no comma) — matches only that exact consecutive phrase.",
+      "howItWorks.p2": "Several words in a row (no comma) — matches that consecutive phrase, including when the first word carries an attached clitic.",
       "howItWorks.p3": "A comma separates several independent terms to search (up to 5 at once).",
 
       "examples.ariaLabel": "Examples",
@@ -155,10 +181,36 @@ var I18N = (function () {
 
       "connections.button": "Find connections between results",
       "connections.loading": "Looking for connections…",
+      "connections.settingsLink": "⚙ AI settings",
+      "connections.orExternal": "or ask an external AI ↗",
       "connections.error.generic": "Couldn't find a connection right now",
-      "connections.error.code.ai_not_configured": "This feature isn't configured on this server",
+      "connections.error.code.no_credential": "No AI key is available",
+      "connections.error.code.authentication_error": "That key didn't work",
+      "connections.error.code.provider_invalid": "The provider rejected the request — the key may be wrong",
       "connections.error.code.quota_exceeded": "Today's AI analysis quota is used up — try again later",
       "connections.error.code.all_providers_exhausted": "AI services are unavailable right now — try again later",
+      "connections.error.tryOwnKey": "Open AI settings to add your own key, or ask an external AI instead:",
+
+      "aiSettings.openButton": "⚙ AI settings",
+      "aiSettings.heading": "AI settings",
+      "aiSettings.close": "Close",
+      "aiSettings.description": "\"Find connections between results\" uses a language model (AI). You can use the server's shared key (if one is set) or add your own — free with a few providers.",
+      "aiSettings.trustNote": "A key you add is sent only to this app's own server, and forwarded from there only to the provider you picked — it's never stored on the server or logged. It's saved only in your own browser (localStorage).",
+      "aiSettings.externalHeading": "No key at all? Ask an external AI directly:",
+      "aiSettings.serverAvailable": "✓ A shared key is set on the server — your own key is optional",
+      "aiSettings.serverUnavailable": "No shared key for this provider on the server — add your own",
+      "aiSettings.freeTag": "free",
+      "aiSettings.getKeyPrefix": "Get a key at ",
+      "aiSettings.keyPlaceholder": "API key…",
+      "aiSettings.addKey": "Add",
+      "aiSettings.noKeysYet": "No keys saved for this provider yet",
+      "aiSettings.removeAria": "Remove key {key}",
+      "aiSettings.showAria": "Show the key",
+      "aiSettings.hideAria": "Hide the key",
+      "aiSettings.keySavedToast": "Key saved in your browser",
+      "aiSettings.keyRemovedToast": "Key removed",
+
+      "external.copiedToast": "Question copied — paste it into the chat that opens",
 
       "error.title": "Error",
       "error.generic": "Search failed",
@@ -198,7 +250,7 @@ var I18N = (function () {
 
       "howItWorks.title": "Comment ça marche ?",
       "howItWorks.p1": "Un seul mot — trouvé aussi avec une lettre de liaison attachée au début (ד/ל/ו/כ/ב, etc.), par exemple une recherche de « אביי » trouve aussi « דאביי » et « לאביי ».",
-      "howItWorks.p2": "Plusieurs mots à la suite (sans virgule) — ne trouve que cette expression exacte et consécutive.",
+      "howItWorks.p2": "Plusieurs mots à la suite (sans virgule) — trouve cette expression consécutive, y compris quand le premier mot porte une lettre de liaison attachée.",
       "howItWorks.p3": "Une virgule sépare plusieurs termes indépendants à rechercher (jusqu'à 5 à la fois).",
 
       "examples.ariaLabel": "Exemples",
@@ -231,10 +283,36 @@ var I18N = (function () {
 
       "connections.button": "Trouver des liens entre les résultats",
       "connections.loading": "Recherche de liens…",
+      "connections.settingsLink": "⚙ Paramètres IA",
+      "connections.orExternal": "ou demandez à une IA externe ↗",
       "connections.error.generic": "Impossible de trouver un lien pour le moment",
-      "connections.error.code.ai_not_configured": "Cette fonctionnalité n'est pas configurée sur ce serveur",
+      "connections.error.code.no_credential": "Aucune clé IA n'est disponible",
+      "connections.error.code.authentication_error": "Cette clé n'a pas fonctionné",
+      "connections.error.code.provider_invalid": "Le fournisseur a rejeté la requête — la clé est peut-être incorrecte",
       "connections.error.code.quota_exceeded": "Le quota d'analyse IA du jour est épuisé — réessayez plus tard",
       "connections.error.code.all_providers_exhausted": "Les services d'IA sont indisponibles pour le moment — réessayez plus tard",
+      "connections.error.tryOwnKey": "Ouvrez les paramètres IA pour ajouter votre propre clé, ou demandez à une IA externe :",
+
+      "aiSettings.openButton": "⚙ Paramètres IA",
+      "aiSettings.heading": "Paramètres IA",
+      "aiSettings.close": "Fermer",
+      "aiSettings.description": "« Trouver des liens entre les résultats » utilise un modèle de langage (IA). Vous pouvez utiliser la clé partagée du serveur (si définie) ou ajouter la vôtre — gratuite chez plusieurs fournisseurs.",
+      "aiSettings.trustNote": "Une clé que vous ajoutez est envoyée uniquement au serveur de cette application, et transmise de là uniquement au fournisseur choisi — elle n'est jamais stockée sur le serveur ni journalisée. Elle n'est enregistrée que dans votre propre navigateur (localStorage).",
+      "aiSettings.externalHeading": "Pas de clé du tout ? Demandez directement à une IA externe :",
+      "aiSettings.serverAvailable": "✓ Une clé partagée est configurée sur le serveur — la vôtre est optionnelle",
+      "aiSettings.serverUnavailable": "Aucune clé partagée pour ce fournisseur sur le serveur — ajoutez la vôtre",
+      "aiSettings.freeTag": "gratuit",
+      "aiSettings.getKeyPrefix": "Obtenez une clé sur ",
+      "aiSettings.keyPlaceholder": "Clé API…",
+      "aiSettings.addKey": "Ajouter",
+      "aiSettings.noKeysYet": "Aucune clé enregistrée pour ce fournisseur",
+      "aiSettings.removeAria": "Supprimer la clé {key}",
+      "aiSettings.showAria": "Afficher la clé",
+      "aiSettings.hideAria": "Masquer la clé",
+      "aiSettings.keySavedToast": "Clé enregistrée dans votre navigateur",
+      "aiSettings.keyRemovedToast": "Clé supprimée",
+
+      "external.copiedToast": "Question copiée — collez-la dans le chat qui s'ouvre",
 
       "error.title": "Erreur",
       "error.generic": "La recherche a échoué",

@@ -29,6 +29,11 @@
   var tractateSelect = document.getElementById("tractate");
   var langSwitch = document.getElementById("lang-switch");
   var installBtn = document.getElementById("install-btn");
+  var footerAiSettingsBtn = document.getElementById("footer-ai-settings");
+  var aiDialog = document.getElementById("ai-settings-dialog");
+  var aiTabsEl = document.getElementById("ai-provider-tabs");
+  var aiPanelEl = document.getElementById("ai-provider-panel");
+  var aiExternalLinksEl = document.getElementById("ai-external-links");
 
   var before = 5;
   var after = 5;
@@ -49,6 +54,7 @@
   var lastSnapshot = null;
   var lastTractates = null;
   var lastHealth = null;
+  var lastAiStatus = null;
 
   function loadLocale() {
     try {
@@ -256,7 +262,7 @@
     head.appendChild(countLabel);
     section.appendChild(head);
 
-    if (!group.isPhrase && group.prefixTotal > 0) {
+    if (group.prefixTotal > 0) {
       var breakdown = el("p", "group-breakdown");
       var exactSpan = el("span", "tag-exact", t(locale, "matchKind.exactTag", { n: I18N.formatNumber(locale, group.exactTotal) }));
       var prefixSpan = el("span", "tag-prefix", t(locale, "matchKind.withPrefixTag", { n: I18N.formatNumber(locale, group.prefixTotal) }));
@@ -370,23 +376,345 @@
     return box;
   }
 
+  // --- AI settings: bring-your-own-key (BYOK) -----------------------------
+  //
+  // The server may already have a shared key for a vendor (see /api/ai-status);
+  // a visitor can also add their own, per vendor, several pooled together for
+  // redundancy. Keys live only in this browser's localStorage and are sent
+  // with an /api/analyze request only, never persisted anywhere server-side
+  // (see app/ai.py's module docstring / README's "AI connections" section).
+
+  var AI_KEYS_STORAGE_KEY = "shas-radar:ai-keys";
+
+  var AI_PROVIDERS = [
+    { id: "gemini", label: "Gemini", keyUrl: "https://aistudio.google.com/apikey", free: true },
+    { id: "openai", label: "OpenAI (GPT)", keyUrl: "https://platform.openai.com/api-keys" },
+    { id: "anthropic", label: "Claude (Anthropic)", keyUrl: "https://console.anthropic.com/settings/keys" },
+  ];
+
+  var activeAiProvider = AI_PROVIDERS[0].id;
+
+  function loadAiKeyMap() {
+    try {
+      var raw = localStorage.getItem(AI_KEYS_STORAGE_KEY);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      var map = {};
+      AI_PROVIDERS.forEach(function (p) {
+        var keys = parsed[p.id];
+        if (Array.isArray(keys)) {
+          map[p.id] = keys.filter(function (k) { return typeof k === "string" && k.trim(); });
+        }
+      });
+      return map;
+    } catch (err) {
+      return {}; // private browsing / storage disabled / corrupted JSON
+    }
+  }
+
+  function saveAiKeyMap(map) {
+    try {
+      localStorage.setItem(AI_KEYS_STORAGE_KEY, JSON.stringify(map));
+    } catch (err) {
+      /* not persisted this session -- the panel still works for one request */
+    }
+  }
+
+  function getAiKeys(providerId) {
+    return loadAiKeyMap()[providerId] || [];
+  }
+
+  function addAiKey(providerId, rawKey) {
+    var trimmed = (rawKey || "").trim();
+    if (!trimmed) return false;
+    var map = loadAiKeyMap();
+    var existing = map[providerId] || [];
+    if (existing.indexOf(trimmed) !== -1) return false;
+    map[providerId] = existing.concat([trimmed]);
+    saveAiKeyMap(map);
+    return true;
+  }
+
+  function removeAiKey(providerId, key) {
+    var map = loadAiKeyMap();
+    var next = (map[providerId] || []).filter(function (k) { return k !== key; });
+    if (next.length) {
+      map[providerId] = next;
+    } else {
+      delete map[providerId];
+    }
+    saveAiKeyMap(map);
+  }
+
+  /* Every saved provider + its pooled keys, shaped for POST /api/analyze's
+   * `credentials` field. Providers with no saved key are omitted. */
+  function getAllAiCredentials() {
+    var map = loadAiKeyMap();
+    return AI_PROVIDERS
+      .map(function (p) { return { provider: p.id, apiKeys: map[p.id] || [] }; })
+      .filter(function (c) { return c.apiKeys.length > 0; });
+  }
+
+  function maskKey(key) {
+    return key.length <= 8 ? "••••" : key.slice(0, 4) + "…" + key.slice(-4);
+  }
+
+  function renderAiProviderTabs() {
+    aiTabsEl.innerHTML = "";
+    AI_PROVIDERS.forEach(function (p) {
+      var btn = el("button", "ai-provider-tab" + (p.id === activeAiProvider ? " active" : ""), p.label);
+      btn.type = "button";
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", p.id === activeAiProvider ? "true" : "false");
+      btn.addEventListener("click", function () {
+        activeAiProvider = p.id;
+        renderAiProviderTabs();
+        renderAiProviderPanel();
+      });
+      aiTabsEl.appendChild(btn);
+    });
+  }
+
+  function renderAiProviderPanel() {
+    aiPanelEl.innerHTML = "";
+    var provider = AI_PROVIDERS.filter(function (p) { return p.id === activeAiProvider; })[0];
+    if (!provider) return;
+
+    var serverHas = !!(lastAiStatus && lastAiStatus.providers && lastAiStatus.providers[provider.id]);
+    aiPanelEl.appendChild(el(
+      "p",
+      "ai-provider-status " + (serverHas ? "available" : "unavailable"),
+      t(locale, serverHas ? "aiSettings.serverAvailable" : "aiSettings.serverUnavailable")
+    ));
+
+    var getKey = el("p", "ai-provider-getkey");
+    getKey.appendChild(document.createTextNode(t(locale, "aiSettings.getKeyPrefix")));
+    var keyLink = document.createElement("a");
+    keyLink.href = provider.keyUrl;
+    keyLink.target = "_blank";
+    keyLink.rel = "noopener noreferrer";
+    keyLink.textContent = provider.keyUrl.replace(/^https:\/\//, "");
+    getKey.appendChild(keyLink);
+    if (provider.free) {
+      getKey.appendChild(document.createTextNode(" · "));
+      getKey.appendChild(el("span", "free-tag", t(locale, "aiSettings.freeTag")));
+    }
+    aiPanelEl.appendChild(getKey);
+
+    var keys = getAiKeys(provider.id);
+    var list = el("div", "ai-key-list");
+    if (keys.length) {
+      keys.forEach(function (key) {
+        var row = el("div", "ai-key-row");
+        row.appendChild(el("span", "ai-key-masked", maskKey(key)));
+        var removeBtn = el("button", "ai-key-remove", "✕");
+        removeBtn.type = "button";
+        removeBtn.setAttribute("aria-label", t(locale, "aiSettings.removeAria", { key: maskKey(key) }));
+        removeBtn.addEventListener("click", function () {
+          removeAiKey(provider.id, key);
+          toast(t(locale, "aiSettings.keyRemovedToast"));
+          renderAiProviderPanel();
+        });
+        row.appendChild(removeBtn);
+        list.appendChild(row);
+      });
+    } else {
+      list.appendChild(el("p", "ai-key-empty", t(locale, "aiSettings.noKeysYet")));
+    }
+    aiPanelEl.appendChild(list);
+
+    var addRow = el("div", "ai-key-add");
+    var keyInput = document.createElement("input");
+    keyInput.type = "password";
+    keyInput.placeholder = t(locale, "aiSettings.keyPlaceholder");
+    keyInput.className = "ai-key-input";
+    keyInput.autocomplete = "off";
+
+    var showBtn = el("button", "ai-key-show", "👁");
+    showBtn.type = "button";
+    var shown = false;
+    showBtn.setAttribute("aria-label", t(locale, "aiSettings.showAria"));
+    showBtn.addEventListener("click", function () {
+      shown = !shown;
+      keyInput.type = shown ? "text" : "password";
+      showBtn.setAttribute("aria-label", t(locale, shown ? "aiSettings.hideAria" : "aiSettings.showAria"));
+    });
+
+    var addBtn = el("button", "ai-key-addbtn", t(locale, "aiSettings.addKey"));
+    addBtn.type = "button";
+    function doAdd() {
+      if (addAiKey(provider.id, keyInput.value)) {
+        toast(t(locale, "aiSettings.keySavedToast"));
+        keyInput.value = "";
+        renderAiProviderPanel();
+      }
+    }
+    addBtn.addEventListener("click", doAdd);
+    keyInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        doAdd();
+      }
+    });
+
+    addRow.appendChild(keyInput);
+    addRow.appendChild(showBtn);
+    addRow.appendChild(addBtn);
+    aiPanelEl.appendChild(addRow);
+  }
+
+  function renderAiExternalLinks() {
+    aiExternalLinksEl.innerHTML = "";
+    aiExternalLinksEl.appendChild(externalChatLinks(null));
+  }
+
+  function openAiSettings() {
+    renderAiProviderTabs();
+    renderAiProviderPanel();
+    renderAiExternalLinks();
+    if (typeof aiDialog.showModal === "function") {
+      aiDialog.showModal();
+    } else {
+      aiDialog.setAttribute("open", ""); // very old browser: falls back to non-modal
+    }
+  }
+
+  footerAiSettingsBtn.addEventListener("click", openAiSettings);
+
+  // --- External AI fallback ------------------------------------------------
+  //
+  // No key configured at all (server or BYOK), or the request came back
+  // blocked/exhausted -- rather than a dead end, hand the same question to a
+  // free, public AI chat product in a new tab. No key, no backend call: the
+  // question is copied to the clipboard (since a target site's prefill
+  // parameter is an unofficial, unstable convention that might not land the
+  // text) and the site opens ready to paste it in.
+
+  var EXTERNAL_CHAT_PROVIDERS = [
+    {
+      id: "chatgpt", name: "ChatGPT", homeUrl: "https://chatgpt.com/",
+      buildUrl: function (q) { return "https://chatgpt.com/?" + new URLSearchParams({ q: q, hints: "search" }); },
+    },
+    {
+      id: "claude", name: "Claude", homeUrl: "https://claude.ai/new",
+      buildUrl: function (q) { return "https://claude.ai/new?" + new URLSearchParams({ q: q }); },
+    },
+    {
+      id: "gemini", name: "Gemini",
+      // gemini.google.com has no known prefill parameter; Google Search's AI
+      // Mode (udm=50) does, and is the more reliable target for one.
+      homeUrl: "https://www.google.com/",
+      buildUrl: function (q) { return "https://www.google.com/search?" + new URLSearchParams({ q: q, udm: "50" }); },
+    },
+  ];
+
+  function copyToClipboard(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function () { /* nothing actionable here */ });
+      }
+    } catch (err) { /* best effort only */ }
+  }
+
+  /* Plain-text version of the same question app/ai.py asks the model --
+   * doesn't need to match its engineered prompt verbatim, just give an
+   * external chat enough context to work with. */
+  function externalQuestionText(data) {
+    var lines = [
+      "Here are search results from the Babylonian Talmud for a few terms searched together. What connects them?",
+      "",
+    ];
+    data.groups.slice(0, 5).forEach(function (group) {
+      lines.push("Query: " + group.query);
+      group.results.slice(0, 6).forEach(function (result) {
+        lines.push("- (" + result.citation + ") " + result.before + " " + result.match + " " + result.after);
+      });
+      lines.push("");
+    });
+    return lines.join("\n").trim();
+  }
+
+  /* A row of provider links. With `question`, each link opens pre-filled
+   * (where the provider supports it) and copies the question to the
+   * clipboard first; with `question` omitted (the settings dialog's
+   * generic "no key at all" list, not tied to any particular search), each
+   * link just opens the plain homepage. */
+  function externalChatLinks(question) {
+    var wrap = el("div", "external-links");
+    EXTERNAL_CHAT_PROVIDERS.forEach(function (provider) {
+      var link = document.createElement("a");
+      link.className = "external-link";
+      link.textContent = provider.name;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      if (question) {
+        link.href = provider.buildUrl(question);
+        link.addEventListener("click", function () {
+          copyToClipboard(question);
+          toast(t(locale, "external.copiedToast"));
+        });
+      } else {
+        link.href = provider.homeUrl;
+      }
+      wrap.appendChild(link);
+    });
+    return wrap;
+  }
+
   // --- AI connections (optional) ------------------------------------------
   //
   // Only meaningful with more than one group -- "find connections between
   // the results" needs plural results to connect in the first place. Posts
   // the groups already on screen (server-side capped further in app/ai.py)
   // rather than re-searching, so what gets analyzed always matches what the
-  // user is actually looking at. Server-side "not configured" (a fresh clone
-  // with no AI provider key set) surfaces as a plain inline error, same as
-  // any other failed request -- the button itself doesn't know in advance.
+  // user is actually looking at, plus any BYOK credentials saved above.
+  // A server with no shared key still works as long as the visitor supplied
+  // their own; a request that fails either way surfaces a plain inline
+  // error, with a nudge toward AI settings and the external-AI fallback for
+  // the failure codes that mean "our own AI path can't serve this" (see
+  // NEEDS_KEY_CODES below).
+
+  // provider_invalid is included alongside authentication_error because at
+  // least one real vendor (Gemini) returns a plain 400 for an invalid key
+  // rather than 401/403 -- ModelDispatcher classifies that as INVALID, not
+  // AUTH, so it surfaces under this code instead (confirmed against the
+  // real API, not assumed).
+  var NEEDS_KEY_CODES = [
+    "no_credential", "authentication_error", "provider_invalid", "quota_exceeded", "all_providers_exhausted",
+  ];
 
   function connectionsSection(data) {
     var section = el("section", "connections");
     var button = el("button", "connections-btn", t(locale, "connections.button"));
     button.type = "button";
+
+    var linksRow = el("div", "connections-links");
+    var settingsLink = el("button", "connections-settings-link", t(locale, "connections.settingsLink"));
+    settingsLink.type = "button";
+    settingsLink.addEventListener("click", openAiSettings);
+    linksRow.appendChild(settingsLink);
+
+    var externalToggle = el("button", "connections-settings-link", t(locale, "connections.orExternal"));
+    externalToggle.type = "button";
+    var externalWrap = el("div", "connections-external-wrap");
+    externalWrap.hidden = true;
+    externalToggle.addEventListener("click", function () {
+      if (externalWrap.hidden) {
+        externalWrap.innerHTML = "";
+        externalWrap.appendChild(externalChatLinks(externalQuestionText(data)));
+        externalWrap.hidden = false;
+      } else {
+        externalWrap.hidden = true;
+      }
+    });
+    linksRow.appendChild(externalToggle);
+
     var body = el("div", "connections-body");
     body.hidden = true;
+
     section.appendChild(button);
+    section.appendChild(linksRow);
+    section.appendChild(externalWrap);
     section.appendChild(body);
 
     button.addEventListener("click", function () {
@@ -400,6 +728,7 @@
         groups: data.groups.map(function (g) {
           return { query: g.query, results: g.results };
         }),
+        credentials: getAllAiCredentials(),
       };
 
       fetch("/api/analyze", {
@@ -410,8 +739,11 @@
         .then(function (response) {
           return response.json().then(function (result) {
             if (!response.ok) {
-              var message = (result.code && t(locale, "connections.error.code." + result.code)) || t(locale, "connections.error.generic");
-              throw new Error(message);
+              var err = new Error(
+                (result.code && t(locale, "connections.error.code." + result.code)) || t(locale, "connections.error.generic")
+              );
+              err.code = result.code;
+              throw err;
             }
             return result;
           });
@@ -421,9 +753,21 @@
           body.hidden = false;
           section.classList.add("answered");
           button.hidden = true;
+          linksRow.hidden = true;
+          externalWrap.hidden = true;
         })
         .catch(function (err) {
           body.appendChild(notice(t(locale, "error.title"), err.message, "error"));
+          if (err.code && NEEDS_KEY_CODES.indexOf(err.code) !== -1) {
+            var help = el("div", "connections-help");
+            help.appendChild(el("p", null, t(locale, "connections.error.tryOwnKey")));
+            var openSettingsBtn = el("button", "connections-settings-link", t(locale, "aiSettings.openButton"));
+            openSettingsBtn.type = "button";
+            openSettingsBtn.addEventListener("click", openAiSettings);
+            help.appendChild(openSettingsBtn);
+            help.appendChild(externalChatLinks(externalQuestionText(data)));
+            body.appendChild(help);
+          }
           body.hidden = false;
           button.disabled = false;
           button.textContent = t(locale, "connections.button");
@@ -475,6 +819,16 @@
     renderFooterCount();
 
     if (lastTractates) populateTractateSelect(lastTractates);
+
+    // The AI settings dialog's dynamic content (provider tabs/panel,
+    // external links) is otherwise only rebuilt when it's opened -- if a
+    // locale switch happens while it's already open, refresh it in place
+    // rather than leaving it in the old language until the next open.
+    if (aiDialog.open) {
+      renderAiProviderTabs();
+      renderAiProviderPanel();
+      renderAiExternalLinks();
+    }
 
     var buttons = langSwitch.querySelectorAll(".lang-btn");
     for (var k = 0; k < buttons.length; k++) {
@@ -720,6 +1074,15 @@
     })
     .catch(function () { /* the footer count is decorative */ })
     .then(disarmHealthWaking);
+
+  // Not waking-gated (unlike the fetches above): this one is purely
+  // informational for the AI settings dialog, which a visitor may never
+  // even open, so it shouldn't contribute to the "waking the server" notice
+  // on an ordinary page load.
+  fetch("/api/ai-status")
+    .then(function (r) { return r.json(); })
+    .then(function (status) { lastAiStatus = status; })
+    .catch(function () { /* the settings panel just shows "no shared key" for every vendor */ });
 
   var initial = fromHash();
   if (initial) runSearch(initial, false);

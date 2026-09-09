@@ -7,22 +7,41 @@ routing, transparent fallback between them, and a per-tenant token quota.
 
 This is the *one* code path in the app that makes an outbound network call.
 Everything else runs off the bundled, offline corpus (see corpus.py), and
-that stays true here too: with no provider API key configured in the
-environment, ``get_gateway()`` returns ``None`` and the feature quietly
-disables itself (``/api/analyze`` answers 503) rather than crash a fresh
-clone that hasn't set any AI keys.
+that stays true here too: a fresh clone with no keys set anywhere still runs
+the whole app -- this feature just answers ``no_credential`` on that one
+endpoint instead of crashing (see ``analyze_connections``).
 
-Providers are registered one per vendor whose key is actually set --
-``GEMINI_API_KEY`` / ``OPENAI_API_KEY`` / ``ANTHROPIC_API_KEY``, any subset,
-zero or more of them. Each provider keeps its library-default cost tier
-(Gemini=CHEAP, OpenAI=STANDARD, Anthropic=PREMIUM), so the router already
-tries the cheaper models first and only escalates on failure -- no extra
-wiring needed here for that.
+Two independent sources of credentials, either sufficient on its own:
+
+* **Server keys** -- ``GEMINI_API_KEY`` / ``OPENAI_API_KEY`` /
+  ``ANTHROPIC_API_KEY`` env vars, any subset, shared across every visitor
+  (this app has no per-user auth, so quota is one app-wide budget, not
+  scoped per visitor -- see ``_quota()``).
+* **A visitor's own key(s)** ("bring your own key"), pasted into the AI
+  settings panel in the UI, sent with the request and never persisted
+  server-side. ModelDispatcher pools several keys for the same vendor
+  natively (comma-joined in ``TenantContext.metadata``), rotating through
+  them on a rate limit before giving up on that vendor.
+
+Both can be present at once: a visitor's own key always takes precedence
+over the shared server key for the *same* vendor (ModelDispatcher's own
+credential precedence), and different vendors can mix -- e.g. the server
+has a Gemini key, the visitor adds their own Anthropic key, and both
+participate in the same cost-tiered fallback chain.
+
+The registry is deliberately rebuilt per request (see ``_build_registry``)
+rather than once at startup: a vendor with *no* key at all for this
+particular request (neither server nor visitor) is left out of it
+entirely. This matters because ModelDispatcher treats an auth failure as
+terminal, not fallback-worthy, by design (a bad/missing key is "the
+caller's problem", elsewhere in the library) -- so a keyless vendor sitting
+in the registry ahead of a vendor the visitor actually gave a key for would
+otherwise hard-fail the whole request before ever reaching the one that
+would have worked.
 """
 
 from __future__ import annotations
 
-import functools
 import os
 from dataclasses import dataclass
 
@@ -40,7 +59,8 @@ from model_dispatcher import (
     TenantId,
     TenantQuota,
 )
-from model_dispatcher.providers import AnthropicProvider, GeminiProvider, OpenAIProvider
+from model_dispatcher.providers import AnthropicProvider, GeminiProvider, ModelProvider, OpenAIProvider
+from model_dispatcher.quota.store import InMemoryQuotaStore
 
 # Mirrors app/main.py's own MAX_QUERIES -- an analysis request can never cover
 # more groups than a single search can produce in the first place. Enforced
@@ -54,20 +74,40 @@ MAX_GROUPS = 5
 MAX_RESULTS_PER_GROUP = 6
 SNIPPET_WORD_CAP = 40
 
-# One shared tenant for the whole app -- there's no per-user auth here, so
-# quota is a single app-wide budget rather than scoped per visitor.
+# One shared tenant identity for the whole app -- individual visitors are
+# distinguished by which credentials *they* supplied (see analyze_connections),
+# not by a separate tenant id each, since there's no per-user auth here.
 TENANT_ID = TenantId("shas-radar")
+
+# One vendor per entry: the ModelProvider adapter, the env vars a server
+# operator can set (a key, and an optional model override), and the default
+# model if no override is given. The dict key doubles as the "family" name
+# ModelDispatcher's own CredentialResolver derives from a provider's
+# ``name`` (the part before the first ":") -- match it exactly, since that's
+# also what a BYOK request's ``credentials[*].provider`` value must equal.
+_PROVIDER_SPECS: dict[str, tuple[type[ModelProvider], str, str, str]] = {
+    # name -> (provider class, key env var, model env var, default model)
+    "gemini": (GeminiProvider, "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-2.5-flash"),
+    "openai": (OpenAIProvider, "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4o-mini"),
+    "anthropic": (AnthropicProvider, "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "claude-opus-4-8"),
+}
+
+# Shared across every request (module-level, built once) so the app-wide
+# quota actually accumulates across requests rather than resetting whenever
+# a fresh registry/gateway is built -- the registry changes per request
+# (see _build_registry), the quota bookkeeping does not.
+_QUOTA_STORE = InMemoryQuotaStore()
 
 # ModelDispatcher's default routing floor reserves STANDARD+ tier models for
 # anything triaged above SIMPLE -- tuned for general agentic/coding work.
 # This feature's own prompts are short and capped (MAX_GROUPS x
 # MAX_RESULTS_PER_GROUP snippets) and the task itself is modest ("suggest a
 # plausible connection"), not premium-only reasoning -- so whichever single
-# vendor key an operator happens to set (even just the CHEAP-tier Gemini
-# default) should be able to serve it. Only a request the scorer calls
-# outright COMPLEX steps up to requiring at least a CHEAP-tier candidate;
-# escalation to a pricier registered provider on failure still applies
-# on top of this, unaffected by how low the floor is set.
+# vendor key ends up available (server or BYOK, even just the CHEAP-tier
+# Gemini default) should be able to serve it. Only a request the scorer
+# calls outright COMPLEX steps up to requiring at least a CHEAP-tier
+# candidate; escalation to a pricier available provider on failure still
+# applies on top of this, unaffected by how low the floor is set.
 _ROUTING = RoutingPolicy(
     complexity_floor={
         TaskComplexity.TRIVIAL: ModelTier.FREE,
@@ -95,6 +135,15 @@ _SYSTEM_PROMPT = (
 )
 
 
+class NoCredentialError(RuntimeError):
+    """Neither a server key nor a visitor-supplied key exists for any vendor.
+
+    Raised before any network call is attempted -- callers map this onto a
+    fast, cheap error (see app/main.py) rather than letting a doomed request
+    reach a vendor's API.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class AnalyzeResult:
     """The model's answer, plus enough provenance to show/debug it."""
@@ -103,8 +152,23 @@ class AnalyzeResult:
     provider: str
 
 
+def server_configured_providers() -> frozenset[str]:
+    """Vendor names backed by a server-side key (env var), regardless of BYOK.
+
+    Used by ``GET /api/ai-status`` so the settings UI can tell a visitor
+    "no key needed for this one" versus "bring your own" per vendor.
+    """
+    return frozenset(name for name, (_, key_var, _, _) in _PROVIDER_SPECS.items() if os.environ.get(key_var))
+
+
 def _quota() -> TenantQuota:
-    """App-wide budget, tunable via env without a code change or redeploy."""
+    """App-wide budget, tunable via env without a code change or redeploy.
+
+    Applies uniformly regardless of whether a request rides the shared
+    server key or a visitor's own -- this protects the *server's* key from
+    a runaway client, and BYOK requests are cheap to let through the same
+    gate since they cost the app nothing extra to route.
+    """
     return TenantQuota(
         requests_per_min=int(os.environ.get("AI_REQUESTS_PER_MIN", "10")),
         tokens_per_min=int(os.environ.get("AI_TOKENS_PER_MIN", "20000")),
@@ -112,45 +176,28 @@ def _quota() -> TenantQuota:
     )
 
 
-def _build_registry() -> ProviderRegistry:
-    """Register one provider per vendor whose API key is actually set.
+def _build_registry(credentials: dict[str, list[str]]) -> ProviderRegistry:
+    """Register only vendors with *some* usable key for this request.
 
-    A missing key just means that vendor is absent from the registry --
-    nothing raises, so the app degrades to "AI feature not configured"
-    instead of failing at import/startup time.
+    A vendor gets a server key, a visitor key, both, or neither -- "neither"
+    means it's left out of the registry entirely (see the module docstring
+    for why: an auth failure is terminal in ModelDispatcher, so a keyless
+    candidate must never even be offered to the router).
     """
     registry = ProviderRegistry()
-    if api_key := os.environ.get("GEMINI_API_KEY"):
-        registry.register(
-            GeminiProvider(model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"), api_key=api_key)
-        )
-    if api_key := os.environ.get("OPENAI_API_KEY"):
-        registry.register(
-            OpenAIProvider(model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"), api_key=api_key)
-        )
-    if api_key := os.environ.get("ANTHROPIC_API_KEY"):
-        registry.register(
-            AnthropicProvider(model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8"), api_key=api_key)
-        )
+    for name, (provider_cls, key_var, model_var, default_model) in _PROVIDER_SPECS.items():
+        server_key = os.environ.get(key_var)
+        if not server_key and not credentials.get(name):
+            continue
+        model = os.environ.get(model_var) or default_model
+        registry.register(provider_cls(model=model, api_key=server_key))
     return registry
 
 
-@functools.lru_cache(maxsize=1)
-def get_gateway() -> ModelGateway | None:
-    """Build the gateway once, on first use -- ``None`` if no key is configured.
-
-    Cached the same way ``corpus.load_corpus()`` is: built once, reused for
-    every request, rather than re-registering providers on every call.
-    """
-    registry = _build_registry()
-    if not len(registry):
-        return None
-    return ModelGateway.create(registry, settings=GatewaySettings(routing=_ROUTING))
-
-
-def is_configured() -> bool:
-    """Whether at least one AI provider is registered."""
-    return get_gateway() is not None
+def _credential_metadata(credentials: dict[str, list[str]]) -> dict[str, str]:
+    """``{vendor: [key, ...]}`` -> the ``user_key:<family>`` tenant-metadata
+    ModelDispatcher's ``CredentialResolver`` reads (comma-joined pooling)."""
+    return {f"user_key:{name}": ",".join(keys) for name, keys in credentials.items() if keys}
 
 
 def _cap_words(text: str, limit: int = SNIPPET_WORD_CAP) -> str:
@@ -173,28 +220,53 @@ def _format_groups(groups: list[dict]) -> str:
 
 
 def analyze_connections(
-    groups: list[dict], locale: str = "he", *, gateway: ModelGateway | None = None
+    groups: list[dict],
+    locale: str = "he",
+    *,
+    credentials: dict[str, list[str]] | None = None,
+    gateway: ModelGateway | None = None,
 ) -> AnalyzeResult:
     """Ask the configured model what connects ``groups``' search results.
 
+    ``credentials`` is ``{vendor: [key, ...]}`` for a visitor's own,
+    bring-your-own keys (any subset of ``gemini``/``openai``/``anthropic``,
+    each optionally pooling more than one key) -- omit or pass ``{}`` to
+    rely solely on whatever the server has configured.
+
     ``gateway`` is an injection seam for tests (a ``MockProvider``-backed
-    gateway); real callers leave it unset and get the app-wide singleton.
+    gateway); real callers leave it unset and get a gateway built fresh from
+    ``credentials`` plus whatever the server has configured.
 
     Raises:
-        RuntimeError: If no gateway is configured -- callers should check
-            ``is_configured()`` first and answer a clean 503 instead.
-        model_dispatcher.exceptions.ModelDispatcherError: Any dispatch failure
-            (quota, all providers exhausted, etc.) -- these already carry the
-            right HTTP status for a web layer to surface as-is.
+        NoCredentialError: Neither the server nor ``credentials`` has a key
+            for any vendor -- callers should answer a fast, cheap error
+            instead of letting a doomed request reach a vendor's API.
+        model_dispatcher.exceptions.ModelDispatcherError: Any dispatch
+            failure (quota, bad key, all providers exhausted, etc.) --
+            these already carry the right HTTP status for a web layer to
+            surface as-is.
     """
-    active_gateway = gateway if gateway is not None else get_gateway()
+    credentials = credentials or {}
+
+    active_gateway = gateway
     if active_gateway is None:
-        raise RuntimeError("no AI provider configured")
+        registry = _build_registry(credentials)
+        if not len(registry):
+            raise NoCredentialError(
+                "no AI provider key available -- set one on the server or add your own in AI settings"
+            )
+        active_gateway = ModelGateway.create(
+            registry, settings=GatewaySettings(routing=_ROUTING), quota_store=_QUOTA_STORE
+        )
 
     language = _LANGUAGE_NAMES.get(locale, _LANGUAGE_NAMES["he"])
     system = _SYSTEM_PROMPT.format(max_groups=MAX_GROUPS, language=language)
 
-    tenant = TenantContext(tenant_id=TENANT_ID, quota=_quota())
+    tenant = TenantContext(
+        tenant_id=TENANT_ID,
+        quota=_quota(),
+        metadata=_credential_metadata(credentials),
+    )
     request = CompletionRequest(
         messages=(
             Message(role=Role.SYSTEM, content=system),
