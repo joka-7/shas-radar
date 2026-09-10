@@ -80,6 +80,7 @@ var I18N = (function () {
       "copy.done": "✓ הועתק",
       "copy.toastCopied": "הציטוט הועתק",
       "copy.toastFailed": "ההעתקה נכשלה",
+      "share.button": "שיתוף",
 
       "more.button": "הצג עוד {n}",
       "more.loading": "טוען…",
@@ -200,6 +201,7 @@ var I18N = (function () {
       "copy.done": "✓ Copied",
       "copy.toastCopied": "Quote copied",
       "copy.toastFailed": "Copy failed",
+      "share.button": "Share",
 
       "more.button": "Show {n} more",
       "more.loading": "Loading…",
@@ -320,6 +322,7 @@ var I18N = (function () {
       "copy.done": "✓ Copié",
       "copy.toastCopied": "Citation copiée",
       "copy.toastFailed": "Échec de la copie",
+      "share.button": "Partager",
 
       "more.button": "Afficher {n} de plus",
       "more.loading": "Chargement…",
