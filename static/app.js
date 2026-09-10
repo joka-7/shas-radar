@@ -873,13 +873,19 @@
           });
         })
         .then(function (result) {
+          body.appendChild(el("p", "connections-answer-label", t(locale, "connections.answerLabel")));
           body.appendChild(el("p", "connections-text", result.connection));
           body.hidden = false;
           section.classList.add("answered");
-          button.hidden = true;
-          linksRow.hidden = true;
-          externalWrap.hidden = true;
-          hint.hidden = true;
+          // Deliberately left visible and re-enabled, not hidden away: the
+          // checkboxes on the result cards are still live, so a visitor can
+          // change what's selected and press this again for a fresh answer
+          // without having to redo the whole search from scratch (this used
+          // to hide button/links/hint outright -- once the "still shows
+          // מחפש קשר" CSS-specificity bug got fixed and `hidden` actually
+          // started working, that read as "the AI panel just disappeared").
+          button.disabled = selection.count() < 2;
+          button.textContent = t(locale, "connections.button");
         })
         .catch(function (err) {
           body.appendChild(notice(t(locale, "error.title"), err.message, "error"));

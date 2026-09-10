@@ -569,6 +569,12 @@ body {
   box-shadow: var(--shadow);
   padding: .9rem 1rem 1rem;
 }
+.connections-answer-label {
+  margin: 0 0 .35rem;
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--gold);
+}
 .connections-text { margin: 0; line-height: 1.7; color: var(--text); }
 
 .connections-links:not([hidden]) { display: flex; }
