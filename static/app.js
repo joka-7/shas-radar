@@ -751,6 +751,12 @@
       id: "google-ai-mode", nameKey: "external.googleAiMode", homeUrl: "https://www.google.com/",
       buildUrl: function (q) { return "https://www.google.com/search?" + new URLSearchParams({ q: q, udm: "50" }); },
     },
+    {
+      // No known prefill parameter (like Gemini above) -- externalChatLinks
+      // still copies the question to the clipboard first, ready to paste
+      // once GroqChat opens.
+      id: "groq", name: "Groq", homeUrl: "https://chat.groq.com/", buildUrl: null,
+    },
   ];
 
   function copyToClipboard(text) {
@@ -1080,14 +1086,9 @@
   // never a silent no-op or a bare one-line toast that's gone before it's
   // read twice.
   //
-  // Fixed position (not in the header's normal flow) is deliberate, not an
-  // oversight: an in-flow install control was tried twice before (see git
-  // history on this repo and on פסוק לשם) and taps went unresponsive on
-  // real devices, most likely from sharing a stacking context with
-  // .search's negative-margin overlap onto the header. Staying fixed, in
-  // its own stacking context, sidesteps that whole class of problem --
-  // styles.css repositions it for wider viewports via a media query
-  // instead, which changes nothing about *how* it's positioned.
+  // Lives inside the Settings dialog now, not a fixed corner FAB (see the
+  // HTML comment above it in index.html) -- one settings entry point for
+  // language, install, and AI instead of a separate floating control.
 
   var deferredInstallPrompt = null;
   var installHelpDialog = document.getElementById("install-help-dialog");
