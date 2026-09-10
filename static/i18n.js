@@ -30,7 +30,10 @@ var I18N = (function () {
       "doc.title": "ש״ס רדאר — חיפוש בש״ס",
 
       "header.title": "ש״ס רדאר",
-      "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס — עם הקשר לפני ואחרי",
+      // A literal newline: .subtitle renders it with white-space: pre-line
+      // to force the break here rather than wherever the viewport happens
+      // to wrap the text.
+      "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס\nעם הקשר לפני ואחרי",
 
       "settings.button": "הגדרות",
       "settings.heading": "הגדרות",
@@ -74,7 +77,7 @@ var I18N = (function () {
       "matchKind.withPrefix": "עם אות שימוש",
       "matchKind.exactTag": "{n} מדויק",
       "matchKind.withPrefixTag": "{n} עם אות שימוש",
-      "openInSefaria": "פתח בספריא ↗",
+      "openInSefaria": "ספריא ↗",
 
       "copy.button": "העתקה",
       "copy.done": "✓ הועתק",
@@ -152,7 +155,7 @@ var I18N = (function () {
       "doc.title": "Shas Radar — Search the Talmud",
 
       "header.title": "Shas Radar",
-      "header.subtitle": "Search words, names, and phrases across all of Shas — with context before and after",
+      "header.subtitle": "Search words, names, and phrases across all of Shas\nwith context before and after",
 
       "settings.button": "Settings",
       "settings.heading": "Settings",
@@ -196,7 +199,7 @@ var I18N = (function () {
       "matchKind.withPrefix": "With attached prefix",
       "matchKind.exactTag": "{n} exact",
       "matchKind.withPrefixTag": "{n} with prefix",
-      "openInSefaria": "Open on Sefaria ↗",
+      "openInSefaria": "Sefaria ↗",
 
       "copy.button": "Copy",
       "copy.done": "✓ Copied",
@@ -274,7 +277,7 @@ var I18N = (function () {
       "doc.title": "Shas Radar — Recherche dans le Talmud",
 
       "header.title": "Shas Radar",
-      "header.subtitle": "Recherche de mots, de noms et d'expressions dans tout le Chas — avec le contexte avant et après",
+      "header.subtitle": "Recherche de mots, de noms et d'expressions dans tout le Chas\navec le contexte avant et après",
 
       "settings.button": "Paramètres",
       "settings.heading": "Paramètres",
@@ -318,7 +321,7 @@ var I18N = (function () {
       "matchKind.withPrefix": "Avec lettre de liaison",
       "matchKind.exactTag": "{n} exact",
       "matchKind.withPrefixTag": "{n} avec préfixe",
-      "openInSefaria": "Ouvrir sur Sefaria ↗",
+      "openInSefaria": "Sefaria ↗",
 
       "copy.button": "Copier",
       "copy.done": "✓ Copié",
