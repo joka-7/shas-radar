@@ -102,7 +102,62 @@ body {
 }
 .subtitle { margin: 0; opacity: .88; font-size: .95rem; }
 
-/* --- Language switch --- */
+/* --- Header icon + settings button ---
+   icon+title+gear, matching KanDOne's header (AppBrandMark + title + a
+   Settings entry point). The settings button is absolutely positioned so
+   the icon+title pair still centers as a group. */
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  position: relative;
+  width: 100%;
+}
+.app-icon {
+  flex: 0 0 auto;
+  width: 2.1rem;
+  height: 2.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, .18);
+  border-radius: 10px;
+}
+.settings-btn {
+  position: absolute;
+  inset-inline-end: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .4);
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  cursor: pointer;
+  transition: background .15s;
+}
+.settings-btn:hover { background: rgba(255, 255, 255, .24); }
+.settings-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* --- Language switch ---
+   Now rendered only inside the settings dialog (see the
+   .ai-settings-dialog .lang-switch override further down), not in the
+   header banner. */
 
 .lang-switch {
   display: flex;
@@ -110,7 +165,6 @@ body {
   background: rgba(255, 255, 255, .14);
   border-radius: 999px;
   padding: .25rem;
-  margin-bottom: .9rem;
 }
 .lang-btn {
   font: 500 .8rem var(--font);
@@ -252,7 +306,9 @@ body {
 .more:focus-visible,
 .stepper-btn:focus-visible,
 .select:focus-visible,
-.install-fab:focus-visible {
+.install-fab:focus-visible,
+.settings-btn:focus-visible,
+.dialog-close:focus-visible {
   outline: 2.5px solid var(--accent);
   outline-offset: 2px;
 }
@@ -676,23 +732,11 @@ body {
 }
 .footer-credit a { color: var(--text-faint); text-decoration: underline; }
 .footer-credit a:hover { color: var(--accent-text); }
-/* Which commit is actually running, plain and unambiguous -- so "is this
-   fix even deployed yet" is a glance at the page, not a guess. */
 
-.footer-ai-settings {
-  display: inline-block;
-  margin-top: .6rem;
-  background: none;
-  border: none;
-  padding: .2rem 0;
-  font: 500 .75rem var(--font);
-  color: var(--text-faint);
-  text-decoration: underline;
-  cursor: pointer;
-}
-.footer-ai-settings:hover { color: var(--accent-text); }
-
-/* --- AI settings dialog --- */
+/* --- AI settings dialog ---
+   Also holds the language switcher, as its own .settings-section above the
+   AI one (see index.html) -- the header banner above only carries the icon,
+   title, and the gear button that opens this dialog. */
 
 .ai-settings-dialog {
   width: min(92vw, 30rem);
@@ -730,6 +774,25 @@ body {
   color: var(--text-soft);
   cursor: pointer;
 }
+
+.settings-section + .settings-section {
+  margin-top: 1.1rem;
+  padding-top: 1.1rem;
+  border-top: 1px dashed var(--line);
+}
+.settings-section-title {
+  margin: 0 0 .6rem;
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+/* Inside the dialog the lang switch sits on a light surface, not the
+   header's colored background, so it needs its own readable palette rather
+   than the white-on-color one further up this file. */
+.ai-settings-dialog .lang-switch { background: var(--surface-2); }
+.ai-settings-dialog .lang-btn { color: var(--text-soft); }
+.ai-settings-dialog .lang-btn:hover { opacity: 1; color: var(--text); }
+.ai-settings-dialog .lang-btn.active { background: var(--accent); color: #fff; }
 
 .ai-settings-desc, .ai-settings-trust {
   font-size: .82rem;
