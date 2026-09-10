@@ -477,7 +477,7 @@
       });
       if (snapshot.tractate) params.set("tractate", snapshot.tractate);
 
-      fetch("/api/search?" + params.toString())
+      fetch(window.API_BASE + "/api/search?" + params.toString())
         .then(function (response) { return response.json(); })
         .then(function (data) {
           var page = data.groups[0];
@@ -914,7 +914,7 @@
         credentials: getAllAiCredentials(),
       };
 
-      fetch("/api/analyze", {
+      fetch(window.API_BASE + "/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1185,7 +1185,7 @@
     });
     if (snapshot.tractate) params.set("tractate", snapshot.tractate);
 
-    fetch("/api/search?" + params.toString(), { signal: controller.signal })
+    fetch(window.API_BASE + "/api/search?" + params.toString(), { signal: controller.signal })
       .then(function (response) {
         return response.json().then(function (body) {
           if (!response.ok) {
@@ -1279,7 +1279,7 @@
   }
 
   var disarmTractateWaking = armWaking();
-  fetch("/api/tractates")
+  fetch(window.API_BASE + "/api/tractates")
     .then(function (r) { return r.json(); })
     .then(populateTractateSelect)
     .catch(function () { /* the filter just stays at "all of Shas" */ })
@@ -1288,7 +1288,7 @@
   applyStaticTranslations();
 
   var disarmHealthWaking = armWaking();
-  fetch("/api/health")
+  fetch(window.API_BASE + "/api/health")
     .then(function (r) { return r.json(); })
     .then(function (health) {
       lastHealth = health;
@@ -1301,7 +1301,7 @@
   // informational for the AI settings dialog, which a visitor may never
   // even open, so it shouldn't contribute to the "waking the server" notice
   // on an ordinary page load.
-  fetch("/api/ai-status")
+  fetch(window.API_BASE + "/api/ai-status")
     .then(function (r) { return r.json(); })
     .then(function (status) { lastAiStatus = status; })
     .catch(function () { /* the settings panel just shows "no shared key" for every vendor */ });

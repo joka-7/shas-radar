@@ -368,11 +368,39 @@ needs an API key.
 revalidates before using a cached copy, rather than a stale `app.js` outliving
 a deploy because its URL never changes.
 
-**Render** — `render.yaml` is a blueprint; point Render at the repo and it
-builds and starts with a `/api/health` health check. On the free plan the
-service sleeps when idle, so the first request after a while pays a cold
-start (up to ~a minute); the UI accounts for this itself with the "waking the
-server" notice described above.
+**Render (the API)** — `render.yaml` is a blueprint; point Render at the repo
+and it builds and starts with a `/api/health` health check. On the free plan
+the service sleeps after 15 idle minutes, so the first request after a while
+pays a cold start (up to ~a minute); the UI accounts for this itself with the
+"waking the server" notice described above.
+
+**Vercel (the frontend)** — `vercel.json` publishes `static/` as-is: no build
+step, and `Cache-Control: no-cache` on everything, which is what keeps the
+deploy-immediacy described above once the files are behind a CDN.
+
+This split exists because of that cold start. Served from Render, the *page*
+waits on the wake too, so a visitor gets a blank "starting" screen for a minute
+and the app looks broken rather than slow. Served from Vercel there is nothing
+to wake: the page paints immediately, and its own boot fetches (`/api/health`,
+`/api/tractates`) start Render waking right then — so the wake runs while the
+visitor is reading the page and typing a term, instead of in front of nothing.
+Installed as a PWA it is better still, because the service worker's cached
+shell opens straight from the icon.
+
+Both deployments serve the same `static/` directory. `static/config.js` decides
+at runtime whether the API shares the page's origin, so the `*.onrender.com`
+URL and a local `uvicorn` keep working unchanged, with no build step and no
+second copy of the frontend to keep in sync. To exercise the cross-origin path
+locally, run the API on one port and `python -m http.server 3000 -d static` on
+another, then set `localStorage.apiBase` to the API's URL — the two `localhost`
+ports are one origin to `config.js` but two to the browser.
+
+Being cross-origin, the Vercel copy has to pass the CORS allowlist in
+`app/main.py`: this project's `*.vercel.app` domains (production and previews)
+plus localhost. An explicit list rather than `*`, since `POST /api/analyze`
+accepts a visitor's own API keys in its body. Override it with the
+`ALLOWED_ORIGINS` env var (comma-separated) for a custom domain — note that
+setting it replaces the listed defaults but not the preview-domain pattern.
 
 **Docker** — the corpus is baked into the image, so the container needs no
 network access to run the core search (only the optional AI connections
@@ -385,8 +413,9 @@ docker run -p 8000:8000 shas-radar
 
 **Anywhere else** — it's one ASGI app with two dependencies:
 `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Fly.io, Railway and Deta
-all take it as-is. Vercel is a poor fit: its Python runtime is serverless, so
-the corpus load would run on every cold start.
+all take it as-is. Vercel is a poor fit for *this* half: its Python runtime is
+serverless, so the corpus load would run on every cold start — which is exactly
+why only the static frontend goes there.
 
 ## Layout
 
@@ -395,8 +424,10 @@ app/hebrew.py           normalization, tokenization, Hebrew numerals  (no deps)
 app/corpus.py           gzip load + per-tractate token stream and word index
 app/search.py           exact/prefix/phrase/proximity matching, KWIC context
 app/ai.py                optional "find connections" feature via ModelDispatcher
-app/main.py             FastAPI routes; mounts static/ at "/"
+app/main.py             FastAPI routes; CORS allowlist; mounts static/ at "/"
 scripts/build_dataset.py   Sefaria export -> data/shas.json.gz (build-time)
+static/config.js        resolves the API base -- same origin, or the Render host
+static/sw.js            service worker: installability + a cached app shell
 static/                 the UI: one page, one stylesheet, one script, one translation table
 tests/                  pytest, against the real corpus
 ```
