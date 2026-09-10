@@ -141,6 +141,62 @@
     };
   }
 
+  // --- Talking to the API --------------------------------------------------
+
+  /*
+   * fetch, but patient about a sleeping backend.
+   *
+   * On the free plan the API sleeps after 15 idle minutes and takes up to a
+   * minute to come back. The page is served from a CDN and so paints long
+   * before that, and the request that arrives meanwhile does not simply wait:
+   * whatever sits in front of the API answers first, with a gateway error or a
+   * dropped connection, well before the app itself is up. Retrying is what
+   * turns that into the wait it looks like it should be -- the caller's promise
+   * stays pending, so the "waking the server" notice stays up and the request
+   * completes on its own once the API answers.
+   *
+   * Only transport failures and gateway statuses are retried. A 4xx is the API
+   * itself talking (a bad query, a missing key) and is returned as-is.
+   */
+  var WAKE_RETRY_BUDGET_MS = 90000;
+  var WAKE_RETRY_STEPS_MS = [1000, 2000, 3000, 5000, 5000, 8000];
+  var GATEWAY_STATUSES = [502, 503, 504];
+
+  function apiFetch(path, options) {
+    options = options || {};
+    // A POST can have a cost on the far side (POST /api/analyze spends a model
+    // call), so it gets one retry to cover a dropped connection, not a full
+    // wake's worth.
+    var maxAttempts = (options.method || "GET").toUpperCase() === "GET"
+      ? WAKE_RETRY_STEPS_MS.length + 1
+      : 2;
+    var deadline = Date.now() + WAKE_RETRY_BUDGET_MS;
+
+    function attempt(n) {
+      return fetch(window.API_BASE + path, options).then(function (response) {
+        if (GATEWAY_STATUSES.indexOf(response.status) === -1) return response;
+        return retryOr(n, response, null);
+      }, function (error) {
+        // The caller aborted (a superseded search) -- not a failure to retry.
+        if (error && error.name === "AbortError") throw error;
+        return retryOr(n, null, error);
+      });
+    }
+
+    function retryOr(n, response, error) {
+      var waitMs = WAKE_RETRY_STEPS_MS[n] || WAKE_RETRY_STEPS_MS[WAKE_RETRY_STEPS_MS.length - 1];
+      if (n + 1 >= maxAttempts || Date.now() + waitMs > deadline) {
+        if (response) return response;
+        throw error;
+      }
+      if (options.signal && options.signal.aborted) throw new Error("aborted");
+      return new Promise(function (resolve) { setTimeout(resolve, waitMs); })
+        .then(function () { return attempt(n + 1); });
+    }
+
+    return attempt(0);
+  }
+
   // --- Stepper controls ----------------------------------------------------
 
   function wireStepper(containerId, min, max, onChange) {
@@ -477,7 +533,7 @@
       });
       if (snapshot.tractate) params.set("tractate", snapshot.tractate);
 
-      fetch(window.API_BASE + "/api/search?" + params.toString())
+      apiFetch("/api/search?" + params.toString())
         .then(function (response) { return response.json(); })
         .then(function (data) {
           var page = data.groups[0];
@@ -914,7 +970,7 @@
         credentials: getAllAiCredentials(),
       };
 
-      fetch(window.API_BASE + "/api/analyze", {
+      apiFetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1185,7 +1241,7 @@
     });
     if (snapshot.tractate) params.set("tractate", snapshot.tractate);
 
-    fetch(window.API_BASE + "/api/search?" + params.toString(), { signal: controller.signal })
+    apiFetch("/api/search?" + params.toString(), { signal: controller.signal })
       .then(function (response) {
         return response.json().then(function (body) {
           if (!response.ok) {
@@ -1279,7 +1335,7 @@
   }
 
   var disarmTractateWaking = armWaking();
-  fetch(window.API_BASE + "/api/tractates")
+  apiFetch("/api/tractates")
     .then(function (r) { return r.json(); })
     .then(populateTractateSelect)
     .catch(function () { /* the filter just stays at "all of Shas" */ })
@@ -1288,7 +1344,7 @@
   applyStaticTranslations();
 
   var disarmHealthWaking = armWaking();
-  fetch(window.API_BASE + "/api/health")
+  apiFetch("/api/health")
     .then(function (r) { return r.json(); })
     .then(function (health) {
       lastHealth = health;
@@ -1301,7 +1357,7 @@
   // informational for the AI settings dialog, which a visitor may never
   // even open, so it shouldn't contribute to the "waking the server" notice
   // on an ordinary page load.
-  fetch(window.API_BASE + "/api/ai-status")
+  apiFetch("/api/ai-status")
     .then(function (r) { return r.json(); })
     .then(function (status) { lastAiStatus = status; })
     .catch(function () { /* the settings panel just shows "no shared key" for every vendor */ });
