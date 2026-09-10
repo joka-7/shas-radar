@@ -32,6 +32,11 @@ var I18N = (function () {
       "header.title": "ש״ס רדאר",
       "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס — עם הקשר לפני ואחרי",
 
+      "settings.button": "הגדרות",
+      "settings.heading": "הגדרות",
+      "settings.close": "סגירה",
+      "settings.languageHeading": "שפה",
+
       "search.label": "מילה בודדת, מילים ברצף או מופרדות בפסיק",
       "search.placeholder": "לדוגמה: {example}",
       "search.button": "חיפוש",
@@ -75,6 +80,7 @@ var I18N = (function () {
       "copy.done": "✓ הועתק",
       "copy.toastCopied": "הציטוט הועתק",
       "copy.toastFailed": "ההעתקה נכשלה",
+      "share.button": "שיתוף",
 
       "more.button": "הצג עוד {n}",
       "more.loading": "טוען…",
@@ -148,6 +154,11 @@ var I18N = (function () {
       "header.title": "Shas Radar",
       "header.subtitle": "Search words, names, and phrases across all of Shas — with context before and after",
 
+      "settings.button": "Settings",
+      "settings.heading": "Settings",
+      "settings.close": "Close",
+      "settings.languageHeading": "Language",
+
       "search.label": "Word, name, phrase, or several separated by a comma",
       "search.placeholder": "e.g. {example}",
       "search.button": "Search",
@@ -191,6 +202,7 @@ var I18N = (function () {
       "copy.done": "✓ Copied",
       "copy.toastCopied": "Quote copied",
       "copy.toastFailed": "Copy failed",
+      "share.button": "Share",
 
       "more.button": "Show {n} more",
       "more.loading": "Loading…",
@@ -264,6 +276,11 @@ var I18N = (function () {
       "header.title": "Shas Radar",
       "header.subtitle": "Recherche de mots, de noms et d'expressions dans tout le Chas — avec le contexte avant et après",
 
+      "settings.button": "Paramètres",
+      "settings.heading": "Paramètres",
+      "settings.close": "Fermer",
+      "settings.languageHeading": "Langue",
+
       "search.label": "Mot, nom, expression, ou plusieurs séparés par une virgule",
       "search.placeholder": "par ex. {example}",
       "search.button": "Rechercher",
@@ -307,6 +324,7 @@ var I18N = (function () {
       "copy.done": "✓ Copié",
       "copy.toastCopied": "Citation copiée",
       "copy.toastFailed": "Échec de la copie",
+      "share.button": "Partager",
 
       "more.button": "Afficher {n} de plus",
       "more.loading": "Chargement…",

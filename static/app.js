@@ -29,7 +29,7 @@
   var tractateSelect = document.getElementById("tractate");
   var langSwitch = document.getElementById("lang-switch");
   var installBtn = document.getElementById("install-btn");
-  var footerAiSettingsBtn = document.getElementById("footer-ai-settings");
+  var settingsBtn = document.getElementById("settings-btn");
   var aiDialog = document.getElementById("ai-settings-dialog");
   var aiTabsEl = document.getElementById("ai-provider-tabs");
   var aiPanelEl = document.getElementById("ai-provider-panel");
@@ -208,6 +208,58 @@
     return button;
   }
 
+  /*
+   * Hands the result off to whatever the OS offers to share text with
+   * (Messages, WhatsApp, Mail, …) via the Web Share API. Browsers without it
+   * (most desktop browsers) fall back to the same clipboard copy the Copy
+   * button does, so the action is never a dead end -- just a slower one.
+   */
+  function shareButton(result) {
+    var button = el("button", "copy", t(locale, "share.button"));
+    button.type = "button";
+
+    button.addEventListener("click", function () {
+      var quote = result.before + " " + result.match + " " + result.after;
+      var payload = '"...' + quote.trim() + '..." (' + result.citation + ")";
+
+      function legacyCopy() {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(payload).then(function () {
+            toast(t(locale, "copy.toastCopied"));
+          }, function () {
+            toast(t(locale, "copy.toastFailed"));
+          });
+          return;
+        }
+        var area = document.createElement("textarea");
+        area.value = payload;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        try {
+          document.execCommand("copy");
+          toast(t(locale, "copy.toastCopied"));
+        } catch (err) {
+          toast(t(locale, "copy.toastFailed"));
+        }
+        document.body.removeChild(area);
+      }
+
+      if (navigator.share) {
+        navigator.share({ text: payload }).catch(function (err) {
+          if (err && err.name === "AbortError") return; // the visitor cancelled the share sheet
+          legacyCopy();
+        });
+      } else {
+        legacyCopy();
+      }
+    });
+
+    return button;
+  }
+
   // --- AI-connections selection --------------------------------------------
   //
   // Opt-in: every result card carries its own checkbox (see resultCard),
@@ -288,6 +340,7 @@
 
     var foot = el("div", "card-foot");
     foot.appendChild(copyButton(result));
+    foot.appendChild(shareButton(result));
     var link = document.createElement("a");
     link.href = result.sefariaUrl;
     link.target = "_blank";
@@ -665,7 +718,7 @@
     }
   }
 
-  footerAiSettingsBtn.addEventListener("click", openAiSettings);
+  settingsBtn.addEventListener("click", openAiSettings);
 
   // --- External AI fallback ------------------------------------------------
   //
