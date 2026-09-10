@@ -29,7 +29,7 @@
   var tractateSelect = document.getElementById("tractate");
   var langSwitch = document.getElementById("lang-switch");
   var installBtn = document.getElementById("install-btn");
-  var footerAiSettingsBtn = document.getElementById("footer-ai-settings");
+  var settingsBtn = document.getElementById("settings-btn");
   var aiDialog = document.getElementById("ai-settings-dialog");
   var aiTabsEl = document.getElementById("ai-provider-tabs");
   var aiPanelEl = document.getElementById("ai-provider-panel");
@@ -665,7 +665,7 @@
     }
   }
 
-  footerAiSettingsBtn.addEventListener("click", openAiSettings);
+  settingsBtn.addEventListener("click", openAiSettings);
 
   // --- External AI fallback ------------------------------------------------
   //
