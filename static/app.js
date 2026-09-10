@@ -29,7 +29,7 @@
   var tractateSelect = document.getElementById("tractate");
   var langSwitch = document.getElementById("lang-switch");
   var installBtn = document.getElementById("install-btn");
-  var footerAiSettingsBtn = document.getElementById("footer-ai-settings");
+  var settingsBtn = document.getElementById("settings-btn");
   var aiDialog = document.getElementById("ai-settings-dialog");
   var aiTabsEl = document.getElementById("ai-provider-tabs");
   var aiPanelEl = document.getElementById("ai-provider-panel");
@@ -208,6 +208,58 @@
     return button;
   }
 
+  /*
+   * Hands the result off to whatever the OS offers to share text with
+   * (Messages, WhatsApp, Mail, …) via the Web Share API. Browsers without it
+   * (most desktop browsers) fall back to the same clipboard copy the Copy
+   * button does, so the action is never a dead end -- just a slower one.
+   */
+  function shareButton(result) {
+    var button = el("button", "copy", t(locale, "share.button"));
+    button.type = "button";
+
+    button.addEventListener("click", function () {
+      var quote = result.before + " " + result.match + " " + result.after;
+      var payload = '"...' + quote.trim() + '..." (' + result.citation + ")";
+
+      function legacyCopy() {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(payload).then(function () {
+            toast(t(locale, "copy.toastCopied"));
+          }, function () {
+            toast(t(locale, "copy.toastFailed"));
+          });
+          return;
+        }
+        var area = document.createElement("textarea");
+        area.value = payload;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        try {
+          document.execCommand("copy");
+          toast(t(locale, "copy.toastCopied"));
+        } catch (err) {
+          toast(t(locale, "copy.toastFailed"));
+        }
+        document.body.removeChild(area);
+      }
+
+      if (navigator.share) {
+        navigator.share({ text: payload }).catch(function (err) {
+          if (err && err.name === "AbortError") return; // the visitor cancelled the share sheet
+          legacyCopy();
+        });
+      } else {
+        legacyCopy();
+      }
+    });
+
+    return button;
+  }
+
   // --- AI-connections selection --------------------------------------------
   //
   // Opt-in: every result card carries its own checkbox (see resultCard),
@@ -288,6 +340,7 @@
 
     var foot = el("div", "card-foot");
     foot.appendChild(copyButton(result));
+    foot.appendChild(shareButton(result));
     var link = document.createElement("a");
     link.href = result.sefariaUrl;
     link.target = "_blank";
@@ -665,7 +718,7 @@
     }
   }
 
-  footerAiSettingsBtn.addEventListener("click", openAiSettings);
+  settingsBtn.addEventListener("click", openAiSettings);
 
   // --- External AI fallback ------------------------------------------------
   //
@@ -697,6 +750,12 @@
     {
       id: "google-ai-mode", nameKey: "external.googleAiMode", homeUrl: "https://www.google.com/",
       buildUrl: function (q) { return "https://www.google.com/search?" + new URLSearchParams({ q: q, udm: "50" }); },
+    },
+    {
+      // No known prefill parameter (like Gemini above) -- externalChatLinks
+      // still copies the question to the clipboard first, ready to paste
+      // once GroqChat opens.
+      id: "groq", name: "Groq", homeUrl: "https://chat.groq.com/", buildUrl: null,
     },
   ];
 
@@ -873,13 +932,19 @@
           });
         })
         .then(function (result) {
+          body.appendChild(el("p", "connections-answer-label", t(locale, "connections.answerLabel")));
           body.appendChild(el("p", "connections-text", result.connection));
           body.hidden = false;
           section.classList.add("answered");
-          button.hidden = true;
-          linksRow.hidden = true;
-          externalWrap.hidden = true;
-          hint.hidden = true;
+          // Deliberately left visible and re-enabled, not hidden away: the
+          // checkboxes on the result cards are still live, so a visitor can
+          // change what's selected and press this again for a fresh answer
+          // without having to redo the whole search from scratch (this used
+          // to hide button/links/hint outright -- once the "still shows
+          // מחפש קשר" CSS-specificity bug got fixed and `hidden` actually
+          // started working, that read as "the AI panel just disappeared").
+          button.disabled = selection.count() < 2;
+          button.textContent = t(locale, "connections.button");
         })
         .catch(function (err) {
           body.appendChild(notice(t(locale, "error.title"), err.message, "error"));
@@ -1021,14 +1086,9 @@
   // never a silent no-op or a bare one-line toast that's gone before it's
   // read twice.
   //
-  // Fixed position (not in the header's normal flow) is deliberate, not an
-  // oversight: an in-flow install control was tried twice before (see git
-  // history on this repo and on פסוק לשם) and taps went unresponsive on
-  // real devices, most likely from sharing a stacking context with
-  // .search's negative-margin overlap onto the header. Staying fixed, in
-  // its own stacking context, sidesteps that whole class of problem --
-  // styles.css repositions it for wider viewports via a media query
-  // instead, which changes nothing about *how* it's positioned.
+  // Lives inside the Settings dialog now, not a fixed corner FAB (see the
+  // HTML comment above it in index.html) -- one settings entry point for
+  // language, install, and AI instead of a separate floating control.
 
   var deferredInstallPrompt = null;
   var installHelpDialog = document.getElementById("install-help-dialog");

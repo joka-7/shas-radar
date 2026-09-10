@@ -30,7 +30,15 @@ var I18N = (function () {
       "doc.title": "ש״ס רדאר — חיפוש בש״ס",
 
       "header.title": "ש״ס רדאר",
-      "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס — עם הקשר לפני ואחרי",
+      // A literal newline: .subtitle renders it with white-space: pre-line
+      // to force the break here rather than wherever the viewport happens
+      // to wrap the text.
+      "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס\nעם הקשר לפני ואחרי",
+
+      "settings.button": "הגדרות",
+      "settings.heading": "הגדרות",
+      "settings.close": "סגירה",
+      "settings.languageHeading": "שפה",
 
       "search.label": "מילה בודדת, מילים ברצף או מופרדות בפסיק",
       "search.placeholder": "לדוגמה: {example}",
@@ -69,18 +77,20 @@ var I18N = (function () {
       "matchKind.withPrefix": "עם אות שימוש",
       "matchKind.exactTag": "{n} מדויק",
       "matchKind.withPrefixTag": "{n} עם אות שימוש",
-      "openInSefaria": "פתח בספריא ↗",
+      "openInSefaria": "ספריא ↗",
 
       "copy.button": "העתקה",
       "copy.done": "✓ הועתק",
       "copy.toastCopied": "הציטוט הועתק",
       "copy.toastFailed": "ההעתקה נכשלה",
+      "share.button": "שיתוף",
 
       "more.button": "הצג עוד {n}",
       "more.loading": "טוען…",
       "more.error": "שגיאה בטעינה — נסו שוב",
 
-      "connections.button": "מצא קשר בין התוצאות",
+      "connections.button": "מצא קשר בין התוצאות עם AI",
+      "connections.answerLabel": "תשובת ה-AI:",
       "connections.loading": "מחפש קשר…",
       "connections.settingsLink": "⚙ הגדרות AI",
       "connections.orExternal": "או שאלו AI חיצוני ↗",
@@ -145,7 +155,12 @@ var I18N = (function () {
       "doc.title": "Shas Radar — Search the Talmud",
 
       "header.title": "Shas Radar",
-      "header.subtitle": "Search words, names, and phrases across all of Shas — with context before and after",
+      "header.subtitle": "Search words, names, and phrases across all of Shas\nwith context before and after",
+
+      "settings.button": "Settings",
+      "settings.heading": "Settings",
+      "settings.close": "Close",
+      "settings.languageHeading": "Language",
 
       "search.label": "Word, name, phrase, or several separated by a comma",
       "search.placeholder": "e.g. {example}",
@@ -184,18 +199,20 @@ var I18N = (function () {
       "matchKind.withPrefix": "With attached prefix",
       "matchKind.exactTag": "{n} exact",
       "matchKind.withPrefixTag": "{n} with prefix",
-      "openInSefaria": "Open on Sefaria ↗",
+      "openInSefaria": "Sefaria ↗",
 
       "copy.button": "Copy",
       "copy.done": "✓ Copied",
       "copy.toastCopied": "Quote copied",
       "copy.toastFailed": "Copy failed",
+      "share.button": "Share",
 
       "more.button": "Show {n} more",
       "more.loading": "Loading…",
       "more.error": "Failed to load — try again",
 
-      "connections.button": "Find connections between results",
+      "connections.button": "Find connections between results with AI",
+      "connections.answerLabel": "AI's answer:",
       "connections.loading": "Looking for connections…",
       "connections.settingsLink": "⚙ AI settings",
       "connections.orExternal": "or ask an external AI ↗",
@@ -260,7 +277,12 @@ var I18N = (function () {
       "doc.title": "Shas Radar — Recherche dans le Talmud",
 
       "header.title": "Shas Radar",
-      "header.subtitle": "Recherche de mots, de noms et d'expressions dans tout le Chas — avec le contexte avant et après",
+      "header.subtitle": "Recherche de mots, de noms et d'expressions dans tout le Chas\navec le contexte avant et après",
+
+      "settings.button": "Paramètres",
+      "settings.heading": "Paramètres",
+      "settings.close": "Fermer",
+      "settings.languageHeading": "Langue",
 
       "search.label": "Mot, nom, expression, ou plusieurs séparés par une virgule",
       "search.placeholder": "par ex. {example}",
@@ -299,18 +321,20 @@ var I18N = (function () {
       "matchKind.withPrefix": "Avec lettre de liaison",
       "matchKind.exactTag": "{n} exact",
       "matchKind.withPrefixTag": "{n} avec préfixe",
-      "openInSefaria": "Ouvrir sur Sefaria ↗",
+      "openInSefaria": "Sefaria ↗",
 
       "copy.button": "Copier",
       "copy.done": "✓ Copié",
       "copy.toastCopied": "Citation copiée",
       "copy.toastFailed": "Échec de la copie",
+      "share.button": "Partager",
 
       "more.button": "Afficher {n} de plus",
       "more.loading": "Chargement…",
       "more.error": "Échec du chargement — réessayez",
 
-      "connections.button": "Trouver des liens entre les résultats",
+      "connections.button": "Trouver des liens entre les résultats avec l'IA",
+      "connections.answerLabel": "Réponse de l'IA :",
       "connections.loading": "Recherche de liens…",
       "connections.settingsLink": "⚙ Paramètres IA",
       "connections.orExternal": "ou demandez à une IA externe ↗",
