@@ -1,7 +1,13 @@
 """FastAPI application.
 
-Serves the JSON search API and the mobile web UI from the *same origin*, so
-there is no CORS involved -- the page and the API it calls share a host.
+Serves the JSON search API and, from ``static/``, the mobile web UI.
+
+Historically those were always the same origin, so CORS never came up. The UI
+is now *also* deployed to Vercel (see ``static/config.js`` for why -- in short,
+a CDN has nothing to wake, so the page paints while this service is still
+starting), which makes that copy cross-origin. Both deployments are served from
+the same ``static/`` directory and the same routes below; the only difference is
+the CORS allowlist a cross-origin caller has to pass.
 """
 
 from __future__ import annotations
@@ -12,6 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from model_dispatcher.exceptions import ModelDispatcherError
@@ -50,6 +57,42 @@ app = FastAPI(
     description="Search the Babylonian Talmud for words, names, and phrases with surrounding context.",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+
+# Who may call this API from a browser on another origin.
+#
+# An explicit allowlist rather than "*": POST /api/analyze accepts a visitor's
+# own API keys in its request body (see AnalyzeCredential below), and an
+# allowlist keeps an unrelated page from driving that endpoint through their
+# browser. allow_credentials stays False -- this API has no cookies and no auth,
+# so there is nothing for a credentialed cross-origin request to carry, and
+# leaving it off is what lets the allowlist stay this simple.
+#
+# Override in the Render dashboard (ALLOWED_ORIGINS, comma-separated) when the
+# frontend moves to a custom domain.
+DEFAULT_ALLOWED_ORIGINS = "https://shas-radar.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    # Vercel gives every branch and every deploy its own preview hostname, so
+    # those can't be listed one by one. Anchored at both ends, and to this
+    # project's name, so it matches this app's previews and nothing else.
+    allow_origin_regex=r"https://shas-radar-[a-z0-9-]+\.vercel\.app",
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    allow_credentials=False,
+    # Cache the preflight, so POST /api/analyze doesn't pay an extra round trip
+    # on every call. Only /api/analyze triggers one at all -- the GET endpoints
+    # send no custom headers, so they are "simple" requests.
+    max_age=3600,
 )
 
 
