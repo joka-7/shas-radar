@@ -80,7 +80,8 @@ var I18N = (function () {
       "more.loading": "טוען…",
       "more.error": "שגיאה בטעינה — נסו שוב",
 
-      "connections.button": "מצא קשר בין התוצאות",
+      "connections.button": "מצא קשר בין התוצאות עם AI",
+      "connections.answerLabel": "תשובת ה-AI:",
       "connections.loading": "מחפש קשר…",
       "connections.settingsLink": "⚙ הגדרות AI",
       "connections.orExternal": "או שאלו AI חיצוני ↗",
@@ -195,7 +196,8 @@ var I18N = (function () {
       "more.loading": "Loading…",
       "more.error": "Failed to load — try again",
 
-      "connections.button": "Find connections between results",
+      "connections.button": "Find connections between results with AI",
+      "connections.answerLabel": "AI's answer:",
       "connections.loading": "Looking for connections…",
       "connections.settingsLink": "⚙ AI settings",
       "connections.orExternal": "or ask an external AI ↗",
@@ -310,7 +312,8 @@ var I18N = (function () {
       "more.loading": "Chargement…",
       "more.error": "Échec du chargement — réessayez",
 
-      "connections.button": "Trouver des liens entre les résultats",
+      "connections.button": "Trouver des liens entre les résultats avec l'IA",
+      "connections.answerLabel": "Réponse de l'IA :",
       "connections.loading": "Recherche de liens…",
       "connections.settingsLink": "⚙ Paramètres IA",
       "connections.orExternal": "ou demandez à une IA externe ↗",
