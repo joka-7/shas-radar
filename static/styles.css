@@ -85,11 +85,6 @@ body {
   color: #fff;
   padding: calc(1.5rem + env(safe-area-inset-top)) 0 1.5rem;
   text-align: center;
-  /* Pinned to the top of the viewport instead of scrolling away with the
-     page, matching KanDOne's header. */
-  position: sticky;
-  top: 0;
-  z-index: 20;
 }
 .header-wrap { display: flex; flex-direction: column; align-items: center; }
 .title {
@@ -100,7 +95,10 @@ body {
   letter-spacing: -.01em;
   direction: ltr;
 }
-.subtitle { margin: 0; opacity: .88; font-size: .95rem; }
+/* pre-line: header.subtitle carries a literal newline (see i18n.js) to
+   force a two-line break at a fixed point, rather than wrapping wherever
+   the viewport happens to run out of room. */
+.subtitle { margin: 0; opacity: .88; font-size: .95rem; white-space: pre-line; }
 
 /* --- Header icon + settings button ---
    icon+title+gear, matching KanDOne's header (AppBrandMark + title + a
@@ -459,16 +457,16 @@ body {
   direction: rtl;
 }
 
-/* Row of per-result actions (copy/share/Sefaria/select-for-AI). Kept to one
-   row rather than wrapping to a second: `nowrap` + horizontal scroll, since
-   four pill buttons plus their Hebrew labels reliably don't all fit a
-   narrow phone's width otherwise. */
+/* Row of per-result actions (copy/share/Sefaria/select-for-AI). Sized to
+   fit one row without scrolling on an ordinary phone width; overflow-x
+   stays as a safety net for a genuinely narrow viewport rather than the
+   normal path. */
 .card-foot {
   display: flex;
   flex-wrap: nowrap;
   overflow-x: auto;
   justify-content: flex-start;
-  gap: .5rem;
+  gap: .35rem;
   margin-top: .6rem;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -478,14 +476,14 @@ body {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: .35rem;
-  font: 500 .85rem var(--font);
+  gap: .25rem;
+  font: 500 .78rem var(--font);
   color: var(--text-soft);
   background: transparent;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: .4rem .75rem;
-  min-height: 38px;
+  padding: .3rem .55rem;
+  min-height: 34px;
   white-space: nowrap;
   cursor: pointer;
   transition: color .15s, border-color .15s, background .15s;
@@ -493,15 +491,15 @@ body {
 .copy:active { transform: scale(.97); }
 .copy.done { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 
-/* .select-ai is a `.copy` too -- same pill, same 38px row, same spot in
+/* .select-ai is a `.copy` too -- same pill, same 34px row, same spot in
    card-foot as the copy/Sefaria buttons (moved here from a separate label
    above the card, which read as unrelated to this card's other actions). */
 .select-ai {
   user-select: none;
 }
 .select-ai .select-ai-checkbox {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   accent-color: var(--gold);
   cursor: pointer;
   flex-shrink: 0;
@@ -602,13 +600,13 @@ body {
 .connections-help .connections-settings-link { display: block; margin-bottom: .6rem; }
 
 /* One line rather than wrapping: nowrap + horizontal scroll, same treatment
-   as .card-foot above -- with Groq/Google AI Mode added, four labeled links
+   as .card-foot above -- with Groq/Google AI Mode added, five labeled links
    don't reliably fit a narrow phone's width otherwise. */
 .external-links {
   display: flex;
   flex-wrap: nowrap;
   overflow-x: auto;
-  gap: .5rem;
+  gap: .4rem;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -617,11 +615,11 @@ body {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  font: 500 .82rem var(--font);
+  font: 500 .78rem var(--font);
   color: var(--accent-text);
   background: var(--accent-soft);
   border-radius: 999px;
-  padding: .3rem .8rem;
+  padding: .25rem .65rem;
   white-space: nowrap;
   text-decoration: none;
 }
