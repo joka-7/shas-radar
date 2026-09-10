@@ -21,24 +21,6 @@
   <meta name="apple-mobile-web-app-title" content="ש״ס רדאר">
 </head>
 <body>
-  <!--
-    Deliberately a sibling of <header>, not a child of it: an in-header
-    install control was tried twice before (see git history on this repo
-    and on פסוק לשם) and taps went unresponsive on some real devices no
-    matter how the CSS was hardened, most likely from sharing a stacking
-    context with .search's negative-margin overlap onto the header. A
-    plain position:fixed element off in its own stacking context, with a
-    single tap target and no secondary dismiss control, sidesteps that
-    whole class of problem.
-  -->
-  <button type="button" class="install-fab" id="install-btn" data-i18n-aria-label="install.button" aria-label="התקנה" hidden>
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 3v11.5"/>
-      <path d="M7.5 10.5 12 15l4.5-4.5"/>
-      <path d="M5 19h14"/>
-    </svg>
-  </button>
-
   <header class="header">
     <div class="wrap header-wrap">
       <div class="header-top">
@@ -139,9 +121,10 @@
     Native <dialog> rather than a hand-rolled overlay: focus trapping,
     Escape-to-close, and the ::backdrop all come for free. `method="dialog"`
     on the form means the close (✕) button needs no JS handler at all.
-    Holds the language switcher (moved out of the header banner) as its own
-    section, above the AI section -- content beyond this static shell (the
-    provider tabs, key lists, the external-AI links) is built by app.js.
+    Holds the install action and the language switcher (moved out of the
+    header banner) as their own sections, above the AI section -- content
+    beyond this static shell (the provider tabs, key lists, the
+    external-AI links) is built by app.js.
   -->
   <dialog id="ai-settings-dialog" class="ai-settings-dialog">
     <form method="dialog" class="ai-settings-form">
@@ -149,6 +132,26 @@
         <h2 data-i18n="settings.heading">הגדרות</h2>
         <button type="submit" class="dialog-close" data-i18n-aria-label="settings.close" aria-label="סגירה">✕</button>
       </div>
+
+      <!--
+        Install used to be a plain position:fixed button of its own, kept
+        deliberately outside <header> and its stacking context (see git
+        history on this repo and on פסוק לשם for why an in-header install
+        control went unresponsive on real devices). Living inside this
+        dialog instead of the header's normal flow keeps that same
+        isolation while giving the header nothing but icon + title + the
+        one settings entry point.
+      -->
+      <section class="settings-section">
+        <button type="button" class="settings-install-btn" id="install-btn" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3v11.5"/>
+            <path d="M7.5 10.5 12 15l4.5-4.5"/>
+            <path d="M5 19h14"/>
+          </svg>
+          <span data-i18n="install.button">התקנה</span>
+        </button>
+      </section>
 
       <section class="settings-section">
         <h3 class="settings-section-title" data-i18n="settings.languageHeading">שפה</h3>
