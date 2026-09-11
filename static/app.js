@@ -23,6 +23,7 @@
   var form = document.getElementById("search-form");
   var input = document.getElementById("q");
   var submit = document.getElementById("submit");
+  var clearBtn = document.getElementById("clear");
   var results = document.getElementById("results");
   var toastEl = document.getElementById("toast");
   var wakingEl = document.getElementById("waking");
@@ -571,10 +572,14 @@
 
   var AI_KEYS_STORAGE_KEY = "shas-radar:ai-keys";
 
+  // Labels are kept to one word so all four tabs fit on a single row at phone
+  // width (see .ai-provider-tab in styles.css); the vendor is unambiguous from
+  // the name alone, and the panel below spells out where to get a key.
   var AI_PROVIDERS = [
     { id: "gemini", label: "Gemini", keyUrl: "https://aistudio.google.com/apikey", free: true },
-    { id: "openai", label: "OpenAI (GPT)", keyUrl: "https://platform.openai.com/api-keys" },
-    { id: "anthropic", label: "Claude (Anthropic)", keyUrl: "https://console.anthropic.com/settings/keys" },
+    { id: "groq", label: "Groq", keyUrl: "https://console.groq.com/keys", free: true },
+    { id: "openai", label: "OpenAI", keyUrl: "https://platform.openai.com/api-keys" },
+    { id: "anthropic", label: "Claude", keyUrl: "https://console.anthropic.com/settings/keys" },
   ];
 
   var activeAiProvider = AI_PROVIDERS[0].id;
@@ -1206,6 +1211,38 @@
 
   // --- Searching -------------------------------------------------------------
 
+  /*
+   * Back to a blank page, and to the bare URL.
+   *
+   * A search puts its query in the hash so results can be shared and the back
+   * button steps between them -- which also means the URL stays "dirty" after
+   * one, and reloading or bookmarking re-runs the old search. Clearing drops
+   * the hash with replaceState rather than pushState, so it tidies the address
+   * bar without adding a history entry of its own (pressing Back still returns
+   * to the previous search rather than to an empty page you just left).
+   */
+  function clearSearch() {
+    if (inFlight) {
+      inFlight.abort();
+      inFlight = null;
+    }
+    input.value = "";
+    lastSearchData = null;
+    lastSnapshot = null;
+    results.innerHTML = "";
+    results.setAttribute("aria-busy", "false");
+    submit.disabled = false;
+    history.replaceState(null, "", location.pathname + location.search);
+    syncClearButton();
+    input.focus();
+  }
+
+  // Only offered when there is something to clear, so it never sits there as
+  // dead weight on a first visit.
+  function syncClearButton() {
+    clearBtn.hidden = !input.value && !results.firstChild;
+  }
+
   function runSearch(query, pushHash) {
     query = (query || "").trim();
     if (!query) {
@@ -1270,10 +1307,16 @@
           results.setAttribute("aria-busy", "false");
         }
         disarmWaking();
+        syncClearButton();
       });
   }
 
   // --- Wiring ------------------------------------------------------------
+
+  clearBtn.addEventListener("click", clearSearch);
+
+  // Keeps the button in step while typing, not just after a search.
+  input.addEventListener("input", syncClearButton);
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();

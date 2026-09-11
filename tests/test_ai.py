@@ -59,7 +59,7 @@ def no_server_keys(monkeypatch):
     might have one exported -- clearing explicitly makes "no server key"
     tests correct regardless of the ambient environment.
     """
-    for env_var in ("GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
+    for env_var in ("GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY"):
         monkeypatch.delenv(env_var, raising=False)
 
 
@@ -203,6 +203,14 @@ class TestBuildRegistry:
         assert len(registry) == 1
         assert registry.all()[0].name.startswith("gemini:")
 
+    def test_groq_registers_from_a_byok_credential(self, no_server_keys):
+        """Groq rides ModelDispatcher's OpenAI-compatible adapter, so its
+        provider name still has to start with the family the credential map
+        is keyed by -- that is what CredentialResolver matches a BYOK key on."""
+        registry = ai._build_registry({"groq": ["byok-key"]})
+        assert len(registry) == 1
+        assert registry.all()[0].name.startswith("groq:")
+
 
 class TestServerConfiguredProviders:
     def test_empty_with_no_env_vars_set(self, no_server_keys):
@@ -296,5 +304,5 @@ class TestAiStatusEndpoint:
 
         assert response.status_code == 200
         assert response.json() == {
-            "providers": {"gemini": False, "openai": True, "anthropic": False}
+            "providers": {"gemini": False, "openai": True, "anthropic": False, "groq": False}
         }

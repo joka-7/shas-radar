@@ -237,6 +237,7 @@ Set any one (or more, for cross-provider fallback) of:
 | `GEMINI_API_KEY` | Google Gemini | `gemini-2.5-flash` (override: `GEMINI_MODEL`) |
 | `OPENAI_API_KEY` | OpenAI | `gpt-4o-mini` (override: `OPENAI_MODEL`) |
 | `ANTHROPIC_API_KEY` | Anthropic | `claude-opus-4-8` (override: `ANTHROPIC_MODEL`) |
+| `GROQ_API_KEY` | Groq | `openai/gpt-oss-120b` (override: `GROQ_MODEL`) |
 
 With more than one key set, ModelDispatcher's own router/fallback chain
 tries the cheaper model first and transparently escalates on failure — no
