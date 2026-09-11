@@ -60,7 +60,13 @@ from model_dispatcher import (
     TenantId,
     TenantQuota,
 )
-from model_dispatcher.providers import AnthropicProvider, GeminiProvider, ModelProvider, OpenAIProvider
+from model_dispatcher.providers import (
+    AnthropicProvider,
+    GeminiProvider,
+    GroqProvider,
+    ModelProvider,
+    OpenAIProvider,
+)
 from model_dispatcher.quota.store import InMemoryQuotaStore
 
 # Mirrors app/main.py's own MAX_QUERIES -- an analysis request can never cover
@@ -91,6 +97,11 @@ _PROVIDER_SPECS: dict[str, tuple[type[ModelProvider], str, str, str]] = {
     "gemini": (GeminiProvider, "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-2.5-flash"),
     "openai": (OpenAIProvider, "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4o-mini"),
     "anthropic": (AnthropicProvider, "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "claude-opus-4-8"),
+    # Groq speaks the OpenAI chat-completions shape, so ModelDispatcher's
+    # adapter is a thin OpenAIProvider subclass and no extra dependency is
+    # needed beyond the `openai` extra already required above. Its free tier
+    # is generous enough to be a realistic default for a visitor's own key.
+    "groq": (GroqProvider, "GROQ_API_KEY", "GROQ_MODEL", "openai/gpt-oss-120b"),
 }
 
 # Shared across every request (module-level, built once) so the app-wide

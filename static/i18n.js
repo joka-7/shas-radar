@@ -43,6 +43,7 @@ var I18N = (function () {
       "search.label": "מילה בודדת, מילים ברצף או מופרדות בפסיק",
       "search.placeholder": "לדוגמה: {example}",
       "search.button": "חיפוש",
+      "search.clearAriaLabel": "ניקוי החיפוש",
 
       "stepper.before": "מילים לפני",
       "stepper.after": "מילים אחרי",
@@ -165,6 +166,7 @@ var I18N = (function () {
       "search.label": "Word, name, phrase, or several separated by a comma",
       "search.placeholder": "e.g. {example}",
       "search.button": "Search",
+      "search.clearAriaLabel": "Clear search",
 
       "stepper.before": "Words before",
       "stepper.after": "Words after",
@@ -287,6 +289,7 @@ var I18N = (function () {
       "search.label": "Mot, nom, expression, ou plusieurs séparés par une virgule",
       "search.placeholder": "par ex. {example}",
       "search.button": "Rechercher",
+      "search.clearAriaLabel": "Effacer la recherche",
 
       "stepper.before": "Mots avant",
       "stepper.after": "Mots après",

@@ -257,7 +257,7 @@ class AnalyzeCredential(BaseModel):
     # and no real API key is anywhere near 200 characters.
     model_config = ConfigDict(str_max_length=200)
 
-    provider: Literal["gemini", "openai", "anthropic"]
+    provider: Literal["gemini", "openai", "anthropic", "groq"]
     apiKeys: list[str] = Field(default_factory=list, max_length=5)
 
 
@@ -278,7 +278,7 @@ def ai_status_endpoint() -> dict:
     vendor, versus "bring your own" for the rest.
     """
     configured = ai.server_configured_providers()
-    return {"providers": {name: name in configured for name in ("gemini", "openai", "anthropic")}}
+    return {"providers": {name: name in configured for name in ("gemini", "openai", "anthropic", "groq")}}
 
 
 @app.post("/api/analyze")
