@@ -1,3 +1,5 @@
+<img src="static/icons/icon-192.png" alt="" width="88">
+
 # Shas Radar — search the Talmud for words, names, and phrases
 
 A mobile-first Hebrew/Aramaic web app for searching the entire Babylonian
