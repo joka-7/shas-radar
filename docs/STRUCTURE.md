@@ -8,8 +8,10 @@ refresh it, and never edit between the markers by hand.
 ```text
 shas-radar/
 ├── .github/
-│   └── workflows/
-│       └── ci.yml
+│   ├── workflows/
+│   │   └── ci.yml
+│   ├── copilot-instructions.md
+│   └── dependabot.yml
 ├── app/
 │   ├── ai.py      # AI-assisted analysis: find connections across a set of search-result groups.
 │   ├── corpus.py  # Loading and indexing the Talmud corpus.
@@ -42,10 +44,16 @@ shas-radar/
 │   ├── test_ai.py      # Tests for app/ai.py -- the optional "find connections" AI feature.
 │   ├── test_hebrew.py  # Tests for the Hebrew/Aramaic normalization primitives.
 │   └── test_search.py  # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
+├── .ai
 ├── .gitignore
+├── .gitmodules
+├── AGENTS.md
+├── CLAUDE.md
 ├── Dockerfile
+├── GEMINI.md
 ├── LICENSE
 ├── README.md             # Shas Radar — search the Talmud for words, names, and phrases
+├── ai-config.toml
 ├── pyproject.toml
 ├── pytest.ini
 ├── render.yaml
