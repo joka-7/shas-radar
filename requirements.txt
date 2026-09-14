@@ -5,7 +5,9 @@ uvicorn[standard]==0.34.0
 # pinned to a tagged commit. Only registers a provider when its own API key
 # env var is set; with none set, the app runs exactly as before (see ai.py).
 #
-# Pinned to a branch, not a tag, for now: app/ai.py depends on the
-# model_dispatcher.byok subpackage, which hasn't shipped in a tagged release
-# yet. Re-pin to a v0.4.0+ tag once ModelDispatcher cuts one containing it.
-model-dispatcher[openai,anthropic,gemini] @ git+https://github.com/joka-7/ModelDispatcher@claude/unified-ai-model-dispatcher-3jonj0
+# Pinned to main, not a tag, for now: app/ai.py depends on the
+# model_dispatcher.byok subpackage (merged into main in
+# https://github.com/joka-7/ModelDispatcher/pull/19), which hasn't shipped
+# in a tagged release yet. Re-pin to a v0.4.0+ tag once ModelDispatcher cuts
+# one containing it.
+model-dispatcher[openai,anthropic,gemini] @ git+https://github.com/joka-7/ModelDispatcher@main
