@@ -41,11 +41,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pip-audit
-      # Advisory for now: starlette (pulled in by the pinned fastapi==0.115.6)
-      # has known advisories with no fix released against this major yet.
-      # Flip to blocking once fastapi/starlette is bumped past them.
       - name: pip-audit
-        continue-on-error: true
         run: pip-audit -r requirements.txt
 
   trivy:
@@ -60,9 +56,7 @@ jobs:
           scan-ref: .
           format: table
           severity: HIGH,CRITICAL
-          # Advisory alongside pip-audit above: report findings in the job
-          # log without failing until the known starlette backlog clears.
-          exit-code: 0
+          exit-code: 1
           scanners: vuln
 
   codeql:
