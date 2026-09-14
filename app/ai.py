@@ -37,6 +37,7 @@ from __future__ import annotations
 import concurrent.futures
 import os
 from dataclasses import dataclass
+from typing import Any
 
 from model_dispatcher import (
     CompletionRequest,
@@ -51,11 +52,10 @@ from model_dispatcher import (
     TenantId,
     TenantQuota,
 )
-from model_dispatcher.byok import ProviderSpec
+from model_dispatcher.byok import ProviderSpec, dispatch_with_timeout
 from model_dispatcher.byok import build_registry as _build_registry_for
 from model_dispatcher.byok import configured_providers as _configured_providers
 from model_dispatcher.byok import credential_metadata as _credential_metadata
-from model_dispatcher.byok import dispatch_with_timeout
 from model_dispatcher.exceptions import DispatchTimeoutError, NoProviderAvailableError
 from model_dispatcher.providers import (
     AnthropicProvider,
@@ -121,7 +121,9 @@ _QUOTA_STORE = InMemoryQuotaStore()
 # itself eventually errors or completes -- acceptable for this app's
 # traffic, not something worth an async rewrite to avoid.
 _DEFAULT_DEADLINE_SECONDS = 30.0
-_DISPATCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai-dispatch")
+_DISPATCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="ai-dispatch"
+)
 
 # Same classes model_dispatcher.byok itself raises -- aliased under the
 # names this module (and its tests) have always used, so nothing downstream
@@ -139,6 +141,7 @@ def _deadline_seconds() -> float:
         return float(raw)
     except ValueError:
         return _DEFAULT_DEADLINE_SECONDS
+
 
 # ModelDispatcher's default routing floor reserves STANDARD+ tier models for
 # anything triaged above SIMPLE -- tuned for general agentic/coding work.
@@ -233,7 +236,7 @@ def _cap_words(text: str, limit: int = SNIPPET_WORD_CAP) -> str:
     return " ".join(text.split()[:limit])
 
 
-def _format_groups(groups: list[dict]) -> str:
+def _format_groups(groups: list[dict[str, Any]]) -> str:
     """Render each group's query and top results as plain text for the prompt."""
     blocks = []
     for group in groups[:MAX_GROUPS]:
@@ -249,7 +252,7 @@ def _format_groups(groups: list[dict]) -> str:
 
 
 def analyze_connections(
-    groups: list[dict],
+    groups: list[dict[str, Any]],
     locale: str = "he",
     *,
     credentials: dict[str, list[str]] | None = None,
