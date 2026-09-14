@@ -187,9 +187,13 @@ class TestAnalyzeConnections:
 
 
 class TestBuildRegistry:
-    def test_empty_with_no_server_key_and_no_credentials(self, no_server_keys):
-        registry = ai._build_registry({})
-        assert len(registry) == 0
+    def test_raises_with_no_server_key_and_no_credentials(self, no_server_keys):
+        # model_dispatcher.byok.build_registry raises rather than handing back
+        # an empty registry -- a keyless registry is never valid to dispatch
+        # against, so failing here (fail loudly, at the source) replaces what
+        # used to be a separate emptiness check in analyze_connections itself.
+        with pytest.raises(ai.NoCredentialError):
+            ai._build_registry({})
 
     def test_only_vendors_with_a_key_get_registered(self, no_server_keys, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "server-side-key")
