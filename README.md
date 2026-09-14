@@ -434,20 +434,34 @@ all take it as-is. Vercel is a poor fit for *this* half: its Python runtime is
 serverless, so the corpus load would run on every cold start — which is exactly
 why only the static frontend goes there.
 
-## Layout
+## Repository layout
 
+The full annotated tree is [`docs/STRUCTURE.md`](docs/STRUCTURE.md) — generated
+and drift-checked in CI, so it never goes stale. Architecture and per-module
+detail live in [`docs/HLD.md`](docs/HLD.md) and [`docs/LLD.md`](docs/LLD.md).
+
+<!-- BEGIN GENERATED TREE (depth=1 entries=all) -->
+```text
+shas-radar/
+├── .github/
+├── app/
+├── data/
+├── docs/
+├── scripts/
+├── static/
+├── tests/
+├── .gitignore
+├── Dockerfile
+├── LICENSE
+├── README.md             # Shas Radar — search the Talmud for words, names, and phrases
+├── pyproject.toml
+├── pytest.ini
+├── render.yaml
+├── requirements-dev.txt
+├── requirements.txt
+└── vercel.json
 ```
-app/hebrew.py           normalization, tokenization, Hebrew numerals  (no deps)
-app/corpus.py           gzip load + per-tractate token stream and word index
-app/search.py           exact/prefix/phrase/proximity matching, KWIC context
-app/ai.py                optional "find connections" feature via ModelDispatcher
-app/main.py             FastAPI routes; CORS allowlist; mounts static/ at "/"
-scripts/build_dataset.py   Sefaria export -> data/shas.json.gz (build-time)
-static/config.js        resolves the API base (same origin; /api is proxied on Vercel)
-static/sw.js            service worker: installability + a cached app shell
-static/                 the UI: one page, one stylesheet, one script, one translation table
-tests/                  pytest, against the real corpus
-```
+<!-- END GENERATED TREE -->
 
 ## Notes
 
