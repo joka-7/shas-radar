@@ -39,7 +39,12 @@ def _sample_groups() -> list[dict]:
         {
             "query": "אביי",
             "results": [
-                {"citation": "ברכות ג:", "before": "אמר רב יוסף אמר", "match": "אביי", "after": "אמר מאי טעמא"},
+                {
+                    "citation": "ברכות ג:",
+                    "before": "אמר רב יוסף אמר",
+                    "match": "אביי",
+                    "after": "אמר מאי טעמא",
+                },
             ],
         },
         {
@@ -81,7 +86,9 @@ class TestAnalyzeConnections:
                 captured["request"] = request
                 return super().complete(request, api_key=api_key)
 
-        provider = RecordingProvider("mock:free", tier=ModelTier.FREE, reply="Connected via Rava's teaching.")
+        provider = RecordingProvider(
+            "mock:free", tier=ModelTier.FREE, reply="Connected via Rava's teaching."
+        )
         gateway = _make_gateway(provider)
 
         result = ai.analyze_connections(_sample_groups(), locale="en", gateway=gateway)
@@ -123,7 +130,9 @@ class TestAnalyzeConnections:
         assert first_block.count("\n- (") == ai.MAX_RESULTS_PER_GROUP
 
     def test_byok_credentials_are_pooled_into_tenant_metadata(self):
-        assert ai._credential_metadata({"gemini": ["k1", "k2"], "openai": [], "anthropic": ["k3"]}) == {
+        assert ai._credential_metadata(
+            {"gemini": ["k1", "k2"], "openai": [], "anthropic": ["k3"]}
+        ) == {
             "user_key:gemini": "k1,k2",
             "user_key:anthropic": "k3",
         }
