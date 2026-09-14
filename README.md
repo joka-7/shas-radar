@@ -450,10 +450,16 @@ shas-radar/
 ├── scripts/
 ├── static/
 ├── tests/
+├── .ai
 ├── .gitignore
+├── .gitmodules
+├── AGENTS.md
+├── CLAUDE.md
 ├── Dockerfile
+├── GEMINI.md
 ├── LICENSE
 ├── README.md             # Shas Radar — search the Talmud for words, names, and phrases
+├── ai-config.toml
 ├── pyproject.toml
 ├── pytest.ini
 ├── render.yaml
