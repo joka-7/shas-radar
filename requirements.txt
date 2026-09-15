@@ -4,4 +4,8 @@ uvicorn[standard]==0.34.0
 # Optional AI "find connections" feature (app/ai.py) -- not yet on PyPI, so
 # pinned to a tagged commit. Only registers a provider when its own API key
 # env var is set; with none set, the app runs exactly as before (see ai.py).
-model-dispatcher[openai,anthropic,gemini] @ git+https://github.com/joka-7/ModelDispatcher@v0.3.0
+#
+# Pinned to a branch, not a tag, for now: app/ai.py depends on the
+# model_dispatcher.byok subpackage, which hasn't shipped in a tagged release
+# yet. Re-pin to a v0.4.0+ tag once ModelDispatcher cuts one containing it.
+model-dispatcher[openai,anthropic,gemini] @ git+https://github.com/joka-7/ModelDispatcher@claude/unified-ai-model-dispatcher-3jonj0

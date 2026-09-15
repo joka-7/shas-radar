@@ -19,25 +19,17 @@ Two independent sources of credentials, either sufficient on its own:
   scoped per visitor -- see ``_quota()``).
 * **A visitor's own key(s)** ("bring your own key"), pasted into the AI
   settings panel in the UI, sent with the request and never persisted
-  server-side. ModelDispatcher pools several keys for the same vendor
-  natively (comma-joined in ``TenantContext.metadata``), rotating through
-  them on a rate limit before giving up on that vendor.
+  server-side.
 
-Both can be present at once: a visitor's own key always takes precedence
-over the shared server key for the *same* vendor (ModelDispatcher's own
-credential precedence), and different vendors can mix -- e.g. the server
-has a Gemini key, the visitor adds their own Anthropic key, and both
-participate in the same cost-tiered fallback chain.
-
-The registry is deliberately rebuilt per request (see ``_build_registry``)
-rather than once at startup: a vendor with *no* key at all for this
-particular request (neither server nor visitor) is left out of it
-entirely. This matters because ModelDispatcher treats an auth failure as
-terminal, not fallback-worthy, by design (a bad/missing key is "the
-caller's problem", elsewhere in the library) -- so a keyless vendor sitting
-in the registry ahead of a vendor the visitor actually gave a key for would
-otherwise hard-fail the whole request before ever reaching the one that
-would have worked.
+Registering only the vendors with an available key, mapping BYOK keys onto
+tenant metadata, and bounding the dispatch with a hard deadline (no built-in
+provider adapter sets a network timeout of its own) are all
+``model_dispatcher.byok``'s job now, not this app's -- that wiring used to
+be hand-written here; it's exactly the same wiring every other single-backend
+BYOK app on top of ModelDispatcher needs, so it now lives in the library
+instead. ``_build_registry``/``_credential_metadata``/``NoCredentialError``/
+``RequestTimeoutError`` stay as this module's own names (and this module's
+public API, per its tests) but delegate straight through.
 """
 
 from __future__ import annotations
@@ -45,6 +37,7 @@ from __future__ import annotations
 import concurrent.futures
 import os
 from dataclasses import dataclass
+from typing import Any
 
 from model_dispatcher import (
     CompletionRequest,
@@ -52,7 +45,6 @@ from model_dispatcher import (
     Message,
     ModelGateway,
     ModelTier,
-    ProviderRegistry,
     Role,
     RoutingPolicy,
     TaskComplexity,
@@ -60,12 +52,17 @@ from model_dispatcher import (
     TenantId,
     TenantQuota,
 )
+from model_dispatcher.byok import ProviderSpec, dispatch_with_timeout
+from model_dispatcher.byok import build_registry as _build_registry_for
+from model_dispatcher.byok import configured_providers as _configured_providers
+from model_dispatcher.byok import credential_metadata as _credential_metadata
+from model_dispatcher.exceptions import DispatchTimeoutError, NoProviderAvailableError
 from model_dispatcher.providers import (
     AnthropicProvider,
     GeminiProvider,
     GroqProvider,
-    ModelProvider,
     OpenAIProvider,
+    ProviderRegistry,
 )
 from model_dispatcher.quota.store import InMemoryQuotaStore
 
@@ -86,22 +83,23 @@ SNIPPET_WORD_CAP = 40
 # not by a separate tenant id each, since there's no per-user auth here.
 TENANT_ID = TenantId("shas-radar")
 
-# One vendor per entry: the ModelProvider adapter, the env vars a server
-# operator can set (a key, and an optional model override), and the default
-# model if no override is given. The dict key doubles as the "family" name
-# ModelDispatcher's own CredentialResolver derives from a provider's
+# One vendor per entry: the ModelDispatcher provider adapter, the env vars a
+# server operator can set (a key, and an optional model override), and the
+# default model if no override is given. The dict key doubles as the "family"
+# name ModelDispatcher's own CredentialResolver derives from a provider's
 # ``name`` (the part before the first ":") -- match it exactly, since that's
 # also what a BYOK request's ``credentials[*].provider`` value must equal.
-_PROVIDER_SPECS: dict[str, tuple[type[ModelProvider], str, str, str]] = {
-    # name -> (provider class, key env var, model env var, default model)
-    "gemini": (GeminiProvider, "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-2.5-flash"),
-    "openai": (OpenAIProvider, "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4o-mini"),
-    "anthropic": (AnthropicProvider, "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "claude-opus-4-8"),
+_PROVIDER_SPECS: dict[str, ProviderSpec] = {
+    "gemini": ProviderSpec(GeminiProvider, "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-2.5-flash"),
+    "openai": ProviderSpec(OpenAIProvider, "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4o-mini"),
+    "anthropic": ProviderSpec(
+        AnthropicProvider, "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "claude-opus-4-8"
+    ),
     # Groq speaks the OpenAI chat-completions shape, so ModelDispatcher's
     # adapter is a thin OpenAIProvider subclass and no extra dependency is
     # needed beyond the `openai` extra already required above. Its free tier
     # is generous enough to be a realistic default for a visitor's own key.
-    "groq": (GroqProvider, "GROQ_API_KEY", "GROQ_MODEL", "openai/gpt-oss-120b"),
+    "groq": ProviderSpec(GroqProvider, "GROQ_API_KEY", "GROQ_MODEL", "openai/gpt-oss-120b"),
 }
 
 # Shared across every request (module-level, built once) so the app-wide
@@ -116,14 +114,23 @@ _QUOTA_STORE = InMemoryQuotaStore()
 # connection or a slow vendor API can otherwise hang for as long as that
 # SDK's own default allows (observed live: ~2 minutes before Render's own
 # proxy finally cut it, not this app choosing to give up). A dispatch is
-# run on this small dedicated pool and bounded with .result(timeout=...)
+# run on this small dedicated pool and bounded with dispatch_with_timeout
 # instead, so a hang always surfaces here, fast and on our own terms,
 # rather than the visitor just watching a spinner. This still leaves the
 # one worker thread running in the background until the underlying socket
 # itself eventually errors or completes -- acceptable for this app's
 # traffic, not something worth an async rewrite to avoid.
 _DEFAULT_DEADLINE_SECONDS = 30.0
-_DISPATCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai-dispatch")
+_DISPATCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="ai-dispatch"
+)
+
+# Same classes model_dispatcher.byok itself raises -- aliased under the
+# names this module (and its tests) have always used, so nothing downstream
+# had to change when the registry-building/dispatch wiring moved into the
+# library.
+NoCredentialError = NoProviderAvailableError
+RequestTimeoutError = DispatchTimeoutError
 
 
 def _deadline_seconds() -> float:
@@ -134,6 +141,7 @@ def _deadline_seconds() -> float:
         return float(raw)
     except ValueError:
         return _DEFAULT_DEADLINE_SECONDS
+
 
 # ModelDispatcher's default routing floor reserves STANDARD+ tier models for
 # anything triaged above SIMPLE -- tuned for general agentic/coding work.
@@ -177,23 +185,6 @@ _SYSTEM_PROMPT = (
 )
 
 
-class NoCredentialError(RuntimeError):
-    """Neither a server key nor a visitor-supplied key exists for any vendor.
-
-    Raised before any network call is attempted -- callers map this onto a
-    fast, cheap error (see app/main.py) rather than letting a doomed request
-    reach a vendor's API.
-    """
-
-
-class RequestTimeoutError(RuntimeError):
-    """The dispatch to the model provider didn't finish within the deadline.
-
-    See the ``_DISPATCH_EXECUTOR`` comment above for why this exists --
-    ModelDispatcher's provider adapters set no HTTP timeout of their own.
-    """
-
-
 @dataclass(frozen=True, slots=True)
 class AnalyzeResult:
     """The model's answer, plus enough provenance to show/debug it."""
@@ -208,7 +199,7 @@ def server_configured_providers() -> frozenset[str]:
     Used by ``GET /api/ai-status`` so the settings UI can tell a visitor
     "no key needed for this one" versus "bring your own" per vendor.
     """
-    return frozenset(name for name, (_, key_var, _, _) in _PROVIDER_SPECS.items() if os.environ.get(key_var))
+    return _configured_providers(_PROVIDER_SPECS)
 
 
 def _quota() -> TenantQuota:
@@ -229,32 +220,23 @@ def _quota() -> TenantQuota:
 def _build_registry(credentials: dict[str, list[str]]) -> ProviderRegistry:
     """Register only vendors with *some* usable key for this request.
 
-    A vendor gets a server key, a visitor key, both, or neither -- "neither"
-    means it's left out of the registry entirely (see the module docstring
-    for why: an auth failure is terminal in ModelDispatcher, so a keyless
-    candidate must never even be offered to the router).
+    Thin wrapper over ``model_dispatcher.byok.build_registry`` bound to this
+    app's own ``_PROVIDER_SPECS`` -- see that function for what "usable"
+    means and why a keyless vendor is left out entirely rather than included
+    and left to fail.
+
+    Raises:
+        NoCredentialError: If no vendor in ``_PROVIDER_SPECS`` has a server
+            key or a visitor-supplied credential.
     """
-    registry = ProviderRegistry()
-    for name, (provider_cls, key_var, model_var, default_model) in _PROVIDER_SPECS.items():
-        server_key = os.environ.get(key_var)
-        if not server_key and not credentials.get(name):
-            continue
-        model = os.environ.get(model_var) or default_model
-        registry.register(provider_cls(model=model, api_key=server_key))
-    return registry
-
-
-def _credential_metadata(credentials: dict[str, list[str]]) -> dict[str, str]:
-    """``{vendor: [key, ...]}`` -> the ``user_key:<family>`` tenant-metadata
-    ModelDispatcher's ``CredentialResolver`` reads (comma-joined pooling)."""
-    return {f"user_key:{name}": ",".join(keys) for name, keys in credentials.items() if keys}
+    return _build_registry_for(_PROVIDER_SPECS, credentials)
 
 
 def _cap_words(text: str, limit: int = SNIPPET_WORD_CAP) -> str:
     return " ".join(text.split()[:limit])
 
 
-def _format_groups(groups: list[dict]) -> str:
+def _format_groups(groups: list[dict[str, Any]]) -> str:
     """Render each group's query and top results as plain text for the prompt."""
     blocks = []
     for group in groups[:MAX_GROUPS]:
@@ -270,7 +252,7 @@ def _format_groups(groups: list[dict]) -> str:
 
 
 def analyze_connections(
-    groups: list[dict],
+    groups: list[dict[str, Any]],
     locale: str = "he",
     *,
     credentials: dict[str, list[str]] | None = None,
@@ -292,8 +274,7 @@ def analyze_connections(
             for any vendor -- callers should answer a fast, cheap error
             instead of letting a doomed request reach a vendor's API.
         RequestTimeoutError: The dispatch didn't finish within
-            ``AI_REQUEST_DEADLINE_SECONDS`` (default 30s) -- see the
-            ``_DISPATCH_EXECUTOR`` module comment for why this exists.
+            ``AI_REQUEST_DEADLINE_SECONDS`` (default 30s).
         model_dispatcher.exceptions.ModelDispatcherError: Any dispatch
             failure (quota, bad key, all providers exhausted, etc.) --
             these already carry the right HTTP status for a web layer to
@@ -304,10 +285,6 @@ def analyze_connections(
     active_gateway = gateway
     if active_gateway is None:
         registry = _build_registry(credentials)
-        if not len(registry):
-            raise NoCredentialError(
-                "no AI provider key available -- set one on the server or add your own in AI settings"
-            )
         active_gateway = ModelGateway.create(
             registry, settings=GatewaySettings(routing=_ROUTING), quota_store=_QUOTA_STORE
         )
@@ -328,14 +305,13 @@ def analyze_connections(
         tenant=tenant.tenant_id,
         max_tokens=500,
     )
-    try:
-        result = _DISPATCH_EXECUTOR.submit(active_gateway.dispatch, request, tenant).result(
-            timeout=_deadline_seconds()
-        )
-    except concurrent.futures.TimeoutError:
-        raise RequestTimeoutError(
-            f"the AI provider did not respond within {_deadline_seconds():.0f}s"
-        ) from None
+    result = dispatch_with_timeout(
+        active_gateway,
+        request,
+        tenant,
+        executor=_DISPATCH_EXECUTOR,
+        timeout_seconds=_deadline_seconds(),
+    )
 
     served_by = "unknown"
     for step in reversed(result.steps):

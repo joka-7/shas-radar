@@ -39,7 +39,12 @@ def _sample_groups() -> list[dict]:
         {
             "query": "אביי",
             "results": [
-                {"citation": "ברכות ג:", "before": "אמר רב יוסף אמר", "match": "אביי", "after": "אמר מאי טעמא"},
+                {
+                    "citation": "ברכות ג:",
+                    "before": "אמר רב יוסף אמר",
+                    "match": "אביי",
+                    "after": "אמר מאי טעמא",
+                },
             ],
         },
         {
@@ -81,7 +86,9 @@ class TestAnalyzeConnections:
                 captured["request"] = request
                 return super().complete(request, api_key=api_key)
 
-        provider = RecordingProvider("mock:free", tier=ModelTier.FREE, reply="Connected via Rava's teaching.")
+        provider = RecordingProvider(
+            "mock:free", tier=ModelTier.FREE, reply="Connected via Rava's teaching."
+        )
         gateway = _make_gateway(provider)
 
         result = ai.analyze_connections(_sample_groups(), locale="en", gateway=gateway)
@@ -123,7 +130,9 @@ class TestAnalyzeConnections:
         assert first_block.count("\n- (") == ai.MAX_RESULTS_PER_GROUP
 
     def test_byok_credentials_are_pooled_into_tenant_metadata(self):
-        assert ai._credential_metadata({"gemini": ["k1", "k2"], "openai": [], "anthropic": ["k3"]}) == {
+        assert ai._credential_metadata(
+            {"gemini": ["k1", "k2"], "openai": [], "anthropic": ["k3"]}
+        ) == {
             "user_key:gemini": "k1,k2",
             "user_key:anthropic": "k3",
         }
@@ -187,9 +196,13 @@ class TestAnalyzeConnections:
 
 
 class TestBuildRegistry:
-    def test_empty_with_no_server_key_and_no_credentials(self, no_server_keys):
-        registry = ai._build_registry({})
-        assert len(registry) == 0
+    def test_raises_with_no_server_key_and_no_credentials(self, no_server_keys):
+        # model_dispatcher.byok.build_registry raises rather than handing back
+        # an empty registry -- a keyless registry is never valid to dispatch
+        # against, so failing here (fail loudly, at the source) replaces what
+        # used to be a separate emptiness check in analyze_connections itself.
+        with pytest.raises(ai.NoCredentialError):
+            ai._build_registry({})
 
     def test_only_vendors_with_a_key_get_registered(self, no_server_keys, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "server-side-key")

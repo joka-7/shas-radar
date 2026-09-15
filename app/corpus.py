@@ -42,6 +42,7 @@ import gzip
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from .hebrew import daf_citation, tokenize
 
@@ -56,23 +57,31 @@ _AMUD_CODE = {"a": 0, "b": 1}
 class Segment:
     """One paragraph of running text: a daf/amud location and its full text."""
 
-    __slots__ = ("daf", "amud", "text", "start", "end")
+    __slots__ = ("amud", "daf", "end", "start", "text")
 
     def __init__(self, daf: int, amud: str, text: str, start: int, end: int):
         self.daf = daf
         self.amud = amud
         self.text = text
         self.start = start  # token position, inclusive
-        self.end = end      # token position, exclusive
+        self.end = end  # token position, exclusive
 
 
 class Tractate:
     """One tractate's full token stream, plus the indexes built over it."""
 
     __slots__ = (
-        "he", "en", "seder_he", "seder_en",
-        "tokens", "tokens_raw", "token_daf", "token_amud",
-        "segments", "segment_starts", "by_word",
+        "by_word",
+        "en",
+        "he",
+        "seder_en",
+        "seder_he",
+        "segment_starts",
+        "segments",
+        "token_amud",
+        "token_daf",
+        "tokens",
+        "tokens_raw",
     )
 
     def __init__(self, he: str, en: str, seder_he: str, seder_en: str):
@@ -81,17 +90,17 @@ class Tractate:
         self.seder_he = seder_he
         self.seder_en = seder_en
 
-        self.tokens: list[str] = []       # normalized (finals folded), interned
-        self.tokens_raw: list[str] = []   # as printed, for display, interned
-        self.token_daf: array.array = array.array("B")   # daf never exceeds 176
-        self.token_amud: array.array = array.array("B")  # 0 = "a", 1 = "b"
+        self.tokens: list[str] = []  # normalized (finals folded), interned
+        self.tokens_raw: list[str] = []  # as printed, for display, interned
+        self.token_daf: array.array[int] = array.array("B")  # daf never exceeds 176
+        self.token_amud: array.array[int] = array.array("B")  # 0 = "a", 1 = "b"
         self.segments: list[Segment] = []
         # Parallel to `segments`, kept sorted for bisect: start-position lookup.
         self.segment_starts: list[int] = []
 
         # word -> sorted array of token positions where it occurs. Built as
         # plain lists in build_index() below, then frozen into array.array.
-        self.by_word: dict[str, array.array] = {}
+        self.by_word: dict[str, array.array[int]] = {}
 
     def __len__(self) -> int:
         return len(self.tokens)
@@ -132,7 +141,7 @@ class Tractate:
 class Corpus:
     """All 37 tractates, indexed for search."""
 
-    def __init__(self, dataset: dict):
+    def __init__(self, dataset: dict[str, Any]):
         self.source: str = dataset["source"]
         self.license: str = dataset["license"]
         self.word_count: int = dataset["wordCount"]

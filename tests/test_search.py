@@ -274,7 +274,7 @@ class TestApi:
     def test_before_after_are_clamped(self, client):
         body = client.get("/api/search", params={"q": "אביי", "before": 999, "after": 0}).json()
         assert body["before"] == 50  # MAX_CONTEXT
-        assert body["after"] == 1    # MIN_CONTEXT
+        assert body["after"] == 1  # MIN_CONTEXT
 
     def test_offset_pages_through_a_groups_own_results(self, client):
         """The "show more" button's own request shape: same term, growing

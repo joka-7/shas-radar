@@ -13,9 +13,10 @@ the CORS allowlist a cross-origin caller has to pass.
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,9 +32,11 @@ from .search import (
     DEFAULT_CONTEXT,
     DEFAULT_LIMIT,
     MAX_LIMIT,
-    Query as SearchQuery,
     find_proximity,
     search,
+)
+from .search import (
+    Query as SearchQuery,
 )
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -45,7 +48,7 @@ MAX_QUERIES = 5
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Load and index the corpus at boot, rather than on the first request."""
     corpus = load_corpus()
     print(f"Loaded {len(corpus):,} tokens from {len(corpus.tractates)} tractates.")
@@ -54,7 +57,9 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Shas Radar",
-    description="Search the Babylonian Talmud for words, names, and phrases with surrounding context.",
+    description=(
+        "Search the Babylonian Talmud for words, names, and phrases with surrounding context."
+    ),
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -71,7 +76,9 @@ app = FastAPI(
 #
 # Override in the Render dashboard (ALLOWED_ORIGINS, comma-separated) when the
 # frontend moves to a custom domain.
-DEFAULT_ALLOWED_ORIGINS = "https://shas-radar.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+DEFAULT_ALLOWED_ORIGINS = (
+    "https://shas-radar.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+)
 
 ALLOWED_ORIGINS = [
     origin.strip()
@@ -97,7 +104,9 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def no_cache_static_assets(request: Request, call_next) -> Response:
+async def no_cache_static_assets(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """Force revalidation on every load of the page and its static assets.
 
     Without this, a browser (or an intermediate cache) holding a cached copy
@@ -113,7 +122,7 @@ async def no_cache_static_assets(request: Request, call_next) -> Response:
     return response
 
 
-def error(code: str, message: str) -> dict:
+def error(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
 
 
@@ -123,7 +132,9 @@ def parse_queries(raw: str) -> list[SearchQuery]:
     parts = [part.strip() for part in raw.split(SEPARATORS[0]) if part.strip()]
 
     if not parts:
-        raise HTTPException(status_code=400, detail=error("empty", "יש להזין מילה, שם או ביטוי לחיפוש"))
+        raise HTTPException(
+            status_code=400, detail=error("empty", "יש להזין מילה, שם או ביטוי לחיפוש")
+        )
     if len(parts) > MAX_QUERIES:
         raise HTTPException(
             status_code=400,
@@ -139,7 +150,7 @@ def parse_queries(raw: str) -> list[SearchQuery]:
 
 
 @app.get("/api/health")
-def health() -> dict:
+def health() -> dict[str, Any]:
     """Liveness check that also reports what corpus is loaded.
 
     ``commit`` echoes Render's own RENDER_GIT_COMMIT env var (set
@@ -159,7 +170,7 @@ def health() -> dict:
 
 
 @app.get("/api/tractates")
-def tractates_endpoint() -> dict:
+def tractates_endpoint() -> dict[str, Any]:
     """The full tractate list, grouped by seder, for the UI's filter picker."""
     corpus = load_corpus()
     return {
@@ -179,16 +190,35 @@ def tractates_endpoint() -> dict:
 @app.get("/api/search")
 def search_endpoint(
     q: str = Query(..., description="One term, or several separated by a comma"),
-    before: int = Query(DEFAULT_CONTEXT, description="Words of context before the match; clamped to the allowed range"),
-    after: int = Query(DEFAULT_CONTEXT, description="Words of context after the match; clamped to the allowed range"),
-    limit: int = Query(DEFAULT_LIMIT, description="Max results per group; clamped to the allowed range"),
+    before: int = Query(
+        DEFAULT_CONTEXT,
+        description="Words of context before the match; clamped to the allowed range",
+    ),
+    after: int = Query(
+        DEFAULT_CONTEXT,
+        description="Words of context after the match; clamped to the allowed range",
+    ),
+    limit: int = Query(
+        DEFAULT_LIMIT, description="Max results per group; clamped to the allowed range"
+    ),
     tractate: str | None = Query(None, description="Restrict to one tractate (Hebrew name)"),
-    offset: int = Query(0, description="Skip this many matches per group, for a group's own 'show more'; clamped to >= 0"),
-) -> dict:
+    offset: int = Query(
+        0,
+        description=(
+            "Skip this many matches per group, for a group's own 'show more'; clamped to >= 0"
+        ),
+    ),
+) -> dict[str, Any]:
     corpus = load_corpus()
     queries = parse_queries(q)
     return search(
-        corpus, queries, before=before, after=after, limit=limit, tractate_filter=tractate, offset=offset
+        corpus,
+        queries,
+        before=before,
+        after=after,
+        limit=limit,
+        tractate_filter=tractate,
+        offset=offset,
     )
 
 
@@ -198,7 +228,7 @@ def proximity_endpoint(
     b: str = Query(..., description="Second word"),
     within: int = Query(6, ge=1, le=50, description="Maximum distance in words"),
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
-) -> dict:
+) -> dict[str, Any]:
     """Bonus: find A and B occurring within `within` words of each other."""
     corpus = load_corpus()
     try:
@@ -271,14 +301,18 @@ class AnalyzeBody(BaseModel):
 
 
 @app.get("/api/ai-status")
-def ai_status_endpoint() -> dict:
+def ai_status_endpoint() -> dict[str, Any]:
     """Which vendors already have a shared server key -- for the AI settings UI.
 
     Lets the settings panel tell a visitor "no key needed for this one" per
     vendor, versus "bring your own" for the rest.
     """
     configured = ai.server_configured_providers()
-    return {"providers": {name: name in configured for name in ("gemini", "openai", "anthropic", "groq")}}
+    return {
+        "providers": {
+            name: name in configured for name in ("gemini", "openai", "anthropic", "groq")
+        }
+    }
 
 
 @app.post("/api/analyze")
@@ -292,15 +326,19 @@ def analyze_endpoint(body: AnalyzeBody) -> JSONResponse:
     neither is available for any vendor.
     """
     groups = [g.model_dump() for g in body.groups]
-    credentials = {
-        cred.provider: [key.strip() for key in cred.apiKeys if key.strip()] for cred in body.credentials
+    credentials: dict[str, list[str]] = {
+        cred.provider: [key.strip() for key in cred.apiKeys if key.strip()]
+        for cred in body.credentials
     }
     try:
         result = ai.analyze_connections(groups, body.locale, credentials=credentials)
     except ai.NoCredentialError:
         return JSONResponse(
             status_code=400,
-            content={"error": "אין מפתח AI זמין — הוסיפו מפתח משלכם בהגדרות ה-AI", "code": "no_credential"},
+            content={
+                "error": "אין מפתח AI זמין — הוסיפו מפתח משלכם בהגדרות ה-AI",
+                "code": "no_credential",
+            },
         )
     except ai.RequestTimeoutError:
         return JSONResponse(

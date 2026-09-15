@@ -24,7 +24,9 @@ equivalent tradition for.
 
 from __future__ import annotations
 
+import array
 from dataclasses import dataclass
+from typing import Any
 
 from .corpus import Corpus, Tractate
 from .hebrew import daf_citation, has_hebrew, words
@@ -35,6 +37,7 @@ MAX_LIMIT = 200
 DEFAULT_CONTEXT = 5
 MIN_CONTEXT = 1
 MAX_CONTEXT = 50
+
 
 # Sefaria's ref-slug convention: spaces in a multi-word title become
 # underscores, e.g. "Bava Kamma" -> "Bava_Kamma.5a". Sefaria's own site is
@@ -53,7 +56,7 @@ class Query:
     words_norm: tuple[str, ...]
 
     @classmethod
-    def parse(cls, raw: str) -> "Query":
+    def parse(cls, raw: str) -> Query:
         text = raw.strip()
         if not has_hebrew(text):
             raise ValueError(f"'{raw}' does not contain Hebrew letters")
@@ -72,9 +75,9 @@ class Match:
     """One place in the corpus where a query matched."""
 
     tractate: Tractate
-    start: int    # token position, inclusive
-    length: int   # number of tokens the match itself spans
-    kind: str     # "exact" | "withPrefix"
+    start: int  # token position, inclusive
+    length: int  # number of tokens the match itself spans
+    kind: str  # "exact" | "withPrefix"
 
 
 # --- Finding matches ---------------------------------------------------------
@@ -95,11 +98,13 @@ def find_with_prefix(corpus: Corpus, word_norm: str) -> list[Match]:
     of words, not the ~1.9M-token corpus itself) -- measured at ~18ms across
     the whole corpus for a real query, fast enough to run inline.
     """
-    matches = []
+    matches: list[Match] = []
     for tr in corpus.tractates:
         for candidate, positions in tr.by_word.items():
             if candidate != word_norm and candidate.endswith(word_norm):
-                matches.extend(Match(tractate=tr, start=p, length=1, kind="withPrefix") for p in positions)
+                matches.extend(
+                    Match(tractate=tr, start=p, length=1, kind="withPrefix") for p in positions
+                )
     return matches
 
 
@@ -112,7 +117,9 @@ def find_phrase(corpus: Corpus, words_norm: tuple[str, ...]) -> list[Match]:
             end = pos + len(words_norm)
             if end > len(tr):
                 continue
-            if all(tr.tokens[pos + offset] == rest[offset - 1] for offset in range(1, len(words_norm))):
+            if all(
+                tr.tokens[pos + offset] == rest[offset - 1] for offset in range(1, len(words_norm))
+            ):
                 matches.append(Match(tractate=tr, start=pos, length=len(words_norm), kind="exact"))
     return matches
 
@@ -137,22 +144,27 @@ def find_phrase_with_prefix(corpus: Corpus, words_norm: tuple[str, ...]) -> list
                 end = pos + len(words_norm)
                 if end > len(tr):
                     continue
-                if all(tr.tokens[pos + offset] == rest[offset - 1] for offset in range(1, len(words_norm))):
-                    matches.append(Match(tractate=tr, start=pos, length=len(words_norm), kind="withPrefix"))
+                if all(
+                    tr.tokens[pos + offset] == rest[offset - 1]
+                    for offset in range(1, len(words_norm))
+                ):
+                    matches.append(
+                        Match(tractate=tr, start=pos, length=len(words_norm), kind="withPrefix")
+                    )
     return matches
 
 
 # --- Proximity (bonus) -------------------------------------------------------
 
 
-def find_proximity(corpus: Corpus, word_a: str, word_b: str, within: int) -> list[dict]:
+def find_proximity(corpus: Corpus, word_a: str, word_b: str, within: int) -> list[dict[str, Any]]:
     """Pairs of positions where ``word_a`` and ``word_b`` occur within
     ``within`` tokens of each other, in the same tractate, either order.
     """
-    results = []
+    results: list[dict[str, Any]] = []
     for tr in corpus.tractates:
-        positions_a = tr.by_word.get(word_a, [])
-        positions_b = tr.by_word.get(word_b, [])
+        positions_a: array.array[int] = tr.by_word.get(word_a, array.array("I"))
+        positions_b: array.array[int] = tr.by_word.get(word_b, array.array("I"))
         if not positions_a or not positions_b:
             continue
         for pa in positions_a:
@@ -165,14 +177,14 @@ def find_proximity(corpus: Corpus, word_a: str, word_b: str, within: int) -> lis
 # --- Context window (KWIC) ---------------------------------------------------
 
 
-def serialize_match(corpus: Corpus, match: Match, before: int, after: int) -> dict:
+def serialize_match(corpus: Corpus, match: Match, before: int, after: int) -> dict[str, Any]:
     """Shape one match into a KWIC result: context, citation, deep link."""
     tr = match.tractate
     start, end = match.start, match.start + match.length
 
-    context_before = " ".join(tr.tokens_raw[max(0, start - before):start])
+    context_before = " ".join(tr.tokens_raw[max(0, start - before) : start])
     matched_text = " ".join(tr.tokens_raw[start:end])
-    context_after = " ".join(tr.tokens_raw[end:end + after])
+    context_after = " ".join(tr.tokens_raw[end : end + after])
 
     daf, amud = tr.token_daf[start], tr.amud_at(start)
     segment = tr.segment_at(start)
@@ -204,7 +216,7 @@ def search_one(
     limit: int,
     tractate_filter: str | None = None,
     offset: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Run one query (a word or a phrase) and shape its result group.
 
     ``offset`` skips this many matches before taking ``limit`` -- what lets
@@ -216,7 +228,9 @@ def search_one(
     result.
     """
     if query.is_phrase:
-        matches = find_phrase(corpus, query.words_norm) + find_phrase_with_prefix(corpus, query.words_norm)
+        matches = find_phrase(corpus, query.words_norm) + find_phrase_with_prefix(
+            corpus, query.words_norm
+        )
     else:
         word = query.words_norm[0]
         matches = find_exact_word(corpus, word) + find_with_prefix(corpus, word)
@@ -229,7 +243,7 @@ def search_one(
     matches.sort(key=lambda m: 0 if m.kind == "exact" else 1)
 
     total = len(matches)
-    shown = matches[offset:offset + limit]
+    shown = matches[offset : offset + limit]
     return {
         "query": query.raw,
         "isPhrase": query.is_phrase,
@@ -248,7 +262,7 @@ def search(
     limit: int = DEFAULT_LIMIT,
     tractate_filter: str | None = None,
     offset: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Run every comma-separated query independently (OR)."""
     before = max(MIN_CONTEXT, min(before, MAX_CONTEXT))
     after = max(MIN_CONTEXT, min(after, MAX_CONTEXT))

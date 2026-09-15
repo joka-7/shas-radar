@@ -1,0 +1,24 @@
+# AI-assistant config manifest. Consumed by `python .ai/bin/ai-sync`, which
+# compiles the fragments named here into a root AGENTS.md and wires every
+# target tool to it. See .ai/README.md.
+
+[project]
+name = "shas-radar"
+
+[stack]
+# FastAPI service serving a vanilla-JS frontend (static/) from the same
+# origin. The frontend has no build step and no framework, so no "react"
+# here.
+languages  = ["python", "javascript"]
+frameworks = []
+practices  = ["testing", "git-commits", "security", "architecture", "documentation", "verification"]
+
+[tools]
+targets = ["claude", "cursor", "gemini", "copilot"]
+
+[options]
+# `copy` rather than `symlink`: the CI checkout doesn't initialize
+# submodules, and the Docker build only copies app/, static/, and data/ —
+# a symlinked AGENTS.md/CLAUDE.md would dangle in both. Real files always
+# resolve. Re-run ai-sync after pulling rule updates.
+link_mode = "copy"
