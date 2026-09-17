@@ -1,5 +1,5 @@
 fastapi==0.141.1
-uvicorn[standard]==0.34.0
+uvicorn[standard]==0.53.0
 
 # Optional AI "find connections" feature (app/ai.py) -- not yet on PyPI, so
 # pinned to a tagged commit. Only registers a provider when its own API key
