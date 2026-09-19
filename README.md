@@ -459,6 +459,7 @@ shas-radar/
 ├── GEMINI.md
 ├── LICENSE
 ├── README.md             # Shas Radar — search the Talmud for words, names, and phrases
+├── SECURITY.md
 ├── ai-config.toml
 ├── pyproject.toml
 ├── pytest.ini

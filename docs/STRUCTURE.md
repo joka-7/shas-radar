@@ -9,7 +9,8 @@ refresh it, and never edit between the markers by hand.
 shas-radar/
 ├── .github/
 │   ├── workflows/
-│   │   └── ci.yml
+│   │   ├── ci.yml
+│   │   └── security.yml
 │   ├── copilot-instructions.md
 │   └── dependabot.yml
 ├── app/
@@ -53,6 +54,7 @@ shas-radar/
 ├── GEMINI.md
 ├── LICENSE
 ├── README.md             # Shas Radar — search the Talmud for words, names, and phrases
+├── SECURITY.md
 ├── ai-config.toml
 ├── pyproject.toml
 ├── pytest.ini
