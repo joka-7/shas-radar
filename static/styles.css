@@ -704,6 +704,11 @@ body {
 #verse-count { margin-top: 0; }
 .footer-note { margin-bottom: 0; }
 .footer-credit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .4rem;
   margin-top: .9rem;
   margin-bottom: 0;
   font-size: .75rem;
@@ -711,6 +716,14 @@ body {
 }
 .footer-credit a { color: var(--text-faint); text-decoration: underline; }
 .footer-credit a:hover { color: var(--accent-text); }
+.footer-links {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  margin-inline-start: .25rem;
+}
+.footer-links a { display: inline-flex; text-decoration: none; }
+.footer-links svg { display: block; }
 
 /* --- AI settings dialog ---
    Also holds the install action and the language switcher, each as its own
