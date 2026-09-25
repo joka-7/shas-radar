@@ -616,13 +616,38 @@ body {
 }
 .connections-settings-link:hover { color: var(--accent-text); }
 .connections-external-wrap { margin-top: .6rem; }
-.connections-help {
-  margin-top: .75rem;
-  padding-top: .75rem;
-  border-top: 1px dashed var(--line);
+
+/* The "find connections" no-key state (see noProviderNotice in app.js) --
+   one box, not an error notice followed by a separately-styled paragraph:
+   that read as "the message ended" and the actual next steps underneath it
+   went unread. */
+.connections-noprovider {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.1rem;
 }
-.connections-help p { margin: 0 0 .5rem; font-size: .82rem; color: var(--text-soft); }
-.connections-help .connections-settings-link { display: block; margin-bottom: .6rem; }
+.connections-noprovider-reason { margin: 0 0 .3rem; font-weight: 700; color: var(--text); }
+.connections-noprovider-cta { margin: 0 0 .7rem; font-size: .82rem; color: var(--text-soft); }
+.connections-noprovider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .6rem 1rem;
+  margin-bottom: .5rem;
+}
+.connections-ask-favorite-btn {
+  min-height: 40px;
+  padding: 0 1rem;
+  font: 600 .85rem var(--font);
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.connections-ask-favorite-btn:hover { opacity: .9; }
 
 /* One line rather than wrapping: nowrap + horizontal scroll, same treatment
    as .card-foot above -- with Groq/Google AI Mode added, five labeled links

@@ -672,6 +672,13 @@
   // parameter is an unofficial, unstable convention that might not land the
   // text) and the site opens ready to paste it in.
 
+  // ids match modeldispatcher-browser-agent's own ExternalChatProviderId
+  // exactly ("gemini" = AI Mode, "geminiApp" = the real app -- not the more
+  // obvious naming) since the AI settings dialog's favorite picker (the
+  // mounted <ModelPicker> island) stores a favorite under those same ids;
+  // loadExternalChatFavorite() below reads that value straight out of this
+  // list, so a mismatch here would silently point "ask my favorite" at the
+  // wrong product.
   var EXTERNAL_CHAT_PROVIDERS = [
     {
       id: "chatgpt", name: "ChatGPT", homeUrl: "https://chatgpt.com/",
@@ -682,17 +689,17 @@
       buildUrl: function (q) { return "https://claude.ai/new?" + new URLSearchParams({ q: q }); },
     },
     {
+      id: "gemini", nameKey: "external.googleAiMode", homeUrl: "https://www.google.com/",
+      buildUrl: function (q) { return "https://www.google.com/search?" + new URLSearchParams({ q: q, udm: "50" }); },
+    },
+    {
       // The actual Gemini app -- gemini.google.com has no known prefill
       // parameter (unlike ChatGPT/Claude above), so this one has no
       // buildUrl; externalChatLinks still copies the question to the
       // clipboard first so it's ready to paste once the app opens. Not to
-      // be confused with Google Search's "AI Mode" below, which *is*
+      // be confused with Google Search's "AI Mode" above, which *is*
       // pre-fillable but is a different product from Gemini itself.
-      id: "gemini", name: "Gemini", homeUrl: "https://gemini.google.com/app", buildUrl: null,
-    },
-    {
-      id: "google-ai-mode", nameKey: "external.googleAiMode", homeUrl: "https://www.google.com/",
-      buildUrl: function (q) { return "https://www.google.com/search?" + new URLSearchParams({ q: q, udm: "50" }); },
+      id: "geminiApp", name: "Gemini", homeUrl: "https://gemini.google.com/app", buildUrl: null,
     },
     {
       // No known prefill parameter (like Gemini above) -- externalChatLinks
@@ -701,6 +708,18 @@
       id: "groq", name: "Groq", homeUrl: "https://chat.groq.com/", buildUrl: null,
     },
   ];
+
+  /* The favorite saved from the AI settings dialog's <ModelPicker> island
+   * (see frontend/src/main.tsx) -- `null` if none is set or the stored
+   * value isn't one of the ids above. */
+  function loadExternalChatFavorite() {
+    try {
+      var raw = localStorage.getItem("shas-radar:ai-external-chat-favorite");
+      return EXTERNAL_CHAT_PROVIDERS.filter(function (p) { return p.id === raw; })[0] || null;
+    } catch (err) {
+      return null;
+    }
+  }
 
   function copyToClipboard(text) {
     try {
@@ -752,6 +771,64 @@
       wrap.appendChild(link);
     });
     return wrap;
+  }
+
+  /* The "find connections" failure state for every code in NEEDS_KEY_CODES
+   * (see below) -- one cohesive block rather than a red error box followed
+   * by a separately-styled paragraph underneath it, which visitors read as
+   * "that's the end of the message" and never got to. `reason` is already
+   * the localized per-code message (e.g. "No AI key is available"); if a
+   * favorite external app is saved, its own button leads -- pressing it
+   * opens that app with the question ready to paste, no key needed -- with
+   * the rest of the providers a click away instead of a wall of five links. */
+  function noProviderNotice(reason, groups) {
+    var box = el("div", "connections-noprovider");
+    var favorite = loadExternalChatFavorite();
+    var question = externalQuestionText(groups);
+
+    box.appendChild(el("p", "connections-noprovider-reason", reason));
+    box.appendChild(el("p", "connections-noprovider-cta", t(locale, "connections.error.tryOwnKey")));
+
+    var actions = el("div", "connections-noprovider-actions");
+    var settingsBtn = el("button", "connections-settings-link", t(locale, "aiSettings.openButton"));
+    settingsBtn.type = "button";
+    settingsBtn.addEventListener("click", openAiSettings);
+    actions.appendChild(settingsBtn);
+
+    if (favorite) {
+      var favoriteName = favorite.nameKey ? t(locale, favorite.nameKey) : favorite.name;
+      var askBtn = el("button", "connections-ask-favorite-btn", t(locale, "connections.noProvider.askFavorite", { favorite: favoriteName }));
+      askBtn.type = "button";
+      askBtn.addEventListener("click", function () {
+        copyToClipboard(question);
+        toast(t(locale, "external.copiedToast"));
+        window.open(favorite.buildUrl ? favorite.buildUrl(question) : favorite.homeUrl, "_blank", "noopener,noreferrer");
+      });
+      actions.appendChild(askBtn);
+    }
+    box.appendChild(actions);
+
+    if (favorite) {
+      var otherToggle = el("button", "connections-settings-link", t(locale, "connections.noProvider.otherProvider"));
+      otherToggle.type = "button";
+      var otherWrap = el("div", "connections-external-wrap");
+      otherWrap.hidden = true;
+      otherToggle.addEventListener("click", function () {
+        if (otherWrap.hidden) {
+          otherWrap.innerHTML = "";
+          otherWrap.appendChild(externalChatLinks(question));
+          otherWrap.hidden = false;
+        } else {
+          otherWrap.hidden = true;
+        }
+      });
+      box.appendChild(otherToggle);
+      box.appendChild(otherWrap);
+    } else {
+      box.appendChild(externalChatLinks(question));
+    }
+
+    return box;
   }
 
   // --- AI connections (optional) ------------------------------------------
@@ -890,16 +967,10 @@
           button.textContent = t(locale, "connections.button");
         })
         .catch(function (err) {
-          body.appendChild(notice(t(locale, "error.title"), err.message, "error"));
           if (err.code && NEEDS_KEY_CODES.indexOf(err.code) !== -1) {
-            var help = el("div", "connections-help");
-            help.appendChild(el("p", null, t(locale, "connections.error.tryOwnKey")));
-            var openSettingsBtn = el("button", "connections-settings-link", t(locale, "aiSettings.openButton"));
-            openSettingsBtn.type = "button";
-            openSettingsBtn.addEventListener("click", openAiSettings);
-            help.appendChild(openSettingsBtn);
-            help.appendChild(externalChatLinks(externalQuestionText(groups)));
-            body.appendChild(help);
+            body.appendChild(noProviderNotice(err.message, groups));
+          } else {
+            body.appendChild(notice(t(locale, "error.title"), err.message, "error"));
           }
           body.hidden = false;
           button.disabled = selection.count() < 2;
