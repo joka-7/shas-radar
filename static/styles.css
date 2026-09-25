@@ -826,115 +826,21 @@ body {
 }
 .ai-settings-trust { font-size: .75rem; color: var(--text-faint); }
 
-.ai-provider-tabs {
-  display: flex;
-  /* Four vendors have to share one row at phone width, so the gap and the
-     tab font below are tighter than elsewhere in the dialog. */
-  gap: .2rem;
-  background: var(--surface-2);
-  border-radius: 999px;
-  padding: .25rem;
-  margin: .9rem 0 .8rem;
-}
-.ai-provider-tab {
-  flex: 1 1 0;
-  min-width: 0;
-  white-space: nowrap;
-  font: 500 .7rem var(--font);
-  color: var(--text-soft);
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  padding: .4rem .35rem;
-  min-height: 32px;
-  cursor: pointer;
-}
-.ai-provider-tab.active { background: var(--surface); color: var(--accent-text); font-weight: 700; box-shadow: var(--shadow); }
-
-.ai-provider-status {
+.ai-settings-server-note {
   font-size: .8rem;
+  color: var(--accent-text);
+  background: var(--accent-soft);
   border-radius: var(--radius-sm);
   padding: .5rem .7rem;
-  margin: 0 0 .6rem;
-}
-.ai-provider-status.available { background: var(--accent-soft); color: var(--accent-text); }
-.ai-provider-status.unavailable { background: var(--surface-2); color: var(--text-soft); }
-
-.ai-provider-getkey { font-size: .8rem; color: var(--text-soft); margin: 0 0 .7rem; }
-.ai-provider-getkey a { color: var(--accent-text); }
-.free-tag {
-  display: inline-block;
-  background: var(--exact-bg);
-  color: var(--exact);
-  border-radius: 999px;
-  padding: .05rem .5rem;
-  font-weight: 600;
-  font-size: .72rem;
+  margin: 0 0 .8rem;
 }
 
-.ai-key-list { display: flex; flex-direction: column; gap: .4rem; margin-bottom: .6rem; }
-.ai-key-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .5rem;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  padding: .35rem .6rem;
-}
-.ai-key-masked { font-family: monospace; font-size: .8rem; color: var(--text-soft); direction: ltr; }
-.ai-key-remove {
-  background: none;
-  border: none;
-  color: var(--text-faint);
-  cursor: pointer;
-  font-size: .85rem;
-  min-height: 28px;
-  padding: 0 .3rem;
-}
-.ai-key-remove:hover { color: var(--gold); }
-.ai-key-empty { font-size: .78rem; color: var(--text-faint); margin: 0 0 .6rem; }
+/* The mounted <ModelPicker> island (frontend/src/main.tsx) styles its own
+   contents via modeldispatcher-react-ui's stylesheet -- this just gives it
+   dialog-appropriate vertical spacing on either side. */
+#ai-model-picker-root { margin-bottom: .8rem; }
 
-.ai-key-add { display: flex; gap: .4rem; align-items: center; }
-.ai-key-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 40px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0 .6rem;
-  font: 400 .85rem var(--font);
-  background: var(--surface);
-  color: var(--text);
-  direction: ltr;
-}
-.ai-key-show {
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  min-width: 40px;
-  min-height: 40px;
-  cursor: pointer;
-}
-.ai-key-addbtn {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 0 .9rem;
-  min-height: 40px;
-  font: 600 .82rem var(--font);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.ai-key-addbtn:hover { opacity: .9; }
-
-.ai-settings-external {
-  margin-top: 1rem;
-  padding-top: .9rem;
-  border-top: 1px dashed var(--line);
-}
-.ai-settings-external-heading { font-size: .8rem; color: var(--text-soft); margin: 0 0 .5rem; }
+.ai-settings-note { font-size: .75rem; color: var(--text-faint); line-height: 1.5; margin: 0; }
 
 .install-help-dialog { width: min(92vw, 22rem); }
 .install-help-steps {

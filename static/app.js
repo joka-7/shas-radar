@@ -32,9 +32,7 @@
   var installBtn = document.getElementById("install-btn");
   var settingsBtn = document.getElementById("settings-btn");
   var aiDialog = document.getElementById("ai-settings-dialog");
-  var aiTabsEl = document.getElementById("ai-provider-tabs");
-  var aiPanelEl = document.getElementById("ai-provider-panel");
-  var aiExternalLinksEl = document.getElementById("ai-external-links");
+  var aiServerKeysNoteEl = document.getElementById("ai-server-keys-note");
 
   var before = 5;
   var after = 5;
@@ -564,214 +562,98 @@
 
   // --- AI settings: bring-your-own-key (BYOK) -----------------------------
   //
-  // The server may already have a shared key for a vendor (see /api/ai-status);
-  // a visitor can also add their own, per vendor, several pooled together for
-  // redundancy. Keys live only in this browser's localStorage and are sent
-  // with an /api/analyze request only, never persisted anywhere server-side
+  // The provider/model/key picker itself is a mounted React island (see
+  // frontend/src/main.tsx -> static/vendor/model-picker/) -- the same
+  // <ModelPicker> every other app on this framework renders, so this
+  // section only bridges the two sides of that boundary:
+  //   - reads the AgentConfig JSON the island writes to `localStorage`
+  //     (getAllAiCredentials, for POST /api/analyze's `credentials` field);
+  //   - shows which vendors already have a shared server key, since
+  //     <ModelPicker> has no notion of that (renderAiServerKeysNote);
+  //   - forwards a locale switch into the island (see setLocale below).
+  // Keys the visitor adds live only in this browser's localStorage and are
+  // sent with an /api/analyze request only, never persisted server-side
   // (see app/ai.py's module docstring / README's "AI connections" section).
 
-  var AI_KEYS_STORAGE_KEY = "shas-radar:ai-keys";
+  var AI_CONFIG_STORAGE_KEY = "shas-radar:ai-config";
+  var LOCALE_CHANGED_EVENT = "shas-radar:locale-changed";
 
-  // Labels are kept to one word so all four tabs fit on a single row at phone
-  // width (see .ai-provider-tab in styles.css); the vendor is unambiguous from
-  // the name alone, and the panel below spells out where to get a key.
-  var AI_PROVIDERS = [
-    { id: "gemini", label: "Gemini", keyUrl: "https://aistudio.google.com/apikey", free: true },
-    { id: "groq", label: "Groq", keyUrl: "https://console.groq.com/keys", free: true },
-    { id: "openai", label: "OpenAI", keyUrl: "https://platform.openai.com/api-keys" },
-    { id: "anthropic", label: "Claude", keyUrl: "https://console.anthropic.com/settings/keys" },
+  // Labels only, for the "server already has a key for..." note -- the ids
+  // must match /api/ai-status's `providers` map (app/main.py).
+  var AI_SERVER_STATUS_PROVIDERS = [
+    { id: "gemini", label: "Gemini" },
+    { id: "groq", label: "Groq" },
+    { id: "openai", label: "OpenAI" },
+    { id: "anthropic", label: "Claude" },
   ];
 
-  var activeAiProvider = AI_PROVIDERS[0].id;
-
-  function loadAiKeyMap() {
+  function loadAiConfig() {
     try {
-      var raw = localStorage.getItem(AI_KEYS_STORAGE_KEY);
-      if (!raw) return {};
+      var raw = localStorage.getItem(AI_CONFIG_STORAGE_KEY);
+      if (!raw) return { providers: [] };
       var parsed = JSON.parse(raw);
-      var map = {};
-      AI_PROVIDERS.forEach(function (p) {
-        var keys = parsed[p.id];
-        if (Array.isArray(keys)) {
-          map[p.id] = keys.filter(function (k) { return typeof k === "string" && k.trim(); });
-        }
-      });
-      return map;
+      return { providers: Array.isArray(parsed.providers) ? parsed.providers : [] };
     } catch (err) {
-      return {}; // private browsing / storage disabled / corrupted JSON
+      return { providers: [] }; // private browsing / storage disabled / corrupted JSON
     }
   }
 
-  function saveAiKeyMap(map) {
-    try {
-      localStorage.setItem(AI_KEYS_STORAGE_KEY, JSON.stringify(map));
-    } catch (err) {
-      /* not persisted this session -- the panel still works for one request */
-    }
-  }
-
-  function getAiKeys(providerId) {
-    return loadAiKeyMap()[providerId] || [];
-  }
-
-  /* "added" | "empty" | "duplicate" -- a return value the caller can always
-   * turn into visible feedback, so pressing Add is never a silent no-op
-   * (an empty field or a key already saved for this provider used to fail
-   * with nothing on screen to explain why). */
-  function addAiKey(providerId, rawKey) {
-    var trimmed = (rawKey || "").trim();
-    if (!trimmed) return "empty";
-    var map = loadAiKeyMap();
-    var existing = map[providerId] || [];
-    if (existing.indexOf(trimmed) !== -1) return "duplicate";
-    map[providerId] = existing.concat([trimmed]);
-    saveAiKeyMap(map);
-    return "added";
-  }
-
-  function removeAiKey(providerId, key) {
-    var map = loadAiKeyMap();
-    var next = (map[providerId] || []).filter(function (k) { return k !== key; });
-    if (next.length) {
-      map[providerId] = next;
-    } else {
-      delete map[providerId];
-    }
-    saveAiKeyMap(map);
-  }
-
-  /* Every saved provider + its pooled keys, shaped for POST /api/analyze's
-   * `credentials` field. Providers with no saved key are omitted. */
+  /* Every configured provider + its pooled keys, shaped for POST /api/analyze's
+   * `credentials` field (AnalyzeCredential in app/main.py caps this at 3
+   * providers / 5 keys each; the slices below just avoid a pointless 422).
+   * Ollama is never included: this app calls the model from its own server,
+   * never the visitor's browser, so it could never reach a local Ollama --
+   * see the "no local models" note in the settings dialog. */
   function getAllAiCredentials() {
-    var map = loadAiKeyMap();
-    return AI_PROVIDERS
-      .map(function (p) { return { provider: p.id, apiKeys: map[p.id] || [] }; })
-      .filter(function (c) { return c.apiKeys.length > 0; });
-  }
-
-  function maskKey(key) {
-    return key.length <= 8 ? "••••" : key.slice(0, 4) + "…" + key.slice(-4);
-  }
-
-  function renderAiProviderTabs() {
-    aiTabsEl.innerHTML = "";
-    AI_PROVIDERS.forEach(function (p) {
-      var btn = el("button", "ai-provider-tab" + (p.id === activeAiProvider ? " active" : ""), p.label);
-      btn.type = "button";
-      btn.setAttribute("role", "tab");
-      btn.setAttribute("aria-selected", p.id === activeAiProvider ? "true" : "false");
-      btn.addEventListener("click", function () {
-        activeAiProvider = p.id;
-        renderAiProviderTabs();
-        renderAiProviderPanel();
+    return loadAiConfig()
+      .providers.filter(function (p) {
+        return p && p.provider !== "ollama" && Array.isArray(p.apiKeys) && p.apiKeys.length > 0;
+      })
+      .slice(0, 3)
+      .map(function (p) {
+        return { provider: p.provider, apiKeys: p.apiKeys.slice(0, 5) };
       });
-      aiTabsEl.appendChild(btn);
+  }
+
+  function renderAiServerKeysNote() {
+    var names = AI_SERVER_STATUS_PROVIDERS.filter(function (p) {
+      return lastAiStatus && lastAiStatus.providers && lastAiStatus.providers[p.id];
+    });
+    if (names.length === 0) {
+      aiServerKeysNoteEl.hidden = true;
+      return;
+    }
+    aiServerKeysNoteEl.hidden = false;
+    aiServerKeysNoteEl.textContent = t(locale, "aiSettings.serverKeysNote", {
+      providers: names.map(function (p) { return p.label; }).join(", "),
     });
   }
 
-  function renderAiProviderPanel() {
-    aiPanelEl.innerHTML = "";
-    var provider = AI_PROVIDERS.filter(function (p) { return p.id === activeAiProvider; })[0];
-    if (!provider) return;
-
-    var serverHas = !!(lastAiStatus && lastAiStatus.providers && lastAiStatus.providers[provider.id]);
-    aiPanelEl.appendChild(el(
-      "p",
-      "ai-provider-status " + (serverHas ? "available" : "unavailable"),
-      t(locale, serverHas ? "aiSettings.serverAvailable" : "aiSettings.serverUnavailable")
-    ));
-
-    var getKey = el("p", "ai-provider-getkey");
-    getKey.appendChild(document.createTextNode(t(locale, "aiSettings.getKeyPrefix")));
-    var keyLink = document.createElement("a");
-    keyLink.href = provider.keyUrl;
-    keyLink.target = "_blank";
-    keyLink.rel = "noopener noreferrer";
-    keyLink.textContent = provider.keyUrl.replace(/^https:\/\//, "");
-    getKey.appendChild(keyLink);
-    if (provider.free) {
-      getKey.appendChild(document.createTextNode(" · "));
-      getKey.appendChild(el("span", "free-tag", t(locale, "aiSettings.freeTag")));
-    }
-    aiPanelEl.appendChild(getKey);
-
-    var keys = getAiKeys(provider.id);
-    var list = el("div", "ai-key-list");
-    if (keys.length) {
-      keys.forEach(function (key) {
-        var row = el("div", "ai-key-row");
-        row.appendChild(el("span", "ai-key-masked", maskKey(key)));
-        var removeBtn = el("button", "ai-key-remove", "✕");
-        removeBtn.type = "button";
-        removeBtn.setAttribute("aria-label", t(locale, "aiSettings.removeAria", { key: maskKey(key) }));
-        removeBtn.addEventListener("click", function () {
-          removeAiKey(provider.id, key);
-          toast(t(locale, "aiSettings.keyRemovedToast"));
-          renderAiProviderPanel();
-        });
-        row.appendChild(removeBtn);
-        list.appendChild(row);
-      });
-    } else {
-      list.appendChild(el("p", "ai-key-empty", t(locale, "aiSettings.noKeysYet")));
-    }
-    aiPanelEl.appendChild(list);
-
-    var addRow = el("div", "ai-key-add");
-    var keyInput = document.createElement("input");
-    keyInput.type = "password";
-    keyInput.placeholder = t(locale, "aiSettings.keyPlaceholder");
-    keyInput.className = "ai-key-input";
-    keyInput.autocomplete = "off";
-
-    var showBtn = el("button", "ai-key-show", "👁");
-    showBtn.type = "button";
-    var shown = false;
-    showBtn.setAttribute("aria-label", t(locale, "aiSettings.showAria"));
-    showBtn.addEventListener("click", function () {
-      shown = !shown;
-      keyInput.type = shown ? "text" : "password";
-      showBtn.setAttribute("aria-label", t(locale, shown ? "aiSettings.hideAria" : "aiSettings.showAria"));
-    });
-
-    var addBtn = el("button", "ai-key-addbtn", t(locale, "aiSettings.addKey"));
-    addBtn.type = "button";
-    function doAdd() {
-      var outcome = addAiKey(provider.id, keyInput.value);
-      if (outcome === "added") {
-        toast(t(locale, "aiSettings.keySavedToast"));
-        keyInput.value = "";
-        renderAiProviderPanel();
-      } else if (outcome === "duplicate") {
-        toast(t(locale, "aiSettings.keyDuplicateToast"));
-      } else {
-        toast(t(locale, "aiSettings.keyEmptyToast"));
-        keyInput.focus();
-      }
-    }
-    addBtn.addEventListener("click", doAdd);
-    keyInput.addEventListener("keydown", function (event) {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        doAdd();
-      }
-    });
-
-    addRow.appendChild(keyInput);
-    addRow.appendChild(showBtn);
-    addRow.appendChild(addBtn);
-    aiPanelEl.appendChild(addRow);
-  }
-
-  function renderAiExternalLinks() {
-    aiExternalLinksEl.innerHTML = "";
-    aiExternalLinksEl.appendChild(externalChatLinks(null));
+  // The <ModelPicker> island (~180KB gzipped: React + ReactDOM, bundled --
+  // see frontend/vite.config.ts) is loaded on first open of this dialog,
+  // not up front with the rest of the page. Most visitors just search the
+  // Talmud and never touch AI settings at all; shipping that weight to
+  // every one of them for a rarely-opened panel would undercut the exact
+  // thing this app is otherwise careful about (see README's "no build
+  // step" quick start -- the *page* stays light even though this one
+  // widget now has a build step of its own).
+  var modelPickerLoadStarted = false;
+  function ensureModelPickerLoaded() {
+    if (modelPickerLoadStarted) return;
+    modelPickerLoadStarted = true;
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "/vendor/model-picker/main.css";
+    document.head.appendChild(link);
+    var script = document.createElement("script");
+    script.type = "module";
+    script.src = "/vendor/model-picker/main.js";
+    document.body.appendChild(script);
   }
 
   function openAiSettings() {
-    renderAiProviderTabs();
-    renderAiProviderPanel();
-    renderAiExternalLinks();
+    ensureModelPickerLoaded();
+    renderAiServerKeysNote();
     if (typeof aiDialog.showModal === "function") {
       aiDialog.showModal();
     } else {
@@ -1086,15 +968,10 @@
 
     if (lastTractates) populateTractateSelect(lastTractates);
 
-    // The AI settings dialog's dynamic content (provider tabs/panel,
-    // external links) is otherwise only rebuilt when it's opened -- if a
-    // locale switch happens while it's already open, refresh it in place
-    // rather than leaving it in the old language until the next open.
-    if (aiDialog.open) {
-      renderAiProviderTabs();
-      renderAiProviderPanel();
-      renderAiExternalLinks();
-    }
+    // Tells the mounted <ModelPicker> island to relabel itself -- it has no
+    // other way to learn about a locale switch (see frontend/src/main.tsx).
+    window.dispatchEvent(new CustomEvent(LOCALE_CHANGED_EVENT, { detail: locale }));
+    if (aiDialog.open) renderAiServerKeysNote();
     if (installHelpDialog.open) openInstallHelp();
 
     var buttons = langSwitch.querySelectorAll(".lang-btn");
@@ -1403,7 +1280,7 @@
   apiFetch("/api/ai-status")
     .then(function (r) { return r.json(); })
     .then(function (status) { lastAiStatus = status; })
-    .catch(function () { /* the settings panel just shows "no shared key" for every vendor */ });
+    .catch(function () { /* the settings dialog's server-keys note just stays hidden */ });
 
   var initial = fromHash();
   if (initial) runSearch(initial, false);

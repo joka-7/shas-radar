@@ -25,6 +25,17 @@ shas-radar/
 │   ├── HLD.md
 │   ├── LLD.md
 │   └── STRUCTURE.md
+├── frontend/
+│   ├── src/
+│   │   └── main.tsx
+│   ├── .gitignore
+│   ├── .prettierrc
+│   ├── README.md          # frontend/
+│   ├── eslint.config.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
 ├── scripts/
 │   ├── build_dataset.py  # Build the local Talmud Bavli dataset used by the app.
 │   └── gen_tree.py       # Generate or check the annotated repository tree used in the docs.
@@ -34,6 +45,10 @@ shas-radar/
 │   │   ├── apple-touch-icon.png
 │   │   ├── icon-192.png
 │   │   └── icon-512.png
+│   ├── vendor/
+│   │   └── model-picker/
+│   │       ├── main.css
+│   │       └── main.js
 │   ├── app.js
 │   ├── config.js
 │   ├── i18n.js
