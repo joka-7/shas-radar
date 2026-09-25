@@ -184,15 +184,21 @@
           לעולם לא נשמר בשרת ולא מופיע ביומן.
         </p>
 
-        <div id="ai-provider-tabs" class="ai-provider-tabs" role="tablist"></div>
-        <div id="ai-provider-panel" class="ai-provider-panel"></div>
+        <p id="ai-server-keys-note" class="ai-settings-server-note" hidden></p>
 
-        <div class="ai-settings-external">
-          <p class="ai-settings-external-heading" data-i18n="aiSettings.externalHeading">
-            בלי מפתח בכלל? אפשר לשאול AI חיצוני ישירות:
-          </p>
-          <div id="ai-external-links" class="external-links"></div>
-        </div>
+        <!--
+          The provider/model/key picker itself is a mounted React island
+          (frontend/src/main.tsx -> static/vendor/model-picker/), not
+          hand-rolled here -- it's the same <ModelPicker> every other app in
+          this framework renders, including its own "pick a favorite free AI
+          app" section. See frontend/README.md for why this one widget has a
+          build step when the rest of this app deliberately doesn't.
+        -->
+        <div id="ai-model-picker-root"></div>
+        <p class="ai-settings-note" data-i18n="aiSettings.noLocalModels">
+          מודל מקומי (Ollama) לא נתמך כאן — האפליקציה קוראת ל-AI מהשרת שלה, לא
+          מהדפדפן שלכם, ולכן לא יכולה להגיע לשרת Ollama שרץ במחשב שלכם.
+        </p>
       </section>
     </form>
   </dialog>

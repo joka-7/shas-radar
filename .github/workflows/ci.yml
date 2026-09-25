@@ -61,3 +61,30 @@ jobs:
         run: |
           python scripts/gen_tree.py --project . --output docs/STRUCTURE.md --check
           python scripts/gen_tree.py --project . --output README.md --max-depth 1 --check
+
+  frontend-drift:
+    name: Frontend bundle is current
+    runs-on: ubuntu-latest
+    steps:
+      # static/vendor/model-picker/ (the AI settings dialog's <ModelPicker>
+      # island -- see frontend/, README's "Frontend build step") is built,
+      # not hand-written. Same reasoning as docs-drift above, applied to a
+      # generated bundle instead of a generated tree: nothing else verifies
+      # it, so it fails the build when the committed output doesn't match a
+      # fresh build of frontend/'s source.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Check the committed bundle against a fresh build
+        run: git diff --exit-code -- static/vendor/model-picker

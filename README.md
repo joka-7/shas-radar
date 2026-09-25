@@ -35,7 +35,9 @@ uvicorn app.main:app --reload
 ```
 
 Open <http://127.0.0.1:8000>. That's the whole setup — the corpus is already
-in the repository, and the frontend has no build step.
+in the repository, and running the app needs no Node at all: the committed
+`static/vendor/model-picker/` bundle is checked in like any other static
+asset (see "Frontend build step" below for the one piece that *is* built).
 
 ### On your phone, over the local network
 
@@ -261,17 +263,21 @@ of leaving the visitor watching a spinner.
 ### Bring your own key (per visitor)
 
 **⚙ AI settings** (in the footer, and next to the connections button once
-it's shown) opens a panel where a visitor can paste their own key for
-Gemini, OpenAI, or Anthropic — several keys per vendor if they like, pooled
-for redundancy (ModelDispatcher rotates through them on a rate limit before
-giving up on that vendor). `/api/ai-status` tells the panel which vendors
-already have a shared server key, so it can say "optional" versus "bring
-your own" per vendor.
+it's shown) opens the same `<ModelPicker>` settings screen every app on
+[ModelDispatcher](https://github.com/joka-7/ModelDispatcher) uses, mounted
+as a small React island (see "Frontend build step" below) -- a visitor can
+add their own key for Gemini, OpenAI, or Anthropic, several per vendor if
+they like, pooled for redundancy (ModelDispatcher rotates through them on a
+rate limit before giving up on that vendor), and pick a favorite free AI app
+as their no-key fallback. `/api/ai-status` still tells the dialog which
+vendors already have a shared server key, shown as one summary note above
+the picker ("a shared key is already set for: ...") rather than a per-vendor
+tag.
 
 A key a visitor adds:
 
 - Is stored **only** in that browser's `localStorage`
-  (`shas-radar:ai-keys`) — never sent anywhere but this app's own `/api/analyze`.
+  (`shas-radar:ai-config`) — never sent anywhere but this app's own `/api/analyze`.
 - Is **never** persisted server-side or logged; it's threaded straight into
   the one ModelDispatcher dispatch the request makes and discarded
   afterwards (`AnalyzeCredential` in `app/main.py`, `credentials` param on
@@ -299,6 +305,33 @@ AI"** links to ChatGPT, Claude, and Google's AI-mode search — the same
 question, copied to the clipboard and opened pre-filled in a new tab where
 the target supports it. No key, no backend call: just a deep link into a
 product the visitor can already use for free.
+
+### Frontend build step (AI settings only)
+
+The rest of `static/` stays plain ES2020 with no build step (see Quick
+start above); the one exception is the AI settings dialog's provider/model/key
+picker, which is [`frontend/`](frontend/) — a small Vite + React + TypeScript
+project whose only output is `static/vendor/model-picker/` (`main.js` +
+`main.css`), committed like any other static asset. `static/app.js` never
+imports it and knows nothing about React; the two sides only agree on the
+`shas-radar:ai-config` `localStorage` key and a `shas-radar:locale-changed`
+event (see the comments at the top of `frontend/src/main.tsx` and above
+`getAllAiCredentials` in `app.js`). It's also lazy-loaded on first open of
+the settings dialog, not shipped with the rest of the page, since it bundles
+React itself (~180KB gzipped) for a panel most visitors never open.
+
+Editing it:
+
+```bash
+cd frontend
+npm ci
+npm run build   # writes ../static/vendor/model-picker/
+```
+
+CI's "Frontend bundle is current" job runs the same build and fails if the
+committed output doesn't match — the same drift check this repo already
+runs for `docs/STRUCTURE.md`, applied to a generated bundle instead of a
+generated tree.
 
 ## UI
 
@@ -447,6 +480,7 @@ shas-radar/
 ├── app/
 ├── data/
 ├── docs/
+├── frontend/
 ├── scripts/
 ├── static/
 ├── tests/
