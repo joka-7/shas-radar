@@ -1175,6 +1175,7 @@
       inFlight = null;
     }
     input.value = "";
+    autosizeInput();
     lastSearchData = null;
     lastSnapshot = null;
     results.innerHTML = "";
@@ -1191,6 +1192,16 @@
     clearBtn.hidden = !input.value && !results.firstChild;
   }
 
+  // #q is a <textarea> styled to look like a single-line field so long
+  // queries (multi-word chips, pasted phrases) wrap into view instead of
+  // being clipped the way a native <input> would. Growing it back to a
+  // fixed height on every change keeps it from ballooning as text is
+  // removed; the CSS max-height caps it and hands off to scrolling.
+  function autosizeInput() {
+    input.style.height = "auto";
+    input.style.height = input.scrollHeight + "px";
+  }
+
   function runSearch(query, pushHash) {
     query = (query || "").trim();
     if (!query) {
@@ -1199,6 +1210,7 @@
     }
 
     input.value = query;
+    autosizeInput();
     if (pushHash !== false) {
       var encoded = "#q=" + encodeURIComponent(query);
       if (location.hash !== encoded) history.pushState(null, "", encoded);
@@ -1264,7 +1276,21 @@
   clearBtn.addEventListener("click", clearSearch);
 
   // Keeps the button in step while typing, not just after a search.
-  input.addEventListener("input", syncClearButton);
+  input.addEventListener("input", function () {
+    syncClearButton();
+    autosizeInput();
+  });
+
+  // A <textarea> doesn't submit its form on Enter -- it inserts a newline.
+  // Queries here are always single-line, so Enter submits like the old
+  // <input> did; Shift+Enter is left alone in case someone pastes/edits
+  // multi-line text before searching.
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit ? form.requestSubmit() : runSearch(input.value);
+    }
+  });
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
