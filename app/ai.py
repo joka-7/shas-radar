@@ -188,7 +188,9 @@ _SYSTEM_PROMPT = (
     "tractate/daf you mean. If the excerpts genuinely show no connection or "
     "pattern, say so plainly rather than inventing one. Keep the whole "
     "answer under roughly 180 words. The Talmud text itself stays in "
-    "Hebrew/Aramaic exactly as given; write your own analysis in {language}."
+    "Hebrew/Aramaic exactly as given; write your own analysis in {language}. "
+    "Plain prose only -- the app displays this as plain text verbatim, so "
+    "no markdown (no **bold**, no *; or -/1. list markers, no # headings)."
 )
 
 
