@@ -109,9 +109,10 @@ sequenceDiagram
         M-->>B: 200 JSON
     end
     opt visitor checks >=2 results and asks for connections
-        B->>V: POST /api/analyze {groups, locale, credentials}
+        B->>V: POST /api/analyze {groups, locale, credentials, history?}
         V->>M: proxied
-        M->>A: analyze_connections(groups, locale, credentials)
+        Note over B: history is empty on this first call; a follow-up<br/>question in the "continue chatting" dialog resends<br/>the whole exchange so far as history, same endpoint
+        M->>A: analyze_connections(groups, locale, credentials, history)
         A->>A: build registry from server + BYOK credentials
         alt no credential anywhere
             A-->>M: NoCredentialError

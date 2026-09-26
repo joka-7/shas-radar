@@ -165,7 +165,7 @@ GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות
 GET /api/proximity?a=אביי&b=רבא&within=6
 GET /api/tractates
 GET /api/health
-POST /api/analyze   {"groups": [...], "locale": "he", "credentials": [...]}   -- see "AI connections" below
+POST /api/analyze   {"groups": [...], "locale": "he", "credentials": [...], "history": [...]}   -- see "AI connections" below
 GET /api/ai-status   -- which vendors have a shared server key, for the AI settings panel
 ```
 
@@ -222,6 +222,13 @@ group at once. That's meaningful in two shapes:
 Answers in the UI's current language (Hebrew/English/French); the Talmud
 text quoted in the prompt stays Hebrew/Aramaic, same as everywhere else in
 this app.
+
+The answer's own **"continue chatting"** button opens a modal dialog (the
+same native `<dialog>` shell as AI settings) to ask follow-up questions
+about it. The conversation lives only in the browser tab for as long as the
+dialog is open -- there is no server-side session -- so each follow-up
+resends the whole exchange so far (`history`) alongside the original
+`groups`; see `ChatTurn`/`AnalyzeBody.history` in `app/main.py`.
 
 This is the **one** thing in the app that makes an outbound network call —
 everything else (see "How the Talmud is packaged and loaded" above) runs off

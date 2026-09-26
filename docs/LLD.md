@@ -147,7 +147,8 @@ used to hand-roll. `_build_registry`, `_credential_metadata`,
 ```python
 analyze_connections(groups: list[dict[str, Any]], locale: str = "he", *,
                      credentials: dict[str, list[str]] | None = None,
-                     gateway: ModelGateway | None = None) -> AnalyzeResult
+                     gateway: ModelGateway | None = None,
+                     history: list[dict[str, str]] | None = None) -> AnalyzeResult
 ```
 
 | Behavior | Detail |
@@ -156,6 +157,7 @@ analyze_connections(groups: list[dict[str, Any]], locale: str = "he", *,
 | Quota | One app-wide `TenantQuota` (`AI_REQUESTS_PER_MIN`/`AI_TOKENS_PER_MIN`/`AI_TOKENS_PER_DAY`), shared across every visitor since there is no per-user auth |
 | Deadline | `dispatch_with_timeout` on a dedicated 4-worker thread pool, bounded to `AI_REQUEST_DEADLINE_SECONDS` (default 30) — no ModelDispatcher provider adapter sets its own HTTP timeout |
 | Prompt | `_SYSTEM_PROMPT` plus `_format_groups(groups)`, capped to `MAX_GROUPS` (5) groups and `MAX_RESULTS_PER_GROUP` (6) results each, each snippet capped to `SNIPPET_WORD_CAP` (40) words |
+| `history` param | A "continue chatting" follow-up's prior turns (`[{"role": "assistant"\|"user", "content": ...}, ...]`), appended as `Message`s after the groups prompt, capped at `MAX_HISTORY_TURNS` (20). Empty/omitted for the original single-shot analysis — the client resends the whole exchange on every follow-up since nothing is kept server-side |
 | `gateway` param | Injection seam for tests — a `MockProvider`-backed gateway, never a real network call in the suite |
 
 Raises `NoCredentialError` (no key anywhere), `RequestTimeoutError` (deadline
@@ -189,7 +191,7 @@ even though `/api/analyze` accepts a visitor's own API keys in its body.
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset` | `before`, `after`, `groups[]` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit` | `total`, `results[]` |
 | `GET /api/ai-status` | — | Which vendors have a shared server key |
-| `POST /api/analyze` | `AnalyzeBody` (`groups`, `locale`, `credentials`) | `{connection, provider}` |
+| `POST /api/analyze` | `AnalyzeBody` (`groups`, `locale`, `credentials`, `history`) | `{connection, provider}` |
 | `GET /` + `/static/*` | — | The frontend, same origin |
 
 ### Error contract
@@ -235,7 +237,7 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | --- | --- |
 | `tests/test_hebrew.py` | Every normalization primitive, including niqqud stripping, maqaf as a separator, and the ט״ו/ט״ז gematria exception |
 | `tests/test_search.py` | Index correctness, all four match kinds (exact, with-prefix, phrase, phrase-with-prefix), proximity, offset/limit pagination, and the HTTP surface via `TestClient` — status codes, the error contract, clamping |
-| `tests/test_ai.py` | `analyze_connections` and its supporting functions against ModelDispatcher's keyless `MockProvider`, including the no-credential and timeout paths |
+| `tests/test_ai.py` | `analyze_connections` and its supporting functions against ModelDispatcher's keyless `MockProvider`, including the no-credential, timeout, and chat-history (ordering, capping) paths |
 
 The real ~1.86M-token corpus loads once per session in `test_search.py`. The
 trade is a startup cost for tests that exercise matching against genuine

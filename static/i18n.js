@@ -111,6 +111,13 @@ var I18N = (function () {
       "connections.selectForAi": "שלחו ל-AI",
       "connections.selectionCapToast": "אפשר לסמן עד {n} תוצאות בכל פעם",
 
+      "chat.continueButton": "המשיכו לשוחח עם ה-AI",
+      "chat.heading": "שיחה עם ה-AI",
+      "chat.placeholder": "שאלו שאלת המשך…",
+      "chat.send": "שליחה",
+      "chat.thinking": "חושב…",
+      "chat.error.generic": "לא ניתן היה לשלוח את ההודעה כרגע",
+
       "aiSettings.openButton": "⚙ הגדרות AI",
       "aiSettings.heading": "הגדרות AI",
       "aiSettings.close": "סגירה",
@@ -223,6 +230,13 @@ var I18N = (function () {
       "connections.selectForAi": "Send to AI",
       "connections.selectionCapToast": "You can select up to {n} results at a time",
 
+      "chat.continueButton": "Continue chatting with AI",
+      "chat.heading": "Chat with AI",
+      "chat.placeholder": "Ask a follow-up question…",
+      "chat.send": "Send",
+      "chat.thinking": "Thinking…",
+      "chat.error.generic": "Couldn't send the message right now",
+
       "aiSettings.openButton": "⚙ AI settings",
       "aiSettings.heading": "AI settings",
       "aiSettings.close": "Close",
@@ -334,6 +348,13 @@ var I18N = (function () {
       "connections.selectedCount": { one: "1 résultat sélectionné", other: "{n} résultats sélectionnés" },
       "connections.selectForAi": "Envoyer à l'IA",
       "connections.selectionCapToast": "Vous pouvez sélectionner jusqu'à {n} résultats à la fois",
+
+      "chat.continueButton": "Continuer la conversation avec l'IA",
+      "chat.heading": "Conversation avec l'IA",
+      "chat.placeholder": "Posez une question complémentaire…",
+      "chat.send": "Envoyer",
+      "chat.thinking": "Réflexion…",
+      "chat.error.generic": "Impossible d'envoyer le message pour le moment",
 
       "aiSettings.openButton": "⚙ Paramètres IA",
       "aiSettings.heading": "Paramètres IA",
