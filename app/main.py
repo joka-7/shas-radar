@@ -272,6 +272,21 @@ class AnalyzeGroup(BaseModel):
     results: list[AnalyzeResultItem] = Field(default_factory=list)
 
 
+class ChatTurn(BaseModel):
+    """One prior turn of a follow-up conversation about an analysis answer.
+
+    Sent back by the client on every follow-up question -- there is no
+    server-side session, so the whole exchange since the initial answer
+    (see ``AnalyzeBody.history``) rides along with each request, the same
+    way BYOK credentials do. Never persisted past the request.
+    """
+
+    model_config = ConfigDict(str_max_length=2000)
+
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class AnalyzeCredential(BaseModel):
     """A visitor's own key(s) for one vendor -- "bring your own key" (BYOK).
 
@@ -298,6 +313,11 @@ class AnalyzeBody(BaseModel):
     groups: list[AnalyzeGroup] = Field(min_length=1, max_length=MAX_QUERIES)
     locale: str = "he"
     credentials: list[AnalyzeCredential] = Field(default_factory=list, max_length=3)
+    # Empty on the first analysis of a set of groups; a follow-up question
+    # in the "continue chatting" dialog resends everything said since (see
+    # ChatTurn) so the model sees a coherent conversation, since nothing is
+    # kept server-side between requests.
+    history: list[ChatTurn] = Field(default_factory=list, max_length=ai.MAX_HISTORY_TURNS)
 
 
 @app.get("/api/ai-status")
@@ -330,8 +350,11 @@ def analyze_endpoint(body: AnalyzeBody) -> JSONResponse:
         cred.provider: [key.strip() for key in cred.apiKeys if key.strip()]
         for cred in body.credentials
     }
+    history = [turn.model_dump() for turn in body.history]
     try:
-        result = ai.analyze_connections(groups, body.locale, credentials=credentials)
+        result = ai.analyze_connections(
+            groups, body.locale, credentials=credentials, history=history
+        )
     except ai.NoCredentialError:
         return JSONResponse(
             status_code=400,

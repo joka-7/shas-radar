@@ -219,6 +219,31 @@
     </form>
   </dialog>
 
+  <!--
+    Continue chatting about an AI "find connections" answer. Same native
+    <dialog> shell as the two above; the conversation itself (bubbles +
+    composer) is built/updated by app.js (openAiChat/sendChatMessage),
+    since it's seeded from whichever connections-section answer opened it.
+    Kept client-side only (see app/ai.py's module docstring): nothing about
+    the conversation is stored server-side between requests.
+  -->
+  <dialog id="ai-chat-dialog" class="ai-settings-dialog ai-chat-dialog">
+    <form method="dialog" class="ai-settings-form ai-chat-form">
+      <div class="ai-settings-head">
+        <h2 data-i18n="chat.heading">שיחה עם ה-AI</h2>
+        <button type="submit" class="dialog-close" data-i18n-aria-label="settings.close" aria-label="סגירה">✕</button>
+      </div>
+      <div class="ai-chat-messages" id="ai-chat-messages"></div>
+      <div class="ai-chat-composer">
+        <textarea
+          class="input ai-chat-input" id="ai-chat-input" rows="1" dir="rtl"
+          placeholder="שאלו שאלת המשך…"
+          autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+        <button type="button" class="submit" id="ai-chat-send" data-i18n="chat.send">שליחה</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/config.js"></script>
   <script src="/i18n.js"></script>
   <script src="/app.js"></script>

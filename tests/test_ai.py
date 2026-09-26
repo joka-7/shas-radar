@@ -129,6 +129,56 @@ class TestAnalyzeConnections:
         first_block = user_message.content.split("\n\n")[0]
         assert first_block.count("\n- (") == ai.MAX_RESULTS_PER_GROUP
 
+    def test_history_turns_are_appended_after_the_groups_message_in_order(self):
+        captured: dict[str, object] = {}
+
+        class RecordingProvider(MockProvider):
+            def complete(self, request, *, api_key=None):  # type: ignore[override]
+                captured["request"] = request
+                return super().complete(request, api_key=api_key)
+
+        provider = RecordingProvider("mock:free", tier=ModelTier.FREE, reply="עוד תשובה.")
+        gateway = _make_gateway(provider)
+        history = [
+            {"role": "assistant", "content": "אביי ורבא נחלקו כאן."},
+            {"role": "user", "content": "מה עוד קשור לזה?"},
+        ]
+
+        result = ai.analyze_connections(_sample_groups(), gateway=gateway, history=history)
+
+        assert result.text == "עוד תשובה."
+        request = captured["request"]
+        # system, groups, then the two history turns in order.
+        assert [m.role for m in request.messages] == [
+            Role.SYSTEM,
+            Role.USER,
+            Role.ASSISTANT,
+            Role.USER,
+        ]
+        assert request.messages[2].content == "אביי ורבא נחלקו כאן."
+        assert request.messages[3].content == "מה עוד קשור לזה?"
+
+    def test_history_is_capped_at_max_history_turns(self):
+        captured: dict[str, object] = {}
+
+        class RecordingProvider(MockProvider):
+            def complete(self, request, *, api_key=None):  # type: ignore[override]
+                captured["request"] = request
+                return super().complete(request, api_key=api_key)
+
+        provider = RecordingProvider("mock:free", tier=ModelTier.FREE)
+        gateway = _make_gateway(provider)
+        history = [
+            {"role": "user" if i % 2 else "assistant", "content": f"turn {i}"}
+            for i in range(ai.MAX_HISTORY_TURNS + 10)
+        ]
+
+        ai.analyze_connections(_sample_groups(), gateway=gateway, history=history)
+
+        request = captured["request"]
+        # 2 for system+groups, plus at most MAX_HISTORY_TURNS history messages.
+        assert len(request.messages) == 2 + ai.MAX_HISTORY_TURNS
+
     def test_byok_credentials_are_pooled_into_tenant_metadata(self):
         assert ai._credential_metadata(
             {"gemini": ["k1", "k2"], "openai": [], "anthropic": ["k3"]}
@@ -303,6 +353,52 @@ class TestAnalyzeEndpoint:
         assert body["provider"] == "mock:free"
         # Blank keys dropped, surrounding whitespace trimmed.
         assert captured["credentials"] == {"gemini": ["k1", "k2"]}
+
+    def test_history_is_forwarded_to_analyze_connections(self, client, monkeypatch):
+        captured: dict[str, object] = {}
+
+        def fake_analyze(groups, locale="he", **kw):
+            captured.update(kw)
+            return ai.AnalyzeResult(text="עוד תשובה.", provider="mock:free")
+
+        monkeypatch.setattr(ai, "analyze_connections", fake_analyze)
+
+        response = client.post(
+            "/api/analyze",
+            json={
+                "groups": _sample_groups(),
+                "history": [
+                    {"role": "assistant", "content": "אביי ורבא נחלקו כאן."},
+                    {"role": "user", "content": "מה עוד קשור לזה?"},
+                ],
+            },
+        )
+
+        assert response.status_code == 200
+        assert captured["history"] == [
+            {"role": "assistant", "content": "אביי ורבא נחלקו כאן."},
+            {"role": "user", "content": "מה עוד קשור לזה?"},
+        ]
+
+    def test_rejects_more_history_turns_than_a_chat_can_produce(self, client):
+        body = {
+            "groups": [{"query": "a", "results": []}],
+            "history": [{"role": "user", "content": "x"} for _ in range(ai.MAX_HISTORY_TURNS + 1)],
+        }
+
+        response = client.post("/api/analyze", json=body)
+
+        assert response.status_code == 422  # pydantic's own max_length validation
+
+    def test_rejects_an_unknown_history_role(self, client):
+        body = {
+            "groups": [{"query": "a", "results": []}],
+            "history": [{"role": "system", "content": "x"}],
+        }
+
+        response = client.post("/api/analyze", json=body)
+
+        assert response.status_code == 422  # pydantic's Literal validation
 
 
 class TestAiStatusEndpoint:

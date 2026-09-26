@@ -78,6 +78,13 @@ MAX_GROUPS = 5
 MAX_RESULTS_PER_GROUP = 6
 SNIPPET_WORD_CAP = 40
 
+# Re-checked here too (not just trusted from AnalyzeBody.history's own
+# max_length in app/main.py), same belt-and-suspenders reasoning as
+# MAX_GROUPS above -- a follow-up conversation in the "continue chatting"
+# dialog is resent in full on every turn, so this bounds how much of it (and
+# therefore how much of the bill) keeps growing with the prompt.
+MAX_HISTORY_TURNS = 20
+
 # One shared tenant identity for the whole app -- individual visitors are
 # distinguished by which credentials *they* supplied (see analyze_connections),
 # not by a separate tenant id each, since there's no per-user auth here.
@@ -181,7 +188,9 @@ _SYSTEM_PROMPT = (
     "tractate/daf you mean. If the excerpts genuinely show no connection or "
     "pattern, say so plainly rather than inventing one. Keep the whole "
     "answer under roughly 180 words. The Talmud text itself stays in "
-    "Hebrew/Aramaic exactly as given; write your own analysis in {language}."
+    "Hebrew/Aramaic exactly as given; write your own analysis in {language}. "
+    "Plain prose only -- the app displays this as plain text verbatim, so "
+    "no markdown (no **bold**, no *; or -/1. list markers, no # headings)."
 )
 
 
@@ -257,6 +266,7 @@ def analyze_connections(
     *,
     credentials: dict[str, list[str]] | None = None,
     gateway: ModelGateway | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> AnalyzeResult:
     """Ask the configured model what connects ``groups``' search results.
 
@@ -268,6 +278,12 @@ def analyze_connections(
     ``gateway`` is an injection seam for tests (a ``MockProvider``-backed
     gateway); real callers leave it unset and get a gateway built fresh from
     ``credentials`` plus whatever the server has configured.
+
+    ``history`` is the "continue chatting" follow-up on a prior answer:
+    ``[{"role": "assistant"|"user", "content": ...}, ...]``, starting with
+    the assistant's own first answer and alternating from there, capped at
+    ``MAX_HISTORY_TURNS``. Omit or pass ``None``/``[]`` for a fresh
+    analysis with no prior turns -- the original single-shot behavior.
 
     Raises:
         NoCredentialError: Neither the server nor ``credentials`` has a key
@@ -297,11 +313,16 @@ def analyze_connections(
         quota=_quota(),
         metadata=_credential_metadata(credentials),
     )
+    messages = [
+        Message(role=Role.SYSTEM, content=system),
+        Message(role=Role.USER, content=_format_groups(groups)),
+    ]
+    for turn in (history or [])[:MAX_HISTORY_TURNS]:
+        role = Role.ASSISTANT if turn.get("role") == "assistant" else Role.USER
+        messages.append(Message(role=role, content=turn.get("content", "")))
+
     request = CompletionRequest(
-        messages=(
-            Message(role=Role.SYSTEM, content=system),
-            Message(role=Role.USER, content=_format_groups(groups)),
-        ),
+        messages=tuple(messages),
         tenant=tenant.tenant_id,
         max_tokens=500,
     )

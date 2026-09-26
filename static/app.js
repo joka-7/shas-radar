@@ -954,6 +954,12 @@
         .then(function (result) {
           body.appendChild(el("p", "connections-answer-label", t(locale, "connections.answerLabel")));
           body.appendChild(el("p", "connections-text", result.connection));
+          var chatBtn = el("button", "connections-btn connections-chat-btn", t(locale, "chat.continueButton"));
+          chatBtn.type = "button";
+          chatBtn.addEventListener("click", function () {
+            openAiChat(groups, result.connection);
+          });
+          body.appendChild(chatBtn);
           body.hidden = false;
           section.classList.add("answered");
           // Deliberately left visible and re-enabled, not hidden away: the
@@ -980,6 +986,127 @@
 
     return section;
   }
+
+  // --- AI chat: continue the conversation (optional) ----------------------
+  //
+  // Opened from the "continue chatting" button under a connections-section
+  // answer (see connectionsSection above), in a modal <dialog> like the AI
+  // settings one. Conversation state lives only in this closure for as long
+  // as the dialog is open -- nothing is kept server-side between requests
+  // (see app/ai.py's module docstring), so every follow-up resends the full
+  // exchange so far as `history` alongside the same `groups` the original
+  // answer was about. Reopening the dialog on a fresh "find connections"
+  // answer resets it; there's exactly one chat dialog on the page, shared
+  // across however many connections-sections a visitor works through.
+
+  var chatDialog = document.getElementById("ai-chat-dialog");
+  var chatMessagesEl = document.getElementById("ai-chat-messages");
+  var chatInput = document.getElementById("ai-chat-input");
+  var chatSendBtn = document.getElementById("ai-chat-send");
+
+  var chatGroups = null;
+  var chatTurns = []; // history sent so far: [{role, content}, ...]
+
+  function chatBubble(role, text) {
+    return el("p", "ai-chat-bubble ai-chat-bubble-" + role, text);
+  }
+
+  function scrollChatToEnd() {
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  function openAiChat(groups, firstAnswer) {
+    chatGroups = groups;
+    chatTurns = [{ role: "assistant", content: firstAnswer }];
+    chatMessagesEl.innerHTML = "";
+    chatMessagesEl.appendChild(chatBubble("assistant", firstAnswer));
+    chatInput.value = "";
+    autosizeTextarea(chatInput);
+    if (typeof chatDialog.showModal === "function") {
+      chatDialog.showModal();
+    } else {
+      chatDialog.setAttribute("open", ""); // very old browser fallback, same as the other dialogs
+    }
+    scrollChatToEnd();
+    chatInput.focus();
+  }
+
+  function sendChatMessage() {
+    var question = chatInput.value.trim();
+    if (!question || !chatGroups || chatSendBtn.disabled) return;
+
+    chatMessagesEl.appendChild(chatBubble("user", question));
+    chatInput.value = "";
+    autosizeTextarea(chatInput);
+    chatSendBtn.disabled = true;
+
+    var pending = chatBubble("assistant", t(locale, "chat.thinking"));
+    pending.classList.add("ai-chat-bubble-pending");
+    chatMessagesEl.appendChild(pending);
+    scrollChatToEnd();
+
+    // Sent, not yet committed to chatTurns -- only on a successful reply,
+    // so a failed question can be retried without duplicating it in history.
+    var turnsForRequest = chatTurns.concat([{ role: "user", content: question }]);
+
+    apiFetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        locale: locale,
+        groups: chatGroups,
+        credentials: getAllAiCredentials(),
+        history: turnsForRequest,
+      }),
+    })
+      .then(function (response) {
+        return response.json().then(function (result) {
+          if (!response.ok) {
+            var err = new Error(
+              (result.code && t(locale, "connections.error.code." + result.code)) || t(locale, "chat.error.generic")
+            );
+            err.code = result.code;
+            throw err;
+          }
+          return result;
+        });
+      })
+      .then(function (result) {
+        pending.remove();
+        chatMessagesEl.appendChild(chatBubble("assistant", result.connection));
+        chatTurns = turnsForRequest.concat([{ role: "assistant", content: result.connection }]);
+      })
+      .catch(function (err) {
+        pending.remove();
+        var errorBubble = el("div", "ai-chat-bubble ai-chat-bubble-error");
+        errorBubble.appendChild(document.createTextNode(err.message));
+        if (err.code && NEEDS_KEY_CODES.indexOf(err.code) !== -1) {
+          var settingsLink = el("button", "connections-settings-link", t(locale, "aiSettings.openButton"));
+          settingsLink.type = "button";
+          settingsLink.addEventListener("click", openAiSettings);
+          errorBubble.appendChild(settingsLink);
+        }
+        chatMessagesEl.appendChild(errorBubble);
+      })
+      .then(function () {
+        chatSendBtn.disabled = false;
+        scrollChatToEnd();
+      });
+  }
+
+  chatInput.addEventListener("input", function () {
+    autosizeTextarea(chatInput);
+  });
+  // Enter sends (textareas don't submit their form on Enter on their own,
+  // same reasoning as #q's own keydown handler above); Shift+Enter still
+  // inserts a newline for a multi-line follow-up.
+  chatInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendChatMessage();
+    }
+  });
+  chatSendBtn.addEventListener("click", sendChatMessage);
 
   function hasEnoughToConnect(data) {
     var total = 0;
@@ -1192,14 +1319,18 @@
     clearBtn.hidden = !input.value && !results.firstChild;
   }
 
-  // #q is a <textarea> styled to look like a single-line field so long
-  // queries (multi-word chips, pasted phrases) wrap into view instead of
-  // being clipped the way a native <input> would. Growing it back to a
-  // fixed height on every change keeps it from ballooning as text is
-  // removed; the CSS max-height caps it and hands off to scrolling.
+  // #q (and the AI chat's own composer, see openAiChat below) are
+  // <textarea>s styled to look like a single-line field so long text (multi-
+  // word chips, pasted phrases, a follow-up question) wraps into view
+  // instead of being clipped the way a native <input> would. Growing it
+  // back to a fixed height on every change keeps it from ballooning as
+  // text is removed; the CSS max-height caps it and hands off to scrolling.
+  function autosizeTextarea(node) {
+    node.style.height = "auto";
+    node.style.height = node.scrollHeight + "px";
+  }
   function autosizeInput() {
-    input.style.height = "auto";
-    input.style.height = input.scrollHeight + "px";
+    autosizeTextarea(input);
   }
 
   function runSearch(query, pushHash) {

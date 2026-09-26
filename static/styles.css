@@ -601,6 +601,7 @@ body {
   color: var(--gold);
 }
 .connections-text { margin: 0; line-height: 1.7; color: var(--text); }
+.connections-chat-btn { margin-top: .7rem; }
 
 .connections-links:not([hidden]) { display: flex; }
 .connections-links {
@@ -869,6 +870,51 @@ body {
    dialog-appropriate vertical spacing on either side. */
 #ai-model-picker-root { margin-bottom: .8rem; }
 
+/* modeldispatcher-react-ui/styles.css (vendored, generated -- see
+   frontend/README.md -- never hand-edit static/vendor/model-picker/main.css
+   itself) hardcodes a single light palette on its own --md-* custom
+   properties with no dark variant, so in this app's dark theme its near-
+   black --md-text/--md-surface render almost invisibly on this dialog's
+   dark background. Re-declared here instead: every selector below matches
+   one in that stylesheet that sets these vars (or, for .md-conversation-
+   intro, a literal color with no var at all) -- an ID-scoped selector
+   always outranks its plain-class one on specificity, so this wins
+   regardless of which stylesheet loads second (main.css is injected into
+   <head> on first dialog open, after this file). */
+@media (prefers-color-scheme: dark) {
+  #ai-model-picker-root .md-picker {
+    --md-accent: var(--accent);
+    --md-accent-ink: #fff;
+    --md-accent-soft: var(--accent-soft);
+    --md-border: var(--line);
+    --md-text: var(--text);
+    --md-text-muted: var(--text-soft);
+    --md-danger: #f87171;
+    --md-success: #4ade80;
+    --md-surface: var(--surface-2);
+    --md-surface-muted: var(--surface-2);
+  }
+  #ai-model-picker-root .md-ask-externally,
+  #ai-model-picker-root .md-no-provider {
+    --md-accent: var(--accent);
+    --md-accent-ink: #fff;
+    --md-border: var(--line);
+    --md-text-muted: var(--text-soft);
+  }
+  #ai-model-picker-root .md-paste-reply {
+    --md-accent: var(--accent);
+    --md-accent-ink: #fff;
+    --md-border: var(--line);
+    --md-text: var(--text);
+    --md-text-muted: var(--text-soft);
+    --md-surface: var(--surface-2);
+  }
+  #ai-model-picker-root .md-conversation-intro {
+    background: var(--surface-2);
+    color: var(--text-soft);
+  }
+}
+
 .ai-settings-note { font-size: .75rem; color: var(--text-faint); line-height: 1.5; margin: 0; }
 
 .install-help-dialog { width: min(92vw, 22rem); }
@@ -883,6 +929,53 @@ body {
   color: var(--text);
 }
 .install-help-steps li { padding-inline-start: .3rem; }
+
+/* --- AI chat dialog ---
+   Same shell as .ai-settings-dialog above (native <dialog>, showModal()),
+   just laid out as a column so the message list can grow/scroll between a
+   fixed header and composer -- see openAiChat/sendChatMessage in app.js. */
+
+/* [open] guard matters here: an unconditional `display: flex` is an author
+   rule, which always outranks the UA stylesheet's own
+   `dialog:not([open]) { display: none }` regardless of specificity -- so
+   without it this dialog would render inline in the page flow even while
+   closed (see .connections-btn's own such note above for the same
+   author-vs-UA-stylesheet reasoning). */
+.ai-chat-dialog[open] { display: flex; flex-direction: column; }
+.ai-chat-form { display: flex; flex-direction: column; min-height: 0; }
+
+.ai-chat-messages {
+  flex: 1;
+  min-height: 8rem;
+  max-height: 55vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  padding-inline-end: .1rem; /* room for the scrollbar, not under the text */
+}
+.ai-chat-bubble {
+  margin: 0;
+  max-width: 88%;
+  padding: .55rem .75rem;
+  border-radius: var(--radius-sm);
+  font-size: .9rem;
+  line-height: 1.6;
+}
+.ai-chat-bubble-assistant { align-self: flex-start; background: var(--surface-2); color: var(--text); }
+.ai-chat-bubble-user { align-self: flex-end; background: var(--accent-soft); color: var(--accent-text); }
+.ai-chat-bubble-pending { opacity: .65; }
+.ai-chat-bubble-error {
+  align-self: stretch;
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.ai-chat-bubble-error .connections-settings-link { display: block; margin-top: .4rem; }
+
+.ai-chat-composer { display: flex; gap: .5rem; margin-top: .75rem; }
+.ai-chat-composer .ai-chat-input { flex: 1; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
