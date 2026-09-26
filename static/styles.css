@@ -870,6 +870,51 @@ body {
    dialog-appropriate vertical spacing on either side. */
 #ai-model-picker-root { margin-bottom: .8rem; }
 
+/* modeldispatcher-react-ui/styles.css (vendored, generated -- see
+   frontend/README.md -- never hand-edit static/vendor/model-picker/main.css
+   itself) hardcodes a single light palette on its own --md-* custom
+   properties with no dark variant, so in this app's dark theme its near-
+   black --md-text/--md-surface render almost invisibly on this dialog's
+   dark background. Re-declared here instead: every selector below matches
+   one in that stylesheet that sets these vars (or, for .md-conversation-
+   intro, a literal color with no var at all) -- an ID-scoped selector
+   always outranks its plain-class one on specificity, so this wins
+   regardless of which stylesheet loads second (main.css is injected into
+   <head> on first dialog open, after this file). */
+@media (prefers-color-scheme: dark) {
+  #ai-model-picker-root .md-picker {
+    --md-accent: var(--accent);
+    --md-accent-ink: #fff;
+    --md-accent-soft: var(--accent-soft);
+    --md-border: var(--line);
+    --md-text: var(--text);
+    --md-text-muted: var(--text-soft);
+    --md-danger: #f87171;
+    --md-success: #4ade80;
+    --md-surface: var(--surface-2);
+    --md-surface-muted: var(--surface-2);
+  }
+  #ai-model-picker-root .md-ask-externally,
+  #ai-model-picker-root .md-no-provider {
+    --md-accent: var(--accent);
+    --md-accent-ink: #fff;
+    --md-border: var(--line);
+    --md-text-muted: var(--text-soft);
+  }
+  #ai-model-picker-root .md-paste-reply {
+    --md-accent: var(--accent);
+    --md-accent-ink: #fff;
+    --md-border: var(--line);
+    --md-text: var(--text);
+    --md-text-muted: var(--text-soft);
+    --md-surface: var(--surface-2);
+  }
+  #ai-model-picker-root .md-conversation-intro {
+    background: var(--surface-2);
+    color: var(--text-soft);
+  }
+}
+
 .ai-settings-note { font-size: .75rem; color: var(--text-faint); line-height: 1.5; margin: 0; }
 
 .install-help-dialog { width: min(92vw, 22rem); }
@@ -890,7 +935,13 @@ body {
    just laid out as a column so the message list can grow/scroll between a
    fixed header and composer -- see openAiChat/sendChatMessage in app.js. */
 
-.ai-chat-dialog { display: flex; flex-direction: column; }
+/* [open] guard matters here: an unconditional `display: flex` is an author
+   rule, which always outranks the UA stylesheet's own
+   `dialog:not([open]) { display: none }` regardless of specificity -- so
+   without it this dialog would render inline in the page flow even while
+   closed (see .connections-btn's own such note above for the same
+   author-vs-UA-stylesheet reasoning). */
+.ai-chat-dialog[open] { display: flex; flex-direction: column; }
 .ai-chat-form { display: flex; flex-direction: column; min-height: 0; }
 
 .ai-chat-messages {
