@@ -731,8 +731,6 @@ body {
 }
 .footer a { color: var(--accent-text); }
 #footer-attribution { margin-bottom: .2rem; }
-#verse-count { margin-top: 0; }
-.footer-note { margin-bottom: 0; }
 .footer-credit {
   display: flex;
   align-items: center;

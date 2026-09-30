@@ -52,7 +52,6 @@
   var lastSearchData = null;
   var lastSnapshot = null;
   var lastTractates = null;
-  var lastHealth = null;
   var lastAiStatus = null;
 
   function loadLocale() {
@@ -1162,7 +1161,6 @@
     input.placeholder = t(locale, "search.placeholder", { example: I18N.PLACEHOLDER_EXAMPLE });
 
     document.getElementById("footer-attribution").innerHTML = t(locale, "footer.attributionHtml");
-    renderFooterCount();
 
     if (lastTractates) populateTractateSelect(lastTractates);
 
@@ -1180,17 +1178,6 @@
     }
   }
 
-  function renderFooterCount() {
-    var target = document.getElementById("verse-count");
-    if (!lastHealth) {
-      target.textContent = "";
-      return;
-    }
-    target.textContent = t(locale, "footer.summary", {
-      wordsPhrase: plural(locale, "footer.words", lastHealth.words),
-      tractatesPhrase: plural(locale, "footer.tractates", lastHealth.tractates),
-    });
-  }
 
   function setLocale(next) {
     if (!I18N.isSupported(next) || next === locale) return;
@@ -1493,12 +1480,7 @@
 
   var disarmHealthWaking = armWaking();
   apiFetch("/api/health")
-    .then(function (r) { return r.json(); })
-    .then(function (health) {
-      lastHealth = health;
-      renderFooterCount();
-    })
-    .catch(function () { /* the footer count is decorative */ })
+    .catch(function () {})
     .then(disarmHealthWaking);
 
   // Not waking-gated (unlike the fetches above): this one is purely

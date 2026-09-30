@@ -140,11 +140,7 @@ var I18N = (function () {
         "נוסח הש״ס: <strong>דפוס וילנא</strong> — מתוך " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
         "נחלת הכלל.",
-      "footer.summary": "{wordsPhrase}, {tractatesPhrase}.",
-      "footer.words": { one: "מילה אחת", two: "שתי מילים", other: "{n} מילים" },
-      "footer.tractates": { one: "מסכת אחת", two: "שתי מסכתות", other: "{n} מסכתות" },
-      "footer.note": "חיפוש זה בודק התאמה מדויקת, התאמה עם אותיות שימוש, וביטויים ברצף — ללא ניתוח דקדוקי מלא.",
-      "footer.credit": "נבנה על ידי",
+      "footer.credit": "נבנה על ידי joka-7",
     },
 
     en: {
@@ -259,11 +255,7 @@ var I18N = (function () {
         "Talmud text: <strong>Vilna edition</strong> — from " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
         "Public Domain.",
-      "footer.summary": "{wordsPhrase}, {tractatesPhrase}.",
-      "footer.words": { one: "1 word", other: "{n} words" },
-      "footer.tractates": { one: "1 tractate", other: "{n} tractates" },
-      "footer.note": "This search checks exact matches, matches with an attached prefix, and consecutive phrases — without full grammatical analysis.",
-      "footer.credit": "Built by",
+      "footer.credit": "Built by joka-7",
     },
 
     fr: {
@@ -378,11 +370,7 @@ var I18N = (function () {
         "Texte du Talmud : <strong>édition de Vilna</strong> — provenant de " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
         "domaine public.",
-      "footer.summary": "{wordsPhrase}, {tractatesPhrase}.",
-      "footer.words": { one: "1 mot", other: "{n} mots" },
-      "footer.tractates": { one: "1 traité", other: "{n} traités" },
-      "footer.note": "Cette recherche vérifie les correspondances exactes, les correspondances avec une lettre de liaison, et les expressions consécutives — sans analyse grammaticale complète.",
-      "footer.credit": "Créé par",
+      "footer.credit": "Créé par joka-7",
     },
   };
 
