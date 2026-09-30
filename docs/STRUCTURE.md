@@ -42,6 +42,7 @@ shas-radar/
 ├── static/
 │   ├── icons/
 │   │   ├── app-icon.png
+│   │   ├── app-icon.svg
 │   │   ├── apple-touch-icon.png
 │   │   ├── icon-192.png
 │   │   └── icon-512.png
