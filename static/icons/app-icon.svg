@@ -24,9 +24,9 @@
     </filter>
   </defs>
 
-  <rect width="512" height="512" rx="124" fill="url(#bgGrad1)"/>
-  <rect x="8" y="8" width="496" height="496" rx="116" fill="none" stroke="#38BDF8" stroke-width="2.5" opacity="0.35"/>
+  <rect width="512" height="512" fill="url(#bgGrad1)"/>
 
+  <g transform="translate(256 262) scale(1.25) translate(-256 -262)">
   <g fill="none" stroke="#0ea5e9" stroke-linecap="round" opacity="0.8">
     <path d="M120 185 A170 170 0 0 1 392 185" stroke-width="4.5" stroke-dasharray="14 12" opacity="0.35"/>
     <path d="M165 215 A120 120 0 0 1 347 215" stroke-width="5.5" opacity="0.6"/>
@@ -44,9 +44,10 @@
 
   <circle cx="345" cy="180" r="7.5" fill="#38BDF8" filter="url(#centerGlow)"/>
   <circle cx="170" cy="270" r="6.5" fill="#F59E0B" filter="url(#centerGlow)"/>
-  <circle cx="256" cy="285" r="76" fill="#38BDF8" opacity="0.28" filter="url(#centerGlow)"/>
+  </g>
+  <circle cx="256" cy="285" r="114" fill="#38BDF8" opacity="0.28" filter="url(#centerGlow)"/>
 
-  <g transform="translate(256, 285)" filter="url(#dropShadowCenter)">
+  <g transform="translate(256, 285) scale(1.5)" filter="url(#dropShadowCenter)">
     <circle cx="0" cy="0" r="66" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-dasharray="10 6" opacity="0.9"/>
     <circle cx="0" cy="0" r="56" fill="#020617" stroke="#38BDF8" stroke-width="4.5"/>
     <circle cx="0" cy="0" r="46" fill="url(#goldCenterGrad)"/>
