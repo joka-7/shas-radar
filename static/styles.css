@@ -747,10 +747,20 @@ body {
 .footer-links {
   display: inline-flex;
   align-items: center;
-  gap: .6rem;
+  gap: .1rem;
   margin-inline-start: .25rem;
 }
-.footer-links a { display: inline-flex; text-decoration: none; }
+.footer-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  padding: .5rem;
+  border-radius: .5rem;
+  transition: background-color .15s ease, transform .1s ease;
+}
+.footer-links a:hover { background-color: var(--surface-2); }
+.footer-links a:active { background-color: var(--surface-2); transform: scale(.88); }
 .footer-links svg { display: block; }
 
 /* --- AI settings dialog ---
