@@ -758,6 +758,8 @@ body {
   padding: .5rem;
   border-radius: .5rem;
   transition: background-color .15s ease, transform .1s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(128, 128, 128, .35);
 }
 .footer-links a:hover { background-color: var(--surface-2); }
 .footer-links a:active { background-color: var(--surface-2); transform: scale(.88); }
