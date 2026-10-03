@@ -141,6 +141,11 @@ var I18N = (function () {
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
         "נחלת הכלל.",
       "footer.credit": "נבנה על ידי joka-7",
+      "footer.link.github": "GitHub",
+      "footer.link.site": "אתר",
+      "footer.link.repo": "קוד",
+      "footer.link.email": "אימייל",
+      "footer.link.feedback": "משוב",
     },
 
     en: {
@@ -256,6 +261,11 @@ var I18N = (function () {
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
         "Public Domain.",
       "footer.credit": "Built by joka-7",
+      "footer.link.github": "GitHub",
+      "footer.link.site": "Site",
+      "footer.link.repo": "Code",
+      "footer.link.email": "Email",
+      "footer.link.feedback": "Feedback",
     },
 
     fr: {
@@ -371,6 +381,11 @@ var I18N = (function () {
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
         "domaine public.",
       "footer.credit": "Créé par joka-7",
+      "footer.link.github": "GitHub",
+      "footer.link.site": "Site",
+      "footer.link.repo": "Code",
+      "footer.link.email": "E-mail",
+      "footer.link.feedback": "Avis",
     },
   };
 
