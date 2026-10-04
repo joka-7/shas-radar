@@ -39,6 +39,7 @@ var I18N = (function () {
       "settings.heading": "הגדרות",
       "settings.close": "סגירה",
       "settings.languageHeading": "שפה",
+      "settings.linksHeading": "קישורים",
 
       "search.label": "מילה בודדת, מילים ברצף או מופרדות בפסיק",
       "search.placeholder": "לדוגמה: {example}",
@@ -159,6 +160,7 @@ var I18N = (function () {
       "settings.heading": "Settings",
       "settings.close": "Close",
       "settings.languageHeading": "Language",
+      "settings.linksHeading": "Links",
 
       "search.label": "Word, name, phrase, or several separated by a comma",
       "search.placeholder": "e.g. {example}",
@@ -279,6 +281,7 @@ var I18N = (function () {
       "settings.heading": "Paramètres",
       "settings.close": "Fermer",
       "settings.languageHeading": "Langue",
+      "settings.linksHeading": "Liens",
 
       "search.label": "Mot, nom, expression, ou plusieurs séparés par une virgule",
       "search.placeholder": "par ex. {example}",

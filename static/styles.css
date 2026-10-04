@@ -771,6 +771,12 @@ body {
 .footer-links a:hover { background-color: var(--surface-2); }
 .footer-links a:active { background-color: var(--surface-2); transform: scale(.88); }
 .footer-links svg { display: block; }
+.settings-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-inline-start: 0;
+}
 
 /* --- AI settings dialog ---
    Also holds the install action and the language switcher, each as its own
