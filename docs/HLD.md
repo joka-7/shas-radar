@@ -29,7 +29,13 @@ what links a set of results the visitor has selected.
 - *Memory-bounded.* The naive representation of the corpus (plain Python
   lists) overran a 512MB deploy target before the server even finished
   starting. `app/corpus.py` trades that for string interning and packed
-  `array.array` columns — see **Data storage**.
+  `array.array` columns — see **Data storage**. Measured on the real server:
+  the Bavli alone is about 203MB, and all four enabled books (Bavli,
+  Yerushalmi, Mishnah, Tosefta) about 316MB once each has been used.
+  `ENABLED_BOOKS` is the switch: Rashi adds about 185MB (all five books reach
+  about 500MB, too close to 512MB), so it is built and tested but not enabled
+  in `render.yaml`; Bavli plus Rashi alone is about 390MB. Tosafot is not
+  included: it would add well over 100MB more.
 - *Installable, not offline.* The PWA shell lets a phone add the app to its
   home screen and paints instantly from the cached shell, but every search
   is still a live API call — there is no offline corpus on the client.
@@ -46,23 +52,28 @@ flowchart TD
     Vercel["Vercel<br/>static/ mirror, proxies /api/*"]
     Main["app/main.py<br/>FastAPI: routing, CORS, validation, errors"]
     Search["app/search.py<br/>matching + KWIC shaping"]
+    Books["app/books.py<br/>which books are enabled and loaded"]
+    Citation["app/citation.py<br/>locations and citation schemes"]
     Corpus["app/corpus.py<br/>Tractate model + word index"]
     Hebrew["app/hebrew.py<br/>normalization primitives"]
     AI["app/ai.py<br/>optional AI connections"]
     Data[("data/shas.json.gz<br/>~1.86M words, 37 tractates, 5.1MB")]
     Build["scripts/build_dataset.py<br/>build-time only"]
-    Sefaria[("Sefaria export<br/>Vilna edition text")]
+    Sefaria[("Sefaria export<br/>William Davidson Edition text")]
     Vendor[("Gemini / OpenAI / Anthropic / Groq<br/>via ModelDispatcher")]
 
     Browser -->|"same origin (Render)"| Main
     Browser -->|"or via"| Vercel
     Vercel -->|"server-side proxy, no CORS"| Main
     Main --> Search
+    Main --> Books
+    Books --> Corpus
     Main -->|"POST /api/analyze only"| AI
     Search --> Corpus
     Search --> Hebrew
     Corpus --> Hebrew
-    Corpus -->|"loaded once at boot"| Data
+    Corpus --> Citation
+    Corpus -->|"each book read once, on first use"| Data
     AI -.->|"outbound call, this app's one exception<br/>to 'no network at runtime'"| Vendor
     Build -.->|"regenerates, offline"| Data
     Sefaria -.->|"fetched by hand, not at runtime"| Build
@@ -73,8 +84,8 @@ to regenerate the corpus and is never invoked by the service, and the AI
 vendor call happens only inside `POST /api/analyze` — every other route
 never leaves the process.
 
-Module boundaries run one way — `main` → `search`/`ai` → `corpus` →
-`hebrew` — and nothing calls back upward. `hebrew.py` is pure string
+Module boundaries run one way — `main` → `books`/`search`/`ai` → `corpus` →
+`citation`/`hebrew` — and nothing calls back upward. `hebrew.py` is pure string
 manipulation with no knowledge of the corpus or HTTP.
 
 ## Dynamic view
@@ -140,10 +151,12 @@ own first API call starts Render waking in the background.
 
 ## Data storage
 
-There is no database, cache, or blob store. The single store is
-`data/shas.json.gz` (~5.1 MB, all 37 tractates), decompressed and indexed
-into process memory at startup by `load_corpus()`, `functools.lru_cache`d to
-one entry so every request shares the same instance.
+There is no database, cache, or blob store. The stores are the dataset files
+under `data/`: `shas.json.gz` (the Bavli, ~5.3 MB, all 37 tractates) and one
+per other book (`yerushalmi`, `mishnah`, `tosefta`, `rashi`; ~8.8 MB together), each decompressed and indexed
+into process memory at startup by `BookLibrary.corpus()`, which keeps one
+instance so every request shares it. Other enabled books are read the first
+time a request asks for one and then stay resident.
 
 In memory, `Tractate` trades the naive representation (four plain Python
 lists per tractate) for two things, both keyed off the fact that a token
@@ -152,8 +165,8 @@ distinct):
 
 - `sys.intern()` on every token string, so ~1.86M entries collapse to
   sharing far fewer actual string objects.
-- `array.array` instead of a plain list for the purely-numeric per-token
-  columns (`token_daf`, `token_amud`, and word positions in `by_word`),
+- `array.array` instead of a plain list for the purely-numeric columns
+  (each paragraph's packed location in `segment_refs`, and word positions in `by_word`),
   trading a Python object + pointer per entry for a few raw bytes.
 
 Together this holds the corpus in a bit over a third of the naive memory
@@ -167,8 +180,9 @@ service is redeploying the image.
 ## Configuration and secrets
 
 Search itself needs no configuration beyond `$PORT` (supplied by the
-platform) and `ALLOWED_ORIGINS` (the CORS allowlist — a plain list of
-hostnames, not a secret). The optional AI feature reads, if set:
+platform), `ALLOWED_ORIGINS` (the CORS allowlist — a plain list of
+hostnames, not a secret) and `ENABLED_BOOKS` (comma-separated book ids, default
+`bavli`; a typo or a missing data file stops the server at startup). The optional AI feature reads, if set:
 `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GROQ_API_KEY`
 (any subset), their `*_MODEL` overrides, `AI_REQUEST_DEADLINE_SECONDS`, and
 the `AI_REQUESTS_PER_MIN` / `AI_TOKENS_PER_MIN` / `AI_TOKENS_PER_DAY` quota

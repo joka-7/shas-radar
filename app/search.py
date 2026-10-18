@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .corpus import Corpus, Tractate
-from .hebrew import daf_citation, has_hebrew, words
+from .hebrew import has_hebrew, words
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
@@ -37,15 +37,6 @@ MAX_LIMIT = 200
 DEFAULT_CONTEXT = 5
 MIN_CONTEXT = 1
 MAX_CONTEXT = 50
-
-
-# Sefaria's ref-slug convention: spaces in a multi-word title become
-# underscores, e.g. "Bava Kamma" -> "Bava_Kamma.5a". Sefaria's own site is
-# unreachable from this build environment to verify directly; this matches
-# their documented convention -- worth a spot-check once deployed.
-def sefaria_url(tractate_en: str, daf: int, amud: str) -> str:
-    slug = tractate_en.replace(" ", "_")
-    return f"https://www.sefaria.org/{slug}.{daf}{amud}"
 
 
 @dataclass
@@ -186,21 +177,21 @@ def serialize_match(corpus: Corpus, match: Match, before: int, after: int) -> di
     matched_text = " ".join(tr.tokens_raw[start:end])
     context_after = " ".join(tr.tokens_raw[end : end + after])
 
-    daf, amud = tr.token_daf[start], tr.amud_at(start)
     segment = tr.segment_at(start)
 
     return {
+        "book": corpus.book,
         "kind": match.kind,
         "before": context_before,
         "match": matched_text,
         "after": context_after,
         "tractate": {"he": tr.he, "en": tr.en},
         "seder": {"he": tr.seder_he, "en": tr.seder_en},
-        "daf": daf,
-        "amud": amud,
-        "citation": f"{tr.he} {daf_citation(daf, amud)}",
-        "citationEn": f"{tr.en} {daf}{amud}",
-        "sefariaUrl": sefaria_url(tr.en, daf, amud),
+        "ref": list(tr.ref_at(start)),
+        **tr.ref_fields(start),
+        "citation": tr.citation(start),
+        "citationEn": tr.citation_en(start),
+        "sefariaUrl": tr.sefaria_url(start),
         "fullParagraph": segment.text,
     }
 

@@ -14,13 +14,19 @@ shas-radar/
 │   ├── copilot-instructions.md
 │   └── dependabot.yml
 ├── app/
-│   ├── ai.py      # AI-assisted analysis: find connections across a set of search-result groups.
-│   ├── corpus.py  # Loading and indexing the Talmud corpus.
-│   ├── hebrew.py  # Hebrew/Aramaic text normalization primitives.
-│   ├── main.py    # FastAPI application.
-│   └── search.py  # Talmud search: exact word, attached-prefix, exact phrase, and KWIC context.
+│   ├── ai.py        # AI-assisted analysis: find connections across a set of search-result groups.
+│   ├── books.py     # The books the app can search, which are enabled, and which are loaded.
+│   ├── citation.py  # Where a passage sits in its book, and how that location is cited.
+│   ├── corpus.py    # Loading and indexing the Talmud corpus.
+│   ├── hebrew.py    # Hebrew/Aramaic text normalization primitives.
+│   ├── main.py      # FastAPI application.
+│   └── search.py    # Talmud search: exact word, attached-prefix, exact phrase, and KWIC context.
 ├── data/
-│   └── shas.json.gz
+│   ├── mishnah.json.gz
+│   ├── rashi.json.gz
+│   ├── shas.json.gz
+│   ├── tosefta.json.gz
+│   └── yerushalmi.json.gz
 ├── docs/
 │   ├── HLD.md
 │   ├── LLD.md
@@ -37,7 +43,7 @@ shas-radar/
 │   ├── tsconfig.json
 │   └── vite.config.ts
 ├── scripts/
-│   ├── build_dataset.py  # Build the local Talmud Bavli dataset used by the app.
+│   ├── build_dataset.py  # Build the local datasets used by the app.
 │   └── gen_tree.py       # Generate or check the annotated repository tree used in the docs.
 ├── static/
 │   ├── icons/
@@ -58,9 +64,13 @@ shas-radar/
 │   ├── styles.css
 │   └── sw.js
 ├── tests/
-│   ├── test_ai.py      # Tests for app/ai.py -- the optional "find connections" AI feature.
-│   ├── test_hebrew.py  # Tests for the Hebrew/Aramaic normalization primitives.
-│   └── test_search.py  # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
+│   ├── conftest.py            # Test configuration: every book is enabled, so the API tests can reach all of them.
+│   ├── test_ai.py             # Tests for app/ai.py -- the optional "find connections" AI feature.
+│   ├── test_books.py          # Tests for app/books.py: the book registry, configuration, and lazy loading.
+│   ├── test_build_dataset.py  # Tests for scripts/build_dataset.py: the pure helpers, not the network fetches.
+│   ├── test_citation.py       # Tests for app/citation.py: ref packing and the folio citation scheme.
+│   ├── test_hebrew.py         # Tests for the Hebrew/Aramaic normalization primitives.
+│   └── test_search.py         # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
 ├── .ai
 ├── .gitignore
 ├── .gitmodules

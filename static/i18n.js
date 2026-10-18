@@ -53,6 +53,8 @@ var I18N = (function () {
 
       "tractate.label": "מסכת (אופציונלי)",
       "tractate.all": "כל הש״ס",
+      "tractate.allInBook": "כל המסכתות",
+      "book.label": "ספר",
 
       "howItWorks.title": "איך זה עובד?",
       "howItWorks.p1": "מילה בודדת — נמצאת גם עם אותיות שימוש בתחילתה (ד/ל/ו/כ/ב וכו׳), כגון שחיפוש \"אביי\" מוצא גם \"דאביי\" ו\"לאביי\".",
@@ -136,12 +138,13 @@ var I18N = (function () {
       "error.code.empty": "יש להזין מילה, שם או ביטוי לחיפוש",
       "error.code.too_many": "אפשר לחפש עד 5 מונחים בבת אחת",
       "error.code.invalid_query": "יש להזין טקסט באותיות עבריות",
-
+      "error.code.unknown_book": "הספר המבוקש אינו קיים",
       "footer.attributionHtml":
-        "נוסח הש״ס: <strong>דפוס וילנא</strong> — מתוך " +
+        "נוסח הש״ס: <strong>מהדורת William Davidson</strong> — מתוך " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
-        "נחלת הכלל.",
+        "CC-BY-NC.",
       "footer.credit": "נבנה על ידי joka-7",
+      "footer.attribution.from": "מתוך",
       "footer.link.github": "GitHub",
       "footer.link.site": "אתר",
       "footer.link.repo": "קוד",
@@ -174,6 +177,8 @@ var I18N = (function () {
 
       "tractate.label": "Tractate (optional)",
       "tractate.all": "All of Shas",
+      "tractate.allInBook": "All tractates",
+      "book.label": "Book",
 
       "howItWorks.title": "How does this work?",
       "howItWorks.p1": "A single word — also found with an attached clitic (ד/ל/ו/כ/ב, etc.) at the front, so searching \"אביי\" also finds \"דאביי\" and \"לאביי\".",
@@ -257,12 +262,13 @@ var I18N = (function () {
       "error.code.empty": "Enter a word, name, or phrase to search",
       "error.code.too_many": "You can search for up to 5 terms at once",
       "error.code.invalid_query": "Enter text using Hebrew letters",
-
+      "error.code.unknown_book": "That book isn't available",
       "footer.attributionHtml":
-        "Talmud text: <strong>Vilna edition</strong> — from " +
+        "Talmud text: <strong>William Davidson Edition</strong> — from " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
-        "Public Domain.",
+        "CC-BY-NC.",
       "footer.credit": "Built by joka-7",
+      "footer.attribution.from": "from",
       "footer.link.github": "GitHub",
       "footer.link.site": "Site",
       "footer.link.repo": "Code",
@@ -295,6 +301,8 @@ var I18N = (function () {
 
       "tractate.label": "Traité (optionnel)",
       "tractate.all": "Tout le Chas",
+      "tractate.allInBook": "Tous les traités",
+      "book.label": "Livre",
 
       "howItWorks.title": "Comment ça marche ?",
       "howItWorks.p1": "Un seul mot — trouvé aussi avec une lettre de liaison attachée au début (ד/ל/ו/כ/ב, etc.), par exemple une recherche de « אביי » trouve aussi « דאביי » et « לאביי ».",
@@ -378,12 +386,13 @@ var I18N = (function () {
       "error.code.empty": "Saisissez un mot, un nom ou une expression à rechercher",
       "error.code.too_many": "Vous pouvez rechercher jusqu'à 5 termes à la fois",
       "error.code.invalid_query": "Saisissez un texte en lettres hébraïques",
-
+      "error.code.unknown_book": "Ce livre n'est pas disponible",
       "footer.attributionHtml":
-        "Texte du Talmud : <strong>édition de Vilna</strong> — provenant de " +
+        "Texte du Talmud : <strong>édition William Davidson</strong> — provenant de " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
-        "domaine public.",
+        "CC-BY-NC.",
       "footer.credit": "Créé par joka-7",
+      "footer.attribution.from": "provenant de",
       "footer.link.github": "GitHub",
       "footer.link.site": "Site",
       "footer.link.repo": "Code",

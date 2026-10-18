@@ -25,6 +25,7 @@
   var plural = I18N.plural;
 
   var LOCALE_STORAGE_KEY = "shas-radar:locale";
+  var BOOK_STORAGE_KEY = "shas-radar:book";
 
   var form = document.getElementById("search-form");
   var input = document.getElementById("q");
@@ -34,6 +35,8 @@
   var toastEl = document.getElementById("toast");
   var wakingEl = document.getElementById("waking");
   var tractateSelect = document.getElementById("tractate");
+  var bookSelect = document.getElementById("book");
+  var bookField = document.getElementById("book-field");
   var langSwitch = document.getElementById("lang-switch");
   var installBtn = document.getElementById("install-btn");
   var settingsBtn = document.getElementById("settings-btn");
@@ -60,6 +63,15 @@
   var lastTractates = null;
   var lastAiStatus = null;
 
+  // The books the API offers (GET /api/books), and which one is selected.
+  // "" means the server's own default until the list arrives. tractatesBook
+  // is the book whose tractate list was requested last, so a slower, older
+  // response never overwrites a newer one.
+  var lastBooks = null;
+  var bookDefault = "";
+  var selectedBook = loadStoredBook();
+  var tractatesBook = null;
+
   function loadLocale() {
     try {
       var stored = localStorage.getItem(LOCALE_STORAGE_KEY);
@@ -68,6 +80,22 @@
       /* private browsing / storage disabled -- fall through to the default */
     }
     return I18N.DEFAULT_LOCALE;
+  }
+
+  function loadStoredBook() {
+    try {
+      return localStorage.getItem(BOOK_STORAGE_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function saveBook(value) {
+    try {
+      localStorage.setItem(BOOK_STORAGE_KEY, value);
+    } catch (err) {
+      /* not remembered next visit; the picker still works */
+    }
   }
 
   function saveLocale(value) {
@@ -377,6 +405,10 @@
     var card = el("article", "card");
 
     var head = el("div", "card-head");
+    var book = bookById(result.book);
+    if (book && lastBooks.length > 1) {
+      head.appendChild(el("span", "badge", localizedName(book.he, book.en)));
+    }
     head.appendChild(el("span", "badge badge-tractate", localizedName(result.tractate.he, result.tractate.en)));
     head.appendChild(hebrewSpan("span", "badge", result.citation));
     var kindLabel = t(locale, result.kind === "exact" ? "matchKind.exact" : "matchKind.withPrefix");
@@ -536,6 +568,7 @@
         limit: String(PAGE_SIZE),
       });
       if (snapshot.tractate) params.set("tractate", snapshot.tractate);
+      if (snapshot.book) params.set("book", snapshot.book);
 
       apiFetch("/api/search?" + params.toString())
         .then(function (response) { return response.json(); })
@@ -1166,8 +1199,10 @@
 
     input.placeholder = t(locale, "search.placeholder", { example: I18N.PLACEHOLDER_EXAMPLE });
 
-    document.getElementById("footer-attribution").innerHTML = t(locale, "footer.attributionHtml");
+    renderFooterAttribution();
+    syncTractateAllLabel();
 
+    if (lastBooks) populateBookSelect();
     if (lastTractates) populateTractateSelect(lastTractates);
 
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
@@ -1352,7 +1387,7 @@
     // Snapshotted so a later "show more" click on this render keeps
     // requesting with the same context/filter, even if the steppers or the
     // tractate filter change in the meantime for the *next* search.
-    var snapshot = { before: before, after: after, tractate: tractateSelect.value };
+    var snapshot = { before: before, after: after, tractate: tractateSelect.value, book: selectedBook };
 
     var params = new URLSearchParams({
       q: query,
@@ -1361,6 +1396,7 @@
       limit: String(PAGE_SIZE),
     });
     if (snapshot.tractate) params.set("tractate", snapshot.tractate);
+    if (snapshot.book) params.set("book", snapshot.book);
 
     apiFetch("/api/search?" + params.toString(), { signal: controller.signal })
       .then(function (response) {
@@ -1475,12 +1511,106 @@
     tractateSelect.value = previousValue;
   }
 
-  var disarmTractateWaking = armWaking();
-  apiFetch("/api/tractates")
+  function bookById(id) {
+    if (!lastBooks) return null;
+    for (var i = 0; i < lastBooks.length; i++) {
+      if (lastBooks[i].id === id) return lastBooks[i];
+    }
+    return null;
+  }
+
+  // The footer credits whichever book is selected, from the license and
+  // source the API reports for it. Until /api/books answers, the static text
+  // for the default book stands.
+  function renderFooterAttribution() {
+    var node = document.getElementById("footer-attribution");
+    var book = bookById(selectedBook);
+    if (!book) {
+      node.innerHTML = t(locale, "footer.attributionHtml");
+      return;
+    }
+    node.textContent = "";
+    node.appendChild(document.createTextNode(localizedName(book.he, book.en) + ": "));
+    node.appendChild(el("strong", null, book.textSource));
+    node.appendChild(document.createTextNode(" — " + t(locale, "footer.attribution.from") + " "));
+    if (/^https:\/\//.test(book.source)) {
+      var link = el("a", null, "Sefaria");
+      link.href = book.source;
+      link.rel = "noopener noreferrer";
+      link.target = "_blank";
+      node.appendChild(link);
+    } else {
+      node.appendChild(document.createTextNode("Sefaria"));
+    }
+    node.appendChild(document.createTextNode(", " + book.license + "."));
+  }
+
+  // "All of Shas" is only true of the Bavli; the other books are not Shas.
+  function syncTractateAllLabel() {
+    var key = selectedBook && selectedBook !== bookDefault ? "tractate.allInBook" : "tractate.all";
+    tractateSelect.options[0].textContent = t(locale, key);
+  }
+
+  // The picker only appears when there is a real choice, so a deployment
+  // with a single book looks exactly as it did before books existed.
+  function populateBookSelect() {
+    bookSelect.textContent = "";
+    lastBooks.forEach(function (book) {
+      var option = document.createElement("option");
+      option.value = book.id;
+      option.textContent = localizedName(book.he, book.en);
+      bookSelect.appendChild(option);
+    });
+    bookSelect.value = selectedBook;
+    bookField.hidden = lastBooks.length < 2;
+    renderFooterAttribution();
+    syncTractateAllLabel();
+  }
+
+  function onBooksLoaded(data) {
+    lastBooks = data.books;
+    bookDefault = data.default;
+    if (!bookById(selectedBook)) selectedBook = bookDefault;
+    populateBookSelect();
+    // The tractate list was requested before the book list was known; refetch
+    // it if the stored choice turned out to be a different (or no longer
+    // available) book.
+    if ((tractatesBook || bookDefault) !== selectedBook) loadTractates();
+  }
+
+  function loadTractates() {
+    var requested = selectedBook;
+    tractatesBook = requested;
+    var path = "/api/tractates" + (requested ? "?book=" + encodeURIComponent(requested) : "");
+    var disarm = armWaking();
+    apiFetch(path)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (tractatesBook !== requested) return; // a newer request has replaced this one
+        populateTractateSelect(data);
+      })
+      .catch(function () { /* the filter just stays at "all tractates" */ })
+      .then(disarm);
+  }
+
+  bookSelect.addEventListener("change", function () {
+    selectedBook = bookSelect.value;
+    saveBook(selectedBook);
+    tractateSelect.value = "";
+    populateTractateSelect({ tractates: [] });
+    renderFooterAttribution();
+    syncTractateAllLabel();
+    loadTractates();
+  });
+
+  loadTractates();
+
+  var disarmBooksWaking = armWaking();
+  apiFetch("/api/books")
     .then(function (r) { return r.json(); })
-    .then(populateTractateSelect)
-    .catch(function () { /* the filter just stays at "all of Shas" */ })
-    .then(disarmTractateWaking);
+    .then(onBooksLoaded)
+    .catch(function () { /* no picker; the default book keeps working */ })
+    .then(disarmBooksWaking);
 
   applyStaticTranslations();
 

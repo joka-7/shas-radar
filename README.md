@@ -57,9 +57,9 @@ ipconfig getifaddr en0                  # macOS
 
 | | |
 | --- | --- |
-| **Text** | The Vilna edition (מהדורת וילנא), niqqud-vocalized |
+| **Text** | The William Davidson Edition (Vilna pagination), niqqud-vocalized |
 | **Source** | [Sefaria's public export](https://github.com/Sefaria/Sefaria-Export) |
-| **License** | Public Domain |
+| **License** | CC-BY-NC — credit required, non-commercial use only (Sefaria records Menachot and Chullin as "unknown") |
 | **Size** | 37 tractates (all of Shas with Gemara), ~1.86M words, 5.1 MB gzipped |
 | **Packaging** | One gzipped JSON at `data/shas.json.gz`, committed to the repo |
 | **Loading** | Read and indexed once at process start, then held in memory |
@@ -73,6 +73,33 @@ python scripts/build_dataset.py
 
 Because the data is committed, the running application never makes a network
 call and a fresh clone works offline.
+
+### Other books
+
+The Bavli is the default; more books can be enabled with `ENABLED_BOOKS`
+(comma-separated ids, see `render.yaml`). Each is its own dataset, loaded the
+first time someone selects it, and cited in its own numbering. A book picker
+appears whenever more than one is enabled.
+
+| Book (id) | Text | License | Size | Citation | Rebuild |
+| --- | --- | --- | --- | --- | --- |
+| Babylonian Talmud (`bavli`) | William Davidson Edition | CC-BY-NC | 37 tractates, ~1.86M words | `ברכות ב.` (daf, amud) | `python scripts/build_dataset.py` |
+| Jerusalem Talmud (`yerushalmi`) | Guggenheimer edition (De Gruyter) | CC-BY — credit required | 39 tractates, ~0.81M words | `תלמוד ירושלמי ברכות א:א` (chapter:halakhah) | `--book yerushalmi` |
+| Mishnah (`mishnah`) | Torat Emet | Public Domain | 63 tractates, ~0.19M words | `משנה ברכות א:א` (chapter:mishnah) | `--book mishnah` |
+| Tosefta (`tosefta`) | Mechon Mamre, Vilna edition | Public Domain | 61 tractates, ~0.29M words | `תוספתא ברכות א:א` (chapter:halakhah) | `--book tosefta` |
+| Rashi on the Bavli (`rashi`) | Vilna edition (Rosh Hashanah: Wikisource) | Public Domain | 35 tractates, ~2.10M words | `רש"י על ברכות ב.` (daf, amud; the link goes to the comment) | `--book rashi` |
+
+The licenses come from Sefaria's own version records. The build fetches one
+specific version per tractate and stops if its license is not on the book's
+allowed list, because Sefaria's "merged" text can blend in a second version
+with a different or unknown license. Rashi on Sanhedrin is left out because
+Sefaria records it as CC-BY-SA (share-alike); the dataset's header lists it
+under `omitted`.
+
+**Memory, measured on the real server.** The Bavli alone: about 203 MB. Plus
+Yerushalmi, Mishnah and Tosefta: about 316 MB. Rashi adds about 185 MB more,
+so all five reach about **500 MB** — too close to a 512 MB limit, which is why
+`render.yaml` does not enable `rashi`. Bavli plus Rashi alone is about 390 MB.
 
 ### The text turned out to be vocalized, not plain print
 
@@ -161,9 +188,10 @@ special-casing 15/16 as ט״ו/ט״ז to avoid the divine name) and the standard
 The UI is a client of this API; nothing is private to it.
 
 ```http
-GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות
+GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות&book=bavli
 GET /api/proximity?a=אביי&b=רבא&within=6
-GET /api/tractates
+GET /api/books       -- the enabled books and their license/source, without loading any
+GET /api/tractates?book=bavli
 GET /api/health
 POST /api/analyze   {"groups": [...], "locale": "he", "credentials": [...], "history": [...]}   -- see "AI connections" below
 GET /api/ai-status   -- which vendors have a shared server key, for the AI settings panel
@@ -513,7 +541,9 @@ shas-radar/
 
 ## Notes
 
-- Text is public domain. The code is available under the MIT license.
+- The Talmud text is CC-BY-NC (William Davidson Edition, via Sefaria): credit
+  required, no commercial use. The other books' licenses are in the table above.
+  The code is available under the MIT license.
 - The Sefaria deep-link format (`sefaria.org/<Title>.<daf><amud>`) matches
   their documented convention but couldn't be verified live from this build
   environment (network-restricted) — worth a spot-check once deployed.

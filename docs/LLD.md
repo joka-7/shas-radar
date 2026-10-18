@@ -29,20 +29,52 @@ fuse the two words into one for matching purposes; treating it as
 non-letter (and therefore a boundary in `NON_LETTERS`/`WORD_RUN`) keeps
 `אשר` and `אמר` as two tokens.
 
+## `app/citation.py` — locations and how they are cited
+
+A location is a `Ref`: a tuple of small integers in the source text's own
+numbering (Bavli: `(daf, amud)`, with amud `0` for "a" and `1` for "b"). A
+`CitationScheme` turns a `Ref` into the printed citation, the English
+citation, the Sefaria link, and any extra result fields.
+
+| Name | Contract |
+| --- | --- |
+| `pack_ref(ref, arity)` | One `int`, up to four 16-bit parts; raises `ValueError` if the part count or a value does not fit |
+| `unpack_ref(packed, arity)` | Inverse of `pack_ref` |
+| `CitationScheme` | Protocol: `arity`, `hebrew(tractate_he, ref)`, `english(tractate_en, ref)`, `sefaria_url(sefaria_title, ref)`, `fields(ref)` |
+| `DafScheme(arity=2)` | The folio scheme; `fields()` returns `daf` and `amud`. With arity 4 (`"daf-comment"`, Rashi) the ref also carries `line` and `comment`: they are in the Sefaria link and the fields, not in the printed citation |
+| `ChapterScheme(arity)` | `chapter:section` (arity 2) or with a segment (arity 3). The printed citation shows only chapter and section, in Hebrew numerals (`ט״ו`); the Sefaria link carries every part; `fields()` returns `chapter`, `section` and, for arity 3, `segment` |
+| `CITATION_SCHEMES` | Name → scheme; the dataset's `citationScheme` key selects one: `"daf"`, `"daf-comment"`, `"chapter"`, `"chapter-segment"` |
+
+## `app/books.py` — which books exist, and which are loaded
+
+| Name | Contract |
+| --- | --- |
+| `Book` | Frozen record: `id`, `he`, `en`, `data_file` (under `data/`) |
+| `KNOWN_BOOKS` | Every book the code knows; today just `bavli` |
+| `read_header(path)` | A dataset's descriptive fields, read without parsing its tractates; relies on the dataset writing them before `tractates` |
+| `BookLibrary(enabled, default)` | Raises `BookConfigError` for an empty or repeated set, a default that is not enabled, or a missing data file |
+| `BookLibrary.from_environ(environ)` | Reads `ENABLED_BOOKS` (comma-separated ids; unset means `bavli`) |
+| `books()` / `book(id)` / `header(id)` / `is_loaded(id)` | Listing and lookup; `book` raises `UnknownBookError` |
+| `corpus(id)` | The book's `Corpus`, loaded on first use under a per-book lock so two simultaneous first requests load it once |
+
+`BookError` is the base of `UnknownBookError` (a request named no enabled
+book) and `BookConfigError` (the configuration is invalid; raised at startup).
+
 ## `app/corpus.py` — model and indexes
 
 ### `Segment`
 
-A `__slots__` record: one paragraph's `daf`, `amud`, full `text`, and its
-`[start, end)` token-position range in the tractate's stream.
+A `__slots__` record: one paragraph's full `text` and its `[start, end)`
+token-position range in the tractate's stream. Its location lives in the
+tractate's parallel `segment_refs` column.
 
 ### `Tractate`
 
 ```python
-Tractate(he: str, en: str, seder_he: str, seder_en: str)
+Tractate(he, en, seder_he, seder_en, sefaria_title, scheme)
 ```
 
-Built incrementally: `add_segment(daf, amud, text)` tokenizes one segment
+Built incrementally: `add_segment(ref, text)` tokenizes one segment
 and appends it to the tractate's flat, continuous token stream (see
 **HLD — Data storage** for why interning and `array.array` are used here),
 then `build_index()` builds `by_word` once all segments are in.
@@ -50,11 +82,11 @@ then `build_index()` builds `by_word` once all segments are in.
 | Field / method | Contract |
 | --- | --- |
 | `tokens` / `tokens_raw` | Normalized / as-printed token stream, interned |
-| `token_daf` / `token_amud` | Parallel `array.array("B")` columns |
+| `segment_refs` | `array.array("Q")`, one packed `Ref` per segment, parallel to `segments` |
 | `by_word` | `dict[str, array.array[int]]` — normalized word → sorted token positions |
 | `segment_at(position)` | The `Segment` (paragraph) containing that token, via `bisect` on `segment_starts` |
-| `amud_at(position)` | `"a"`/`"b"`, decoded from the packed `token_amud` byte |
-| `citation(position)` | The traditional printed citation for that token |
+| `ref_at(position)` | The `Ref` of the segment containing that token |
+| `ref_fields(position)` / `citation(position)` / `citation_en(position)` / `sefaria_url(position)` | The scheme's output for that token's `Ref` |
 | `__len__` | Token count |
 
 ### `Corpus`
@@ -63,16 +95,18 @@ then `build_index()` builds `by_word` once all segments are in.
 Corpus(dataset: dict[str, Any])
 ```
 
-Builds one `Tractate` per entry in the dataset, in the order the file lists
-them (the traditional Vilna Shas order — see `scripts/build_dataset.py`).
+Builds one `Tractate` per entry in the dataset (`sections`, each with a `ref`
+and its `segments`), using the scheme named by the dataset's
+`citationScheme`, in the order the file lists them (the traditional Vilna Shas order — see `scripts/build_dataset.py`).
 
 | Method | Contract |
 | --- | --- |
 | `tractate_by_name(name_he)` | The `Tractate` with that Hebrew name, or `None` |
 | `__len__` | Total token count across every tractate |
 
-`load_corpus(path=None)` is `@functools.lru_cache(maxsize=1)`, so the gzip
-read and the whole indexing pass happen once per process. Passing an
+`load_corpus(path)` reads and indexes one dataset and is not cached;
+`BookLibrary.corpus` is what makes the gzip read and the indexing pass happen
+once per book per process. Passing an
 explicit `path` is how tests load a fixture instead of the real corpus.
 
 ## `app/search.py` — matching, proximity, and KWIC shaping
@@ -169,8 +203,11 @@ it as-is.
 
 ### Wiring
 
-`lifespan` loads and indexes the corpus at boot; `load_corpus()` being
-cached means every later call in a handler is a dict lookup, not a reload.
+`library` (a `BookLibrary`, built at import from `ENABLED_BOOKS`) owns which
+corpora are loaded. `lifespan` loads and indexes the default book at boot;
+`corpus_for(book)` returns a book's corpus, so every later call in a handler
+is a dict lookup, not a reload, and answers `400 unknown_book` for a book that
+does not exist or is not enabled.
 
 The `no_cache_static_assets` middleware forces revalidation on `/` and
 `static/*.js`/`*.css`, so a deploy always takes effect on the next load
@@ -186,10 +223,11 @@ even though `/api/analyze` accepts a visitor's own API keys in its body.
 
 | Route | Query / body | Response |
 | --- | --- | --- |
-| `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `commit` |
-| `GET /api/tractates` | — | The full tractate list, grouped by seder |
-| `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset` | `before`, `after`, `groups[]` |
-| `GET /api/proximity` | `a`, `b`, `within`, `limit` | `total`, `results[]` |
+| `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
+| `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`; read from each dataset's header, so listing never loads a book |
+| `GET /api/tractates` | `book` | That book's tractate list, grouped by seder |
+| `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
+| `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
 | `GET /api/ai-status` | — | Which vendors have a shared server key |
 | `POST /api/analyze` | `AnalyzeBody` (`groups`, `locale`, `credentials`, `history`) | `{connection, provider}` |
 | `GET /` + `/static/*` | — | The frontend, same origin |
@@ -204,7 +242,7 @@ and rendered by `http_exception_handler`:
 {"error": "<message, mostly Hebrew>", "code": "<stable machine code>"}
 ```
 
-`code` values: `empty`, `too_many`, `invalid_query`, `no_credential`,
+`code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_credential`,
 `timeout`, plus whatever `ModelDispatcherError.error_code` supplies for a
 dispatch failure. The frontend's `error.code.*` lookup keys off these.
 
@@ -217,10 +255,17 @@ Build-time only; never imported by the running service.
 
 | Function | Contract |
 | --- | --- |
-| `clean_segment(text)` | Strips Sefaria's display markup (`<big><strong>`, `<br>`) from one segment |
+| `clean_segment(text)` | Strips Sefaria's display markup (`<big><strong>`, `<br>`, …) from one segment, then unescapes entities (`&lt;`) |
 | `tractate_url(seder, name)` | Builds the export URL for one tractate |
 | `fetch_tractate(entry)` | Downloads one tractate, derives `daf`/`amud` from Sefaria's flat `text` array index (`daf = index // 2 + 1`, `amud = "a" if even else "b"`), cleans and shapes its pages |
-| `main()` | Fetches all 37 tractates (`ThreadPoolExecutor(max_workers=8)`), restores canonical order, writes `data/shas.json.gz` |
+| `build_bavli()` | Fetches all 37 tractates (`ThreadPoolExecutor(max_workers=8)`), restores canonical order |
+| `BookSpec` / `SPECS` | For each chaptered book: table-of-contents path, nesting depth, the exact Sefaria version, the licenses allowed, and the header strings |
+| `toc_leaves(contents, path, skip)` | The texts under a category path in Sefaria's table of contents, in order; `KeyError` if the path is missing |
+| `walk_sections(text, arity)` | Yields `(ref, segment)` with 1-based indices; `ValueError` if the text is not `arity` levels deep |
+| `fetch_chaptered_tractate(spec, leaf)` | Fetches the chosen version file (not `merged.json`), stops if its license is not allowed, shapes the sections |
+| `daf_ref(ref)` | A leading 1-based daf index to `daf, amud` (index 1 is 1a, 3 is 2a); used for Rashi |
+| `build_chaptered_book(spec)` | Builds Mishnah, Tosefta, Yerushalmi or Rashi; stops if tractate names repeat. A spec with `omit_disallowed` (Rashi) leaves out a tractate whose license is not allowed (`OmittedTractate`) and lists it under `omitted` in the dataset header |
+| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi` / `rashi`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
 
 ## Logging
 
@@ -237,9 +282,12 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | --- | --- |
 | `tests/test_hebrew.py` | Every normalization primitive, including niqqud stripping, maqaf as a separator, and the ט״ו/ט״ז gematria exception |
 | `tests/test_search.py` | Index correctness, all four match kinds (exact, with-prefix, phrase, phrase-with-prefix), proximity, offset/limit pagination, and the HTTP surface via `TestClient` — status codes, the error contract, clamping |
+| `tests/test_citation.py` | Ref packing, and the folio and chapter schemes' Hebrew/English/URL output |
+| `tests/test_books.py` | The registry and `ENABLED_BOOKS` parsing, per-book lazy loading under a lock, and every shipped dataset (header matches corpus, unique tractate names, no markup or entities left in the text) |
+| `tests/test_build_dataset.py` | The build script's pure helpers: cleaning, the nested-text walk, table-of-contents lookup |
 | `tests/test_ai.py` | `analyze_connections` and its supporting functions against ModelDispatcher's keyless `MockProvider`, including the no-credential, timeout, and chat-history (ordering, capping) paths |
 
-The real ~1.86M-token corpus loads once per session in `test_search.py`. The
+`tests/conftest.py` enables all five books, so the real datasets load once per session and are shared by `test_search.py` and `test_books.py`. The real ~1.86M-token Bavli corpus is among them. The
 trade is a startup cost for tests that exercise matching against genuine
 text — `אביי` and `רבא` each turning up thousands of times is itself part of
 what the tests assert — rather than a fixture that agrees with the

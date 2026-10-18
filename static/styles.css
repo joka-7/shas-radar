@@ -200,7 +200,9 @@ body {
   margin-bottom: .5rem;
 }
 .label-inline { margin-bottom: .35rem; }
-.field { display: flex; gap: .5rem; }
+/* :not([hidden]) so the book picker's `hidden` attribute still hides it (see the
+   note on .connections-btn below). */
+.field:not([hidden]) { display: flex; gap: .5rem; }
 .field-filter { flex-direction: column; margin-top: .9rem; }
 .input {
   flex: 1;
@@ -351,8 +353,12 @@ body {
 
 /* --- Waking notice --- */
 
-.waking {
+/* :not([hidden]) so the notice's `hidden` attribute still hides it (see the
+   note on .connections-btn below). */
+.waking:not([hidden]) {
   display: flex;
+}
+.waking {
   align-items: center;
   gap: .55rem;
   background: var(--accent-soft);
