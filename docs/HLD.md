@@ -30,12 +30,11 @@ what links a set of results the visitor has selected.
   lists) overran a 512MB deploy target before the server even finished
   starting. `app/corpus.py` trades that for string interning and packed
   `array.array` columns — see **Data storage**. Measured on the real server:
-  the Bavli alone is about 203MB, and all four enabled books (Bavli,
-  Yerushalmi, Mishnah, Tosefta) about 316MB once each has been used.
-  `ENABLED_BOOKS` is the switch: Rashi adds about 185MB (all five books reach
-  about 500MB, too close to 512MB), so it is built and tested but not enabled
-  in `render.yaml`; Bavli plus Rashi alone is about 390MB. Tosafot is not
-  included: it would add well over 100MB more.
+  the Bavli alone is about 168MB, and the four enabled books (Bavli,
+  Yerushalmi, Mishnah, Tosefta) about 247MB once each has been used.
+  `ENABLED_BOOKS` is the switch: Rashi adds about 137MB (all five books reach
+  about 384MB), so it is built and tested but not enabled in `render.yaml`.
+  Tosafot is not included: it would add well over 100MB more.
 - *Installable, not offline.* The PWA shell lets a phone add the app to its
   home screen and paints instantly from the cached shell, but every search
   is still a live API call — there is no offline corpus on the client.
@@ -138,8 +137,8 @@ sequenceDiagram
 ```
 
 Matching never scans the whole ~1.86M-token corpus for the common cases:
-`Tractate.build_index()` builds `by_word` (normalized word → positions), so
-exact-word lookups are dict hits. The attached-prefix modes (`find_with_
+`Tractate.build_index()` builds `by_word` (normalized word → positions, a
+`WordIndex` of three flat arrays), so exact-word lookups are binary searches. The attached-prefix modes (`find_with_
 prefix`, `find_phrase_with_prefix`) scan each tractate's distinct vocabulary
 instead — tens of thousands of words, not the token stream — measured at
 ~18ms across the whole corpus.
@@ -168,6 +167,11 @@ distinct):
 - `array.array` instead of a plain list for the purely-numeric columns
   (each paragraph's packed location in `segment_refs`, and word positions in `by_word`),
   trading a Python object + pointer per entry for a few raw bytes.
+- One flat positions array per tractate behind `by_word`, not one small array
+  object per distinct word: that per-word overhead (about 100 bytes) was larger
+  than the positions themselves, since over half the distinct words occur once.
+  Moving to the flat layout cut the server's memory by about 100MB with every
+  book loaded (488MB to 384MB), with byte-identical search results.
 
 Together this holds the corpus in a bit over a third of the naive memory
 footprint — the difference between fitting a 512MB deploy target and not.

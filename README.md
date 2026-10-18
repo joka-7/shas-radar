@@ -96,10 +96,10 @@ with a different or unknown license. Rashi on Sanhedrin is left out because
 Sefaria records it as CC-BY-SA (share-alike); the dataset's header lists it
 under `omitted`.
 
-**Memory, measured on the real server.** The Bavli alone: about 203 MB. Plus
-Yerushalmi, Mishnah and Tosefta: about 316 MB. Rashi adds about 185 MB more,
-so all five reach about **500 MB** — too close to a 512 MB limit, which is why
-`render.yaml` does not enable `rashi`. Bavli plus Rashi alone is about 390 MB.
+**Memory, measured on the real server.** The Bavli alone: about 168 MB. Plus
+Yerushalmi, Mishnah and Tosefta: about 247 MB. Rashi adds about 137 MB more,
+so all five reach about **384 MB** of a 512 MB limit. `render.yaml` still
+does not enable `rashi`; add it to `ENABLED_BOOKS` to turn it on.
 
 ### The text turned out to be vocalized, not plain print
 

@@ -69,6 +69,7 @@ shas-radar/
 │   ├── test_books.py          # Tests for app/books.py: the book registry, configuration, and lazy loading.
 │   ├── test_build_dataset.py  # Tests for scripts/build_dataset.py: the pure helpers, not the network fetches.
 │   ├── test_citation.py       # Tests for app/citation.py: ref packing and the folio citation scheme.
+│   ├── test_corpus.py         # Tests for app/corpus.py: the compact word index.
 │   ├── test_hebrew.py         # Tests for the Hebrew/Aramaic normalization primitives.
 │   └── test_search.py         # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
 ├── .ai

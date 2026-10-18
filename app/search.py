@@ -24,7 +24,6 @@ equivalent tradition for.
 
 from __future__ import annotations
 
-import array
 from dataclasses import dataclass
 from typing import Any
 
@@ -91,11 +90,10 @@ def find_with_prefix(corpus: Corpus, word_norm: str) -> list[Match]:
     """
     matches: list[Match] = []
     for tr in corpus.tractates:
-        for candidate, positions in tr.by_word.items():
-            if candidate != word_norm and candidate.endswith(word_norm):
-                matches.extend(
-                    Match(tractate=tr, start=p, length=1, kind="withPrefix") for p in positions
-                )
+        for _, positions in tr.by_word.suffix_matches(word_norm):
+            matches.extend(
+                Match(tractate=tr, start=p, length=1, kind="withPrefix") for p in positions
+            )
     return matches
 
 
@@ -128,9 +126,7 @@ def find_phrase_with_prefix(corpus: Corpus, words_norm: tuple[str, ...]) -> list
     first, rest = words_norm[0], words_norm[1:]
     matches = []
     for tr in corpus.tractates:
-        for candidate, positions in tr.by_word.items():
-            if candidate == first or not candidate.endswith(first):
-                continue
+        for _, positions in tr.by_word.suffix_matches(first):
             for pos in positions:
                 end = pos + len(words_norm)
                 if end > len(tr):
@@ -154,8 +150,8 @@ def find_proximity(corpus: Corpus, word_a: str, word_b: str, within: int) -> lis
     """
     results: list[dict[str, Any]] = []
     for tr in corpus.tractates:
-        positions_a: array.array[int] = tr.by_word.get(word_a, array.array("I"))
-        positions_b: array.array[int] = tr.by_word.get(word_b, array.array("I"))
+        positions_a = tr.by_word.get(word_a)
+        positions_b = tr.by_word.get(word_b)
         if not positions_a or not positions_b:
             continue
         for pa in positions_a:
