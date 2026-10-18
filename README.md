@@ -161,9 +161,10 @@ special-casing 15/16 as ט״ו/ט״ז to avoid the divine name) and the standard
 The UI is a client of this API; nothing is private to it.
 
 ```http
-GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות
+GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות&book=bavli
 GET /api/proximity?a=אביי&b=רבא&within=6
-GET /api/tractates
+GET /api/books       -- the enabled books and their license/source, without loading any
+GET /api/tractates?book=bavli
 GET /api/health
 POST /api/analyze   {"groups": [...], "locale": "he", "credentials": [...], "history": [...]}   -- see "AI connections" below
 GET /api/ai-status   -- which vendors have a shared server key, for the AI settings panel

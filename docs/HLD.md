@@ -46,6 +46,8 @@ flowchart TD
     Vercel["Vercel<br/>static/ mirror, proxies /api/*"]
     Main["app/main.py<br/>FastAPI: routing, CORS, validation, errors"]
     Search["app/search.py<br/>matching + KWIC shaping"]
+    Books["app/books.py<br/>which books are enabled and loaded"]
+    Citation["app/citation.py<br/>locations and citation schemes"]
     Corpus["app/corpus.py<br/>Tractate model + word index"]
     Hebrew["app/hebrew.py<br/>normalization primitives"]
     AI["app/ai.py<br/>optional AI connections"]
@@ -58,11 +60,14 @@ flowchart TD
     Browser -->|"or via"| Vercel
     Vercel -->|"server-side proxy, no CORS"| Main
     Main --> Search
+    Main --> Books
+    Books --> Corpus
     Main -->|"POST /api/analyze only"| AI
     Search --> Corpus
     Search --> Hebrew
     Corpus --> Hebrew
-    Corpus -->|"loaded once at boot"| Data
+    Corpus --> Citation
+    Corpus -->|"each book read once, on first use"| Data
     AI -.->|"outbound call, this app's one exception<br/>to 'no network at runtime'"| Vendor
     Build -.->|"regenerates, offline"| Data
     Sefaria -.->|"fetched by hand, not at runtime"| Build
@@ -73,8 +78,8 @@ to regenerate the corpus and is never invoked by the service, and the AI
 vendor call happens only inside `POST /api/analyze` — every other route
 never leaves the process.
 
-Module boundaries run one way — `main` → `search`/`ai` → `corpus` →
-`hebrew` — and nothing calls back upward. `hebrew.py` is pure string
+Module boundaries run one way — `main` → `books`/`search`/`ai` → `corpus` →
+`citation`/`hebrew` — and nothing calls back upward. `hebrew.py` is pure string
 manipulation with no knowledge of the corpus or HTTP.
 
 ## Dynamic view
@@ -142,8 +147,9 @@ own first API call starts Render waking in the background.
 
 There is no database, cache, or blob store. The single store is
 `data/shas.json.gz` (~5.1 MB, all 37 tractates), decompressed and indexed
-into process memory at startup by `load_corpus()`, `functools.lru_cache`d to
-one entry so every request shares the same instance.
+into process memory at startup by `BookLibrary.corpus()`, which keeps one
+instance so every request shares it. Other enabled books are read the first
+time a request asks for one and then stay resident.
 
 In memory, `Tractate` trades the naive representation (four plain Python
 lists per tractate) for two things, both keyed off the fact that a token
@@ -167,8 +173,9 @@ service is redeploying the image.
 ## Configuration and secrets
 
 Search itself needs no configuration beyond `$PORT` (supplied by the
-platform) and `ALLOWED_ORIGINS` (the CORS allowlist — a plain list of
-hostnames, not a secret). The optional AI feature reads, if set:
+platform), `ALLOWED_ORIGINS` (the CORS allowlist — a plain list of
+hostnames, not a secret) and `ENABLED_BOOKS` (comma-separated book ids, default
+`bavli`; a typo or a missing data file stops the server at startup). The optional AI feature reads, if set:
 `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GROQ_API_KEY`
 (any subset), their `*_MODEL` overrides, `AI_REQUEST_DEADLINE_SECONDS`, and
 the `AI_REQUESTS_PER_MIN` / `AI_TOKENS_PER_MIN` / `AI_TOKENS_PER_DAY` quota

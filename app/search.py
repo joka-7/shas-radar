@@ -180,12 +180,14 @@ def serialize_match(corpus: Corpus, match: Match, before: int, after: int) -> di
     segment = tr.segment_at(start)
 
     return {
+        "book": corpus.book,
         "kind": match.kind,
         "before": context_before,
         "match": matched_text,
         "after": context_after,
         "tractate": {"he": tr.he, "en": tr.en},
         "seder": {"he": tr.seder_he, "en": tr.seder_en},
+        "ref": list(tr.ref_at(start)),
         **tr.ref_fields(start),
         "citation": tr.citation(start),
         "citationEn": tr.citation_en(start),

@@ -184,7 +184,7 @@ def main() -> int:
         "book": "bavli",
         "citationScheme": "daf",
         "source": "https://github.com/Sefaria/Sefaria-Export",
-        "textSource": "William Davidson Edition, via Sefaria",
+        "textSource": "William Davidson Edition",
         "license": "CC-BY-NC",
         "tractateCount": len(tractates),
         "wordCount": word_count,

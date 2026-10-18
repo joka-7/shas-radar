@@ -44,6 +44,21 @@ citation, the Sefaria link, and any extra result fields.
 | `DafScheme` | The folio scheme; `fields()` returns `daf` and `amud` |
 | `CITATION_SCHEMES` | Name → scheme; the dataset's `citationScheme` key selects one (`"daf"`) |
 
+## `app/books.py` — which books exist, and which are loaded
+
+| Name | Contract |
+| --- | --- |
+| `Book` | Frozen record: `id`, `he`, `en`, `data_file` (under `data/`) |
+| `KNOWN_BOOKS` | Every book the code knows; today just `bavli` |
+| `read_header(path)` | A dataset's descriptive fields, read without parsing its tractates; relies on the dataset writing them before `tractates` |
+| `BookLibrary(enabled, default)` | Raises `BookConfigError` for an empty or repeated set, a default that is not enabled, or a missing data file |
+| `BookLibrary.from_environ(environ)` | Reads `ENABLED_BOOKS` (comma-separated ids; unset means `bavli`) |
+| `books()` / `book(id)` / `header(id)` / `is_loaded(id)` | Listing and lookup; `book` raises `UnknownBookError` |
+| `corpus(id)` | The book's `Corpus`, loaded on first use under a per-book lock so two simultaneous first requests load it once |
+
+`BookError` is the base of `UnknownBookError` (a request named no enabled
+book) and `BookConfigError` (the configuration is invalid; raised at startup).
+
 ## `app/corpus.py` — model and indexes
 
 ### `Segment`
@@ -88,8 +103,9 @@ and its `segments`), using the scheme named by the dataset's
 | `tractate_by_name(name_he)` | The `Tractate` with that Hebrew name, or `None` |
 | `__len__` | Total token count across every tractate |
 
-`load_corpus(path=None)` is `@functools.lru_cache(maxsize=1)`, so the gzip
-read and the whole indexing pass happen once per process. Passing an
+`load_corpus(path)` reads and indexes one dataset and is not cached;
+`BookLibrary.corpus` is what makes the gzip read and the indexing pass happen
+once per book per process. Passing an
 explicit `path` is how tests load a fixture instead of the real corpus.
 
 ## `app/search.py` — matching, proximity, and KWIC shaping
@@ -186,8 +202,11 @@ it as-is.
 
 ### Wiring
 
-`lifespan` loads and indexes the corpus at boot; `load_corpus()` being
-cached means every later call in a handler is a dict lookup, not a reload.
+`library` (a `BookLibrary`, built at import from `ENABLED_BOOKS`) owns which
+corpora are loaded. `lifespan` loads and indexes the default book at boot;
+`corpus_for(book)` returns a book's corpus, so every later call in a handler
+is a dict lookup, not a reload, and answers `400 unknown_book` for a book that
+does not exist or is not enabled.
 
 The `no_cache_static_assets` middleware forces revalidation on `/` and
 `static/*.js`/`*.css`, so a deploy always takes effect on the next load
@@ -203,10 +222,11 @@ even though `/api/analyze` accepts a visitor's own API keys in its body.
 
 | Route | Query / body | Response |
 | --- | --- | --- |
-| `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `commit` |
-| `GET /api/tractates` | — | The full tractate list, grouped by seder |
-| `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset` | `before`, `after`, `groups[]` |
-| `GET /api/proximity` | `a`, `b`, `within`, `limit` | `total`, `results[]` |
+| `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
+| `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`; read from each dataset's header, so listing never loads a book |
+| `GET /api/tractates` | `book` | That book's tractate list, grouped by seder |
+| `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
+| `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
 | `GET /api/ai-status` | — | Which vendors have a shared server key |
 | `POST /api/analyze` | `AnalyzeBody` (`groups`, `locale`, `credentials`, `history`) | `{connection, provider}` |
 | `GET /` + `/static/*` | — | The frontend, same origin |
@@ -221,7 +241,7 @@ and rendered by `http_exception_handler`:
 {"error": "<message, mostly Hebrew>", "code": "<stable machine code>"}
 ```
 
-`code` values: `empty`, `too_many`, `invalid_query`, `no_credential`,
+`code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_credential`,
 `timeout`, plus whatever `ModelDispatcherError.error_code` supplies for a
 dispatch failure. The frontend's `error.code.*` lookup keys off these.
 

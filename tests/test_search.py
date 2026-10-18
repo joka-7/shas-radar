@@ -5,8 +5,8 @@ committed corpus rather than a fixture, the same way פסוק לשם's tests do.
 import pytest
 from fastapi.testclient import TestClient
 
-from app.corpus import load_corpus
-from app.main import app
+from app.books import DEFAULT_BOOK
+from app.main import app, library
 from app.search import (
     Query,
     find_exact_word,
@@ -20,7 +20,7 @@ from app.search import (
 
 @pytest.fixture(scope="session")
 def corpus():
-    return load_corpus()
+    return library.corpus(DEFAULT_BOOK)
 
 
 @pytest.fixture(scope="session")
@@ -234,6 +234,45 @@ class TestApi:
         assert body["status"] == "ok"
         assert body["tractates"] == 37
         assert body["license"] == "CC-BY-NC"
+
+    def test_health_reports_enabled_and_loaded_books(self, client):
+        body = client.get("/api/health").json()
+        assert body["books"] == ["bavli"]
+        assert body["loadedBooks"] == ["bavli"]
+
+    def test_books_endpoint_describes_enabled_books(self, client):
+        body = client.get("/api/books").json()
+        assert body["default"] == "bavli"
+        (bavli,) = body["books"]
+        assert bavli["id"] == "bavli"
+        assert bavli["en"] == "Babylonian Talmud"
+        assert bavli["citationScheme"] == "daf"
+        assert bavli["tractates"] == 37
+        assert bavli["license"] == "CC-BY-NC"
+        assert bavli["loaded"] is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/search?q=אביי&book=nope",
+            "/api/tractates?book=nope",
+            "/api/proximity?a=אביי&b=רבא&book=nope",
+        ],
+    )
+    def test_unknown_book_is_a_400_with_a_stable_code(self, client, path):
+        response = client.get(path)
+        assert response.status_code == 400
+        assert response.json()["code"] == "unknown_book"
+
+    def test_book_parameter_defaults_to_the_default_book(self, client):
+        explicit = client.get("/api/search?q=אביי&book=bavli&limit=3").json()
+        implicit = client.get("/api/search?q=אביי&limit=3").json()
+        assert explicit == implicit
+
+    def test_search_results_carry_their_book_and_ref(self, client):
+        first = client.get("/api/search?q=אביי&limit=1").json()["groups"][0]["results"][0]
+        assert first["book"] == "bavli"
+        assert first["ref"] == [first["daf"], 0 if first["amud"] == "a" else 1]
 
     def test_tractates_endpoint(self, client):
         body = client.get("/api/tractates").json()

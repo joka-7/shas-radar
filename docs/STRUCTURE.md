@@ -15,6 +15,7 @@ shas-radar/
 │   └── dependabot.yml
 ├── app/
 │   ├── ai.py        # AI-assisted analysis: find connections across a set of search-result groups.
+│   ├── books.py     # The books the app can search, which are enabled, and which are loaded.
 │   ├── citation.py  # Where a passage sits in its book, and how that location is cited.
 │   ├── corpus.py    # Loading and indexing the Talmud corpus.
 │   ├── hebrew.py    # Hebrew/Aramaic text normalization primitives.
@@ -60,6 +61,7 @@ shas-radar/
 │   └── sw.js
 ├── tests/
 │   ├── test_ai.py        # Tests for app/ai.py -- the optional "find connections" AI feature.
+│   ├── test_books.py     # Tests for app/books.py: the book registry, configuration, and lazy loading.
 │   ├── test_citation.py  # Tests for app/citation.py: ref packing and the folio citation scheme.
 │   ├── test_hebrew.py    # Tests for the Hebrew/Aramaic normalization primitives.
 │   └── test_search.py    # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.

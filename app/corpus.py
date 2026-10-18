@@ -1,9 +1,9 @@
 """Loading and indexing the Talmud corpus.
 
-The corpus lives in ``data/shas.json.gz``, committed to the repository and
-built by ``scripts/build_dataset.py``. It is read once at process start, kept
-in memory, and never refetched -- the running application makes no network
-calls.
+Each book's corpus is a dataset file under ``data/``, committed to the
+repository and built by ``scripts/build_dataset.py``. It is read once, kept in
+memory, and never refetched -- the running application makes no network
+calls. ``app.books`` decides which datasets are loaded and when.
 
 Unlike the Tanakh, where "a verse" is a natural, short, citable unit, the
 Talmud is continuous running prose -- a segment can be one sentence or one
@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import array
 import bisect
-import functools
 import gzip
 import json
 import sys
@@ -46,8 +45,6 @@ from typing import Any
 
 from .citation import CITATION_SCHEMES, CitationScheme, Ref, pack_ref, unpack_ref
 from .hebrew import tokenize
-
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "shas.json.gz"
 
 
 class Segment:
@@ -166,7 +163,9 @@ class Corpus:
     """All 37 tractates, indexed for search."""
 
     def __init__(self, dataset: dict[str, Any]):
+        self.book: str = dataset["book"]
         self.source: str = dataset["source"]
+        self.text_source: str = dataset["textSource"]
         self.license: str = dataset["license"]
         self.word_count: int = dataset["wordCount"]
 
@@ -199,8 +198,10 @@ class Corpus:
         return next((t for t in self.tractates if t.he == name_he), None)
 
 
-@functools.lru_cache(maxsize=1)
-def load_corpus(path: Path | None = None) -> Corpus:
-    """Load and index the corpus. Cached, so this only happens once per process."""
-    with gzip.open(path or DATA_PATH, "rt", encoding="utf-8") as handle:
+def load_corpus(path: Path) -> Corpus:
+    """Read and index one dataset file.
+
+    Not cached: ``app.books.BookLibrary`` owns which corpora are loaded.
+    """
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
         return Corpus(json.load(handle))

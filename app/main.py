@@ -26,7 +26,8 @@ from model_dispatcher.exceptions import ModelDispatcherError
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import ai
-from .corpus import load_corpus
+from .books import DEFAULT_BOOK, BookLibrary, UnknownBookError
+from .corpus import Corpus
 from .search import (
     DEFAULT_CONTEXT,
     DEFAULT_LIMIT,
@@ -46,10 +47,15 @@ SEPARATORS = ",،;"
 MAX_QUERIES = 5
 
 
+# Built at import, so a bad ENABLED_BOOKS or a missing data file stops the
+# server at startup rather than failing a visitor's request.
+library = BookLibrary.from_environ(os.environ)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Load and index the corpus at boot, rather than on the first request."""
-    corpus = load_corpus()
+    """Load and index the default book at boot, rather than on the first request."""
+    corpus = library.corpus(library.default)
     print(f"Loaded {len(corpus):,} tokens from {len(corpus.tractates)} tractates.")
     yield
 
@@ -125,6 +131,16 @@ def error(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
 
 
+def corpus_for(book: str) -> Corpus:
+    """The corpus for a request's ``book``, or a 400 if there is no such book."""
+    try:
+        return library.corpus(book)
+    except UnknownBookError:
+        raise HTTPException(
+            status_code=400, detail=error("unknown_book", "הספר המבוקש אינו קיים")
+        ) from None
+
+
 def parse_queries(raw: str) -> list[SearchQuery]:
     for separator in SEPARATORS[1:]:
         raw = raw.replace(separator, SEPARATORS[0])
@@ -157,21 +173,47 @@ def health() -> dict[str, Any]:
     actually running -- a plain, unambiguous way to tell whether a given
     fix has really been deployed, rather than inferring it from behavior.
     """
-    corpus = load_corpus()
+    corpus = library.corpus(library.default)
     return {
         "status": "ok",
         "words": len(corpus),
         "tractates": len(corpus.tractates),
         "source": corpus.source,
         "license": corpus.license,
+        "books": [book.id for book in library.books()],
+        "loadedBooks": [book.id for book in library.books() if library.is_loaded(book.id)],
         "commit": os.environ.get("RENDER_GIT_COMMIT", "dev")[:7],
     }
 
 
+@app.get("/api/books")
+def books_endpoint() -> dict[str, Any]:
+    """The enabled books and what each one is, without loading any of them."""
+    books = []
+    for book in library.books():
+        header = library.header(book.id)
+        books.append(
+            {
+                "id": book.id,
+                "he": book.he,
+                "en": book.en,
+                "citationScheme": header["citationScheme"],
+                "tractates": header["tractateCount"],
+                "source": header["source"],
+                "textSource": header["textSource"],
+                "license": header["license"],
+                "loaded": library.is_loaded(book.id),
+            }
+        )
+    return {"default": library.default, "books": books}
+
+
 @app.get("/api/tractates")
-def tractates_endpoint() -> dict[str, Any]:
-    """The full tractate list, grouped by seder, for the UI's filter picker."""
-    corpus = load_corpus()
+def tractates_endpoint(
+    book: str = Query(DEFAULT_BOOK, description="Book id; see /api/books"),
+) -> dict[str, Any]:
+    """A book's tractate list, grouped by seder, for the UI's filter picker."""
+    corpus = corpus_for(book)
     return {
         "tractates": [
             {
@@ -201,6 +243,7 @@ def search_endpoint(
         DEFAULT_LIMIT, description="Max results per group; clamped to the allowed range"
     ),
     tractate: str | None = Query(None, description="Restrict to one tractate (Hebrew name)"),
+    book: str = Query(DEFAULT_BOOK, description="Book id to search; see /api/books"),
     offset: int = Query(
         0,
         description=(
@@ -208,7 +251,7 @@ def search_endpoint(
         ),
     ),
 ) -> dict[str, Any]:
-    corpus = load_corpus()
+    corpus = corpus_for(book)
     queries = parse_queries(q)
     return search(
         corpus,
@@ -227,9 +270,10 @@ def proximity_endpoint(
     b: str = Query(..., description="Second word"),
     within: int = Query(6, ge=1, le=50, description="Maximum distance in words"),
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    book: str = Query(DEFAULT_BOOK, description="Book id to search; see /api/books"),
 ) -> dict[str, Any]:
     """Bonus: find A and B occurring within `within` words of each other."""
-    corpus = load_corpus()
+    corpus = corpus_for(book)
     try:
         word_a = SearchQuery.parse(a).words_norm[0]
         word_b = SearchQuery.parse(b).words_norm[0]
