@@ -138,9 +138,9 @@ var I18N = (function () {
       "error.code.invalid_query": "יש להזין טקסט באותיות עבריות",
 
       "footer.attributionHtml":
-        "נוסח הש״ס: <strong>דפוס וילנא</strong> — מתוך " +
+        "נוסח הש״ס: <strong>מהדורת William Davidson</strong> — מתוך " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
-        "נחלת הכלל.",
+        "CC-BY-NC.",
       "footer.credit": "נבנה על ידי joka-7",
       "footer.link.github": "GitHub",
       "footer.link.site": "אתר",
@@ -259,9 +259,9 @@ var I18N = (function () {
       "error.code.invalid_query": "Enter text using Hebrew letters",
 
       "footer.attributionHtml":
-        "Talmud text: <strong>Vilna edition</strong> — from " +
+        "Talmud text: <strong>William Davidson Edition</strong> — from " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
-        "Public Domain.",
+        "CC-BY-NC.",
       "footer.credit": "Built by joka-7",
       "footer.link.github": "GitHub",
       "footer.link.site": "Site",
@@ -380,9 +380,9 @@ var I18N = (function () {
       "error.code.invalid_query": "Saisissez un texte en lettres hébraïques",
 
       "footer.attributionHtml":
-        "Texte du Talmud : <strong>édition de Vilna</strong> — provenant de " +
+        "Texte du Talmud : <strong>édition William Davidson</strong> — provenant de " +
         "<a href=\"https://github.com/Sefaria/Sefaria-Export\" rel=\"noopener noreferrer\" target=\"_blank\">Sefaria</a>, " +
-        "domaine public.",
+        "CC-BY-NC.",
       "footer.credit": "Créé par joka-7",
       "footer.link.github": "GitHub",
       "footer.link.site": "Site",

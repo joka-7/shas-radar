@@ -2,8 +2,8 @@
 """Build the local Talmud Bavli dataset used by the app.
 
 Downloads the Hebrew/Aramaic text of all 37 tractates of the Babylonian Talmud
-(Vilna edition, niqqud-vocalized -- confirmed against the fetched data, not
-assumed) from Sefaria's public export bucket, cleans the editorial HTML
+(William Davidson Edition, niqqud-vocalized -- confirmed against the fetched
+data, not assumed) from Sefaria's public export bucket, cleans the editorial HTML
 markup out of it, and writes a single gzipped JSON file at
 ``data/shas.json.gz``.
 
@@ -13,9 +13,10 @@ the running application never touches the network.
 
     python scripts/build_dataset.py
 
-Source : https://github.com/Sefaria/Sefaria-Export  (text originally the
-         Vilna edition, digitized and hosted by Sefaria)
-License: Public Domain
+Source : https://github.com/Sefaria/Sefaria-Export  (William Davidson Edition,
+         hosted by Sefaria; page numbering follows the Vilna Shas)
+License: CC-BY-NC, per Sefaria's version record -- credit required, no
+         commercial use. Menachot and Chullin are recorded as "unknown" there.
 """
 
 from __future__ import annotations
@@ -180,8 +181,8 @@ def main() -> int:
     )
     dataset = {
         "source": "https://github.com/Sefaria/Sefaria-Export",
-        "textSource": "Vilna edition, via Sefaria",
-        "license": "Public Domain",
+        "textSource": "William Davidson Edition, via Sefaria",
+        "license": "CC-BY-NC",
         "tractateCount": len(tractates),
         "wordCount": word_count,
         "tractates": tractates,

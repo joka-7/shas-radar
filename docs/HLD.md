@@ -51,7 +51,7 @@ flowchart TD
     AI["app/ai.py<br/>optional AI connections"]
     Data[("data/shas.json.gz<br/>~1.86M words, 37 tractates, 5.1MB")]
     Build["scripts/build_dataset.py<br/>build-time only"]
-    Sefaria[("Sefaria export<br/>Vilna edition text")]
+    Sefaria[("Sefaria export<br/>William Davidson Edition text")]
     Vendor[("Gemini / OpenAI / Anthropic / Groq<br/>via ModelDispatcher")]
 
     Browser -->|"same origin (Render)"| Main

@@ -233,7 +233,7 @@ class TestApi:
         body = client.get("/api/health").json()
         assert body["status"] == "ok"
         assert body["tractates"] == 37
-        assert body["license"] == "Public Domain"
+        assert body["license"] == "CC-BY-NC"
 
     def test_tractates_endpoint(self, client):
         body = client.get("/api/tractates").json()

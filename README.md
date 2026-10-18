@@ -57,9 +57,9 @@ ipconfig getifaddr en0                  # macOS
 
 | | |
 | --- | --- |
-| **Text** | The Vilna edition (מהדורת וילנא), niqqud-vocalized |
+| **Text** | The William Davidson Edition (Vilna pagination), niqqud-vocalized |
 | **Source** | [Sefaria's public export](https://github.com/Sefaria/Sefaria-Export) |
-| **License** | Public Domain |
+| **License** | CC-BY-NC — credit required, non-commercial use only (Sefaria records Menachot and Chullin as "unknown") |
 | **Size** | 37 tractates (all of Shas with Gemara), ~1.86M words, 5.1 MB gzipped |
 | **Packaging** | One gzipped JSON at `data/shas.json.gz`, committed to the repo |
 | **Loading** | Read and indexed once at process start, then held in memory |
@@ -513,7 +513,8 @@ shas-radar/
 
 ## Notes
 
-- Text is public domain. The code is available under the MIT license.
+- The Talmud text is CC-BY-NC (William Davidson Edition, via Sefaria): credit
+  required, no commercial use. The code is available under the MIT license.
 - The Sefaria deep-link format (`sefaria.org/<Title>.<daf><amud>`) matches
   their documented convention but couldn't be verified live from this build
   environment (network-restricted) — worth a spot-check once deployed.
