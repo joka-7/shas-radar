@@ -353,8 +353,12 @@ body {
 
 /* --- Waking notice --- */
 
-.waking {
+/* :not([hidden]) so the notice's `hidden` attribute still hides it (see the
+   note on .connections-btn below). */
+.waking:not([hidden]) {
   display: flex;
+}
+.waking {
   align-items: center;
   gap: .55rem;
   background: var(--accent-soft);
