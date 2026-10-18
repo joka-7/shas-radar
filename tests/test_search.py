@@ -2,6 +2,8 @@
 committed corpus rather than a fixture, the same way פסוק לשם's tests do.
 """
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -237,14 +239,19 @@ class TestApi:
 
     def test_health_reports_enabled_and_loaded_books(self, client):
         body = client.get("/api/health").json()
-        assert body["books"] == ["bavli"]
-        assert body["loadedBooks"] == ["bavli"]
+        assert body["books"] == ["bavli", "yerushalmi", "mishnah", "tosefta"]
+        assert "bavli" in body["loadedBooks"]
 
-    def test_books_endpoint_describes_enabled_books(self, client):
+    def test_books_endpoint_describes_enabled_books_without_loading_them(self, client):
         body = client.get("/api/books").json()
         assert body["default"] == "bavli"
-        (bavli,) = body["books"]
-        assert bavli["id"] == "bavli"
+        assert [book["id"] for book in body["books"]] == [
+            "bavli",
+            "yerushalmi",
+            "mishnah",
+            "tosefta",
+        ]
+        bavli = body["books"][0]
         assert bavli["en"] == "Babylonian Talmud"
         assert bavli["citationScheme"] == "daf"
         assert bavli["tractates"] == 37
@@ -350,3 +357,81 @@ class TestApi:
         response = client.get("/")
         assert response.status_code == 200
         assert 'dir="rtl"' in response.text
+
+
+class TestOtherBooks:
+    """Mishnah, Tosefta and Yerushalmi, through the same endpoints as the Bavli."""
+
+    @pytest.mark.parametrize(
+        ("book", "tractates", "scheme", "license"),
+        [
+            ("yerushalmi", 39, "chapter-segment", "CC-BY"),
+            ("mishnah", 63, "chapter", "Public Domain"),
+            ("tosefta", 61, "chapter", "Public Domain"),
+        ],
+    )
+    def test_listed_with_its_scheme_and_license(self, client, book, tractates, scheme, license):
+        listed = {b["id"]: b for b in client.get("/api/books").json()["books"]}[book]
+        assert (listed["tractates"], listed["citationScheme"], listed["license"]) == (
+            tractates,
+            scheme,
+            license,
+        )
+        assert len(client.get(f"/api/tractates?book={book}").json()["tractates"]) == tractates
+
+    @pytest.mark.parametrize(
+        ("book", "citation", "citation_en", "url_pattern", "ref"),
+        [
+            (
+                "mishnah",
+                "משנה ברכות א:א",
+                "Mishnah Berakhot 1:1",
+                r"^https://www\.sefaria\.org/Mishnah_Berakhot\.1\.1$",
+                [1, 1],
+            ),
+            (
+                "tosefta",
+                "תוספתא ברכות א:א",
+                "Tosefta Berakhot 1:1",
+                r"^https://www\.sefaria\.org/Tosefta_Berakhot\.1\.1$",
+                [1, 1],
+            ),
+            (
+                "yerushalmi",
+                "תלמוד ירושלמי ברכות א:א",
+                "Jerusalem Talmud Berakhot 1:1",
+                r"^https://www\.sefaria\.org/Jerusalem_Talmud_Berakhot\.1\.1\.1$",
+                [1, 1, 1],
+            ),
+        ],
+    )
+    def test_the_opening_of_berakhot_is_cited_in_the_books_own_numbering(
+        self, client, book, citation, citation_en, url_pattern, ref
+    ):
+        params = {"q": "מאימתי קורין את שמע", "book": book, "limit": 1}
+        first = client.get("/api/search", params=params).json()["groups"][0]["results"][0]
+        assert first["book"] == book
+        assert first["citation"] == citation
+        assert first["citationEn"] == citation_en
+        assert re.match(url_pattern, first["sefariaUrl"])
+        assert first["ref"] == ref
+        assert (first["chapter"], first["section"]) == (1, 1)
+        assert "daf" not in first
+
+    def test_a_sage_of_the_gemara_is_not_in_the_mishnah(self, client):
+        group = client.get("/api/search", params={"q": "אביי", "book": "mishnah"}).json()["groups"][
+            0
+        ]
+        assert group["total"] == 0
+
+    def test_the_tractate_filter_applies_within_the_book(self, client):
+        params = {"q": "רבי", "book": "mishnah", "tractate": "משנה ברכות", "limit": 200}
+        group = client.get("/api/search", params=params).json()["groups"][0]
+        assert group["total"] > 0
+        assert {r["tractate"]["he"] for r in group["results"]} == {"משנה ברכות"}
+
+    def test_proximity_searches_the_named_book(self, client):
+        params = {"a": "רבי", "b": "אליעזר", "within": 2, "book": "mishnah", "limit": 1}
+        body = client.get("/api/proximity", params=params).json()
+        assert body["total"] > 0
+        assert body["results"][0]["citation"].startswith("משנה ")

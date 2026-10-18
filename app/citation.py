@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .hebrew import daf_citation
+from .hebrew import daf_citation, he_number
 
 Ref = tuple[int, ...]
 
@@ -111,4 +111,42 @@ class DafScheme:
         return {"daf": daf, "amud": _AMUD_CHARS[amud]}
 
 
-CITATION_SCHEMES: dict[str, CitationScheme] = {"daf": DafScheme()}
+class ChapterScheme:
+    """Chapter and section: ``(chapter, section)``, optionally with a third part.
+
+    Cited as ``chapter:section`` (Mishnah, Tosefta, Yerushalmi). A third part,
+    the Yerushalmi's segment within a halakhah, is part of the Sefaria link but
+    not of the printed citation.
+    """
+
+    def __init__(self, arity: int):
+        if arity not in (2, 3):
+            raise ValueError(f"a chapter scheme has 2 or 3 parts, not {arity}")
+        self._arity = arity
+
+    @property
+    def arity(self) -> int:
+        return self._arity
+
+    def hebrew(self, tractate_he: str, ref: Ref) -> str:
+        chapter, section = ref[:2]
+        return f"{tractate_he} {he_number(chapter)}:{he_number(section)}"
+
+    def english(self, tractate_en: str, ref: Ref) -> str:
+        chapter, section = ref[:2]
+        return f"{tractate_en} {chapter}:{section}"
+
+    def sefaria_url(self, sefaria_title: str, ref: Ref) -> str:
+        return f"https://www.sefaria.org/{sefaria_title.replace(' ', '_')}." + ".".join(
+            str(part) for part in ref
+        )
+
+    def fields(self, ref: Ref) -> dict[str, int | str]:
+        return dict(zip(("chapter", "section", "segment"), ref, strict=False))
+
+
+CITATION_SCHEMES: dict[str, CitationScheme] = {
+    "daf": DafScheme(),
+    "chapter": ChapterScheme(2),
+    "chapter-segment": ChapterScheme(3),
+}

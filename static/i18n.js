@@ -53,6 +53,7 @@ var I18N = (function () {
 
       "tractate.label": "מסכת (אופציונלי)",
       "tractate.all": "כל הש״ס",
+      "tractate.allInBook": "כל המסכתות",
       "book.label": "ספר",
 
       "howItWorks.title": "איך זה עובד?",
@@ -176,6 +177,7 @@ var I18N = (function () {
 
       "tractate.label": "Tractate (optional)",
       "tractate.all": "All of Shas",
+      "tractate.allInBook": "All tractates",
       "book.label": "Book",
 
       "howItWorks.title": "How does this work?",
@@ -299,6 +301,7 @@ var I18N = (function () {
 
       "tractate.label": "Traité (optionnel)",
       "tractate.all": "Tout le Chas",
+      "tractate.allInBook": "Tous les traités",
       "book.label": "Livre",
 
       "howItWorks.title": "Comment ça marche ?",

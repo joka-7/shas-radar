@@ -22,7 +22,7 @@ services:
       # selects it -- see docs/HLD.md -- so this is the switch for the 512MB
       # free plan.
       - key: ENABLED_BOOKS
-        value: bavli
+        value: bavli,yerushalmi,mishnah,tosefta
       # Optional AI "find connections" feature (app/ai.py, README's "AI
       # connections" section) -- set any one of these in the Render dashboard
       # to turn it on; leave all three unset and the app runs exactly as

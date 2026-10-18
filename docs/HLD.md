@@ -29,7 +29,11 @@ what links a set of results the visitor has selected.
 - *Memory-bounded.* The naive representation of the corpus (plain Python
   lists) overran a 512MB deploy target before the server even finished
   starting. `app/corpus.py` trades that for string interning and packed
-  `array.array` columns — see **Data storage**.
+  `array.array` columns — see **Data storage**. Measured on the real server:
+  the Bavli alone is about 203MB, and all four enabled books (Bavli,
+  Yerushalmi, Mishnah, Tosefta) about 316MB once each has been used.
+  `ENABLED_BOOKS` is the switch: Rashi would add roughly 144MB and Tosafot
+  roughly 123MB on top, which is why they are not included.
 - *Installable, not offline.* The PWA shell lets a phone add the app to its
   home screen and paints instantly from the cached shell, but every search
   is still a live API call — there is no offline corpus on the client.
@@ -145,8 +149,9 @@ own first API call starts Render waking in the background.
 
 ## Data storage
 
-There is no database, cache, or blob store. The single store is
-`data/shas.json.gz` (~5.1 MB, all 37 tractates), decompressed and indexed
+There is no database, cache, or blob store. The stores are the dataset files
+under `data/`: `shas.json.gz` (the Bavli, ~5.3 MB, all 37 tractates) and one
+per other book (`yerushalmi`, `mishnah`, `tosefta`; ~3.6 MB together), each decompressed and indexed
 into process memory at startup by `BookLibrary.corpus()`, which keeps one
 instance so every request shares it. Other enabled books are read the first
 time a request asks for one and then stay resident.

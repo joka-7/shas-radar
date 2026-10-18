@@ -1,6 +1,7 @@
 """Tests for app/books.py: the book registry, configuration, and lazy loading."""
 
 import gzip
+import re
 import threading
 
 import pytest
@@ -15,6 +16,7 @@ from app.books import (
     UnknownBookError,
     read_header,
 )
+from app.main import library
 
 BAVLI = KNOWN_BOOKS[0]
 MISSING_FILE = Book("ghost", "רוח", "Ghost", "does-not-exist.json.gz")
@@ -56,6 +58,11 @@ class TestBookLibraryConfiguration:
             ({}, ["bavli"]),
             ({"ENABLED_BOOKS": "bavli"}, ["bavli"]),
             ({"ENABLED_BOOKS": " bavli , "}, ["bavli"]),
+            (
+                {"ENABLED_BOOKS": "bavli,yerushalmi,mishnah,tosefta"},
+                ["bavli", "yerushalmi", "mishnah", "tosefta"],
+            ),
+            ({"ENABLED_BOOKS": "mishnah,bavli"}, ["mishnah", "bavli"]),  # order is kept
         ],
     )
     def test_from_environ_reads_enabled_books(self, environ, expected_ids):
@@ -132,3 +139,31 @@ class TestBookLibraryLoading:
 
         assert len(calls) == 1
         assert len({id(corpus) for corpus in seen}) == 1
+
+
+class TestDatasets:
+    """Every shipped dataset, as loaded by the app, holds up its end of the contract."""
+
+    @pytest.mark.parametrize("book_id", [book.id for book in KNOWN_BOOKS])
+    def test_header_matches_the_loaded_corpus(self, book_id):
+        header = library.header(book_id)
+        corpus = library.corpus(book_id)
+        assert corpus.book == book_id == header["book"]
+        assert len(corpus.tractates) == header["tractateCount"]
+        assert corpus.license == header["license"]
+
+    @pytest.mark.parametrize("book_id", [book.id for book in KNOWN_BOOKS])
+    def test_tractate_names_are_unique_within_the_book(self, book_id):
+        names = [t.he for t in library.corpus(book_id).tractates]
+        assert len(set(names)) == len(names)
+
+    @pytest.mark.parametrize("book_id", [book.id for book in KNOWN_BOOKS])
+    def test_no_markup_or_entities_survive_in_the_text(self, book_id):
+        leftovers = re.compile(r"<[A-Za-z/]|&[A-Za-z#0-9]+;")
+        dirty = [
+            (t.he, segment.text[:40])
+            for t in library.corpus(book_id).tractates
+            for segment in t.segments
+            if leftovers.search(segment.text)
+        ]
+        assert dirty == []

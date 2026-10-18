@@ -42,7 +42,8 @@ citation, the Sefaria link, and any extra result fields.
 | `unpack_ref(packed, arity)` | Inverse of `pack_ref` |
 | `CitationScheme` | Protocol: `arity`, `hebrew(tractate_he, ref)`, `english(tractate_en, ref)`, `sefaria_url(sefaria_title, ref)`, `fields(ref)` |
 | `DafScheme` | The folio scheme; `fields()` returns `daf` and `amud` |
-| `CITATION_SCHEMES` | Name → scheme; the dataset's `citationScheme` key selects one (`"daf"`) |
+| `ChapterScheme(arity)` | `chapter:section` (arity 2) or with a segment (arity 3). The printed citation shows only chapter and section, in Hebrew numerals (`ט״ו`); the Sefaria link carries every part; `fields()` returns `chapter`, `section` and, for arity 3, `segment` |
+| `CITATION_SCHEMES` | Name → scheme; the dataset's `citationScheme` key selects one: `"daf"`, `"chapter"`, `"chapter-segment"` |
 
 ## `app/books.py` — which books exist, and which are loaded
 
@@ -254,10 +255,16 @@ Build-time only; never imported by the running service.
 
 | Function | Contract |
 | --- | --- |
-| `clean_segment(text)` | Strips Sefaria's display markup (`<big><strong>`, `<br>`) from one segment |
+| `clean_segment(text)` | Strips Sefaria's display markup (`<big><strong>`, `<br>`, …) from one segment, then unescapes entities (`&lt;`) |
 | `tractate_url(seder, name)` | Builds the export URL for one tractate |
 | `fetch_tractate(entry)` | Downloads one tractate, derives `daf`/`amud` from Sefaria's flat `text` array index (`daf = index // 2 + 1`, `amud = "a" if even else "b"`), cleans and shapes its pages |
-| `main()` | Fetches all 37 tractates (`ThreadPoolExecutor(max_workers=8)`), restores canonical order, writes `data/shas.json.gz` |
+| `build_bavli()` | Fetches all 37 tractates (`ThreadPoolExecutor(max_workers=8)`), restores canonical order |
+| `BookSpec` / `SPECS` | For each chaptered book: table-of-contents path, nesting depth, the exact Sefaria version, the licenses allowed, and the header strings |
+| `toc_leaves(contents, path, skip)` | The texts under a category path in Sefaria's table of contents, in order; `KeyError` if the path is missing |
+| `walk_sections(text, arity)` | Yields `(ref, segment)` with 1-based indices; `ValueError` if the text is not `arity` levels deep |
+| `fetch_chaptered_tractate(spec, leaf)` | Fetches the chosen version file (not `merged.json`), stops if its license is not allowed, shapes the sections |
+| `build_chaptered_book(spec)` | Builds Mishnah, Tosefta or Yerushalmi; stops if tractate names repeat |
+| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
 
 ## Logging
 
@@ -274,9 +281,12 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | --- | --- |
 | `tests/test_hebrew.py` | Every normalization primitive, including niqqud stripping, maqaf as a separator, and the ט״ו/ט״ז gematria exception |
 | `tests/test_search.py` | Index correctness, all four match kinds (exact, with-prefix, phrase, phrase-with-prefix), proximity, offset/limit pagination, and the HTTP surface via `TestClient` — status codes, the error contract, clamping |
+| `tests/test_citation.py` | Ref packing, and the folio and chapter schemes' Hebrew/English/URL output |
+| `tests/test_books.py` | The registry and `ENABLED_BOOKS` parsing, per-book lazy loading under a lock, and every shipped dataset (header matches corpus, unique tractate names, no markup or entities left in the text) |
+| `tests/test_build_dataset.py` | The build script's pure helpers: cleaning, the nested-text walk, table-of-contents lookup |
 | `tests/test_ai.py` | `analyze_connections` and its supporting functions against ModelDispatcher's keyless `MockProvider`, including the no-credential, timeout, and chat-history (ordering, capping) paths |
 
-The real ~1.86M-token corpus loads once per session in `test_search.py`. The
+`tests/conftest.py` enables all four books, so the real datasets load once per session and are shared by `test_search.py` and `test_books.py`. The real ~1.86M-token Bavli corpus is among them. The
 trade is a startup cost for tests that exercise matching against genuine
 text — `אביי` and `רבא` each turning up thousands of times is itself part of
 what the tests assert — rather than a fixture that agrees with the

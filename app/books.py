@@ -56,7 +56,12 @@ class Book:
         return DATA_DIR / self.data_file
 
 
-KNOWN_BOOKS: tuple[Book, ...] = (Book("bavli", "תלמוד בבלי", "Babylonian Talmud", "shas.json.gz"),)
+KNOWN_BOOKS: tuple[Book, ...] = (
+    Book("bavli", "תלמוד בבלי", "Babylonian Talmud", "shas.json.gz"),
+    Book("yerushalmi", "תלמוד ירושלמי", "Jerusalem Talmud", "yerushalmi.json.gz"),
+    Book("mishnah", "משנה", "Mishnah", "mishnah.json.gz"),
+    Book("tosefta", "תוספתא", "Tosefta", "tosefta.json.gz"),
+)
 
 
 def read_header(path: Path) -> dict[str, Any]:

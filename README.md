@@ -74,6 +74,27 @@ python scripts/build_dataset.py
 Because the data is committed, the running application never makes a network
 call and a fresh clone works offline.
 
+### Other books
+
+The Bavli is the default; more books can be enabled with `ENABLED_BOOKS`
+(comma-separated ids, see `render.yaml`). Each is its own dataset, loaded the
+first time someone selects it, and cited in its own numbering. A book picker
+appears whenever more than one is enabled.
+
+| Book (id) | Text | License | Size | Citation | Rebuild |
+| --- | --- | --- | --- | --- | --- |
+| Babylonian Talmud (`bavli`) | William Davidson Edition | CC-BY-NC | 37 tractates, ~1.86M words | `ברכות ב.` (daf, amud) | `python scripts/build_dataset.py` |
+| Jerusalem Talmud (`yerushalmi`) | Guggenheimer edition (De Gruyter) | CC-BY — credit required | 39 tractates, ~0.81M words | `תלמוד ירושלמי ברכות א:א` (chapter:halakhah) | `--book yerushalmi` |
+| Mishnah (`mishnah`) | Torat Emet | Public Domain | 63 tractates, ~0.19M words | `משנה ברכות א:א` (chapter:mishnah) | `--book mishnah` |
+| Tosefta (`tosefta`) | Mechon Mamre, Vilna edition | Public Domain | 61 tractates, ~0.29M words | `תוספתא ברכות א:א` (chapter:halakhah) | `--book tosefta` |
+
+The licenses come from Sefaria's own version records. The build fetches one
+specific version per tractate and stops if its license is not on the book's
+allowed list, because Sefaria's "merged" text can blend in a second version
+with a different or unknown license. With all four loaded the running server
+uses about 316 MB (the Bavli alone: about 203 MB), measured on the real
+server.
+
 ### The text turned out to be vocalized, not plain print
 
 Standard printed editions of the Talmud carry no niqqud, so that was the
@@ -515,7 +536,8 @@ shas-radar/
 ## Notes
 
 - The Talmud text is CC-BY-NC (William Davidson Edition, via Sefaria): credit
-  required, no commercial use. The code is available under the MIT license.
+  required, no commercial use. The other books' licenses are in the table above.
+  The code is available under the MIT license.
 - The Sefaria deep-link format (`sefaria.org/<Title>.<daf><amud>`) matches
   their documented convention but couldn't be verified live from this build
   environment (network-restricted) — worth a spot-check once deployed.

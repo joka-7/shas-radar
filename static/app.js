@@ -1200,6 +1200,7 @@
     input.placeholder = t(locale, "search.placeholder", { example: I18N.PLACEHOLDER_EXAMPLE });
 
     renderFooterAttribution();
+    syncTractateAllLabel();
 
     if (lastBooks) populateBookSelect();
     if (lastTractates) populateTractateSelect(lastTractates);
@@ -1544,6 +1545,12 @@
     node.appendChild(document.createTextNode(", " + book.license + "."));
   }
 
+  // "All of Shas" is only true of the Bavli; the other books are not Shas.
+  function syncTractateAllLabel() {
+    var key = selectedBook && selectedBook !== bookDefault ? "tractate.allInBook" : "tractate.all";
+    tractateSelect.options[0].textContent = t(locale, key);
+  }
+
   // The picker only appears when there is a real choice, so a deployment
   // with a single book looks exactly as it did before books existed.
   function populateBookSelect() {
@@ -1557,6 +1564,7 @@
     bookSelect.value = selectedBook;
     bookField.hidden = lastBooks.length < 2;
     renderFooterAttribution();
+    syncTractateAllLabel();
   }
 
   function onBooksLoaded(data) {
@@ -1591,6 +1599,7 @@
     tractateSelect.value = "";
     populateTractateSelect({ tractates: [] });
     renderFooterAttribution();
+    syncTractateAllLabel();
     loadTractates();
   });
 

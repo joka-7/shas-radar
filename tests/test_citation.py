@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.citation import CITATION_SCHEMES, DafScheme, pack_ref, unpack_ref
+from app.citation import CITATION_SCHEMES, ChapterScheme, DafScheme, pack_ref, unpack_ref
 
 
 class TestPackRef:
@@ -75,3 +75,53 @@ class TestDafScheme:
 
     def test_arity_is_two(self):
         assert self.scheme.arity == 2
+
+
+class TestChapterScheme:
+    pair = CITATION_SCHEMES["chapter"]
+    triple = CITATION_SCHEMES["chapter-segment"]
+
+    @pytest.mark.parametrize(
+        ("ref", "hebrew", "english", "url", "fields"),
+        [
+            (
+                (1, 1),
+                "משנה ברכות א:א",
+                "Mishnah Berakhot 1:1",
+                "https://www.sefaria.org/Mishnah_Berakhot.1.1",
+                {"chapter": 1, "section": 1},
+            ),
+            (
+                (3, 15),  # 15 is written ט״ו, not יה
+                "משנה ברכות ג:ט״ו",
+                "Mishnah Berakhot 3:15",
+                "https://www.sefaria.org/Mishnah_Berakhot.3.15",
+                {"chapter": 3, "section": 15},
+            ),
+        ],
+    )
+    def test_cites_a_chapter_and_section(self, ref, hebrew, english, url, fields):
+        assert self.pair.hebrew("משנה ברכות", ref) == hebrew
+        assert self.pair.english("Mishnah Berakhot", ref) == english
+        assert self.pair.sefaria_url("Mishnah Berakhot", ref) == url
+        assert self.pair.fields(ref) == fields
+
+    def test_a_third_part_is_in_the_link_but_not_the_printed_citation(self):
+        ref = (2, 3, 4)
+        assert self.triple.hebrew("תלמוד ירושלמי ברכות", ref) == "תלמוד ירושלמי ברכות ב:ג"
+        assert self.triple.english("Jerusalem Talmud Berakhot", ref) == (
+            "Jerusalem Talmud Berakhot 2:3"
+        )
+        assert self.triple.sefaria_url("Jerusalem Talmud Berakhot", ref) == (
+            "https://www.sefaria.org/Jerusalem_Talmud_Berakhot.2.3.4"
+        )
+        assert self.triple.fields(ref) == {"chapter": 2, "section": 3, "segment": 4}
+
+    @pytest.mark.parametrize(("scheme", "arity"), [(pair, 2), (triple, 3)])
+    def test_arity(self, scheme, arity):
+        assert scheme.arity == arity
+
+    @pytest.mark.parametrize("arity", [0, 1, 4])
+    def test_rejects_an_arity_it_has_no_meaning_for(self, arity):
+        with pytest.raises(ValueError):
+            ChapterScheme(arity)
