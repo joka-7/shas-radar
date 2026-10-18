@@ -14,11 +14,12 @@ shas-radar/
 │   ├── copilot-instructions.md
 │   └── dependabot.yml
 ├── app/
-│   ├── ai.py      # AI-assisted analysis: find connections across a set of search-result groups.
-│   ├── corpus.py  # Loading and indexing the Talmud corpus.
-│   ├── hebrew.py  # Hebrew/Aramaic text normalization primitives.
-│   ├── main.py    # FastAPI application.
-│   └── search.py  # Talmud search: exact word, attached-prefix, exact phrase, and KWIC context.
+│   ├── ai.py        # AI-assisted analysis: find connections across a set of search-result groups.
+│   ├── citation.py  # Where a passage sits in its book, and how that location is cited.
+│   ├── corpus.py    # Loading and indexing the Talmud corpus.
+│   ├── hebrew.py    # Hebrew/Aramaic text normalization primitives.
+│   ├── main.py      # FastAPI application.
+│   └── search.py    # Talmud search: exact word, attached-prefix, exact phrase, and KWIC context.
 ├── data/
 │   └── shas.json.gz
 ├── docs/
@@ -58,9 +59,10 @@ shas-radar/
 │   ├── styles.css
 │   └── sw.js
 ├── tests/
-│   ├── test_ai.py      # Tests for app/ai.py -- the optional "find connections" AI feature.
-│   ├── test_hebrew.py  # Tests for the Hebrew/Aramaic normalization primitives.
-│   └── test_search.py  # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
+│   ├── test_ai.py        # Tests for app/ai.py -- the optional "find connections" AI feature.
+│   ├── test_citation.py  # Tests for app/citation.py: ref packing and the folio citation scheme.
+│   ├── test_hebrew.py    # Tests for the Hebrew/Aramaic normalization primitives.
+│   └── test_search.py    # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
 ├── .ai
 ├── .gitignore
 ├── .gitmodules

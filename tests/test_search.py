@@ -42,7 +42,7 @@ class TestCorpus:
 
     def test_berakhot_ends_at_the_traditional_64a(self, corpus):
         berakhot = corpus.tractate_by_name("ברכות")
-        last_daf = max(berakhot.token_daf)
+        last_daf, _ = berakhot.ref_at(len(berakhot) - 1)
         assert last_daf == 64
 
     def test_every_tractate_has_tokens(self, corpus):

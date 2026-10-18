@@ -141,27 +141,28 @@ def fetch_tractate(entry: tuple[int, tuple[str, str]]) -> dict:
     except urllib.error.HTTPError as exc:  # pragma: no cover - network path
         raise SystemExit(f"failed to fetch {name}: HTTP {exc.code} for {url}") from exc
 
-    pages: list[dict] = []
+    sections: list[dict] = []
     for index, segments in enumerate(raw["text"]):
         if not segments:
             continue
         daf = index // 2 + 1
-        amud = "a" if index % 2 == 0 else "b"
+        amud_code = index % 2  # 0 = "a", 1 = "b"
         cleaned = [clean_segment(seg) for seg in segments if seg]
         cleaned = [seg for seg in cleaned if seg]
         if cleaned:
-            pages.append({"daf": daf, "amud": amud, "segments": cleaned})
+            sections.append({"ref": [daf, amud_code], "segments": cleaned})
 
-    word_count = sum(len(seg.split()) for page in pages for seg in page["segments"])
-    print(f"  {name:<16} {len(pages):>4} pages  {word_count:>7,} words", file=sys.stderr)
+    word_count = sum(len(seg.split()) for section in sections for seg in section["segments"])
+    print(f"  {name:<16} {len(sections):>4} pages  {word_count:>7,} words", file=sys.stderr)
 
     return {
         "order": order,
         "he": raw["heTitle"],
         "en": raw["title"],
+        "sefariaTitle": raw["title"],
         "seder": seder,
         "sederHe": SEDER_HE[seder],
-        "pages": pages,
+        "sections": sections,
     }
 
 
@@ -177,9 +178,11 @@ def main() -> int:
         del tractate["order"]
 
     word_count = sum(
-        len(seg.split()) for t in tractates for p in t["pages"] for seg in p["segments"]
+        len(seg.split()) for t in tractates for sec in t["sections"] for seg in sec["segments"]
     )
     dataset = {
+        "book": "bavli",
+        "citationScheme": "daf",
         "source": "https://github.com/Sefaria/Sefaria-Export",
         "textSource": "William Davidson Edition, via Sefaria",
         "license": "CC-BY-NC",

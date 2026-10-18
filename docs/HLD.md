@@ -152,8 +152,8 @@ distinct):
 
 - `sys.intern()` on every token string, so ~1.86M entries collapse to
   sharing far fewer actual string objects.
-- `array.array` instead of a plain list for the purely-numeric per-token
-  columns (`token_daf`, `token_amud`, and word positions in `by_word`),
+- `array.array` instead of a plain list for the purely-numeric columns
+  (each paragraph's packed location in `segment_refs`, and word positions in `by_word`),
   trading a Python object + pointer per entry for a few raw bytes.
 
 Together this holds the corpus in a bit over a third of the naive memory

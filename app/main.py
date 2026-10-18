@@ -27,7 +27,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import ai
 from .corpus import load_corpus
-from .hebrew import daf_citation
 from .search import (
     DEFAULT_CONTEXT,
     DEFAULT_LIMIT,
@@ -246,13 +245,12 @@ def proximity_endpoint(
     for pair in shown:
         tr = pair["tractate"]
         lo, hi = sorted((pair["posA"], pair["posB"]))
-        daf, amud = tr.token_daf[lo], tr.amud_at(lo)
         results.append(
             {
                 "text": " ".join(tr.tokens_raw[lo : hi + 1]),
                 "tractate": {"he": tr.he, "en": tr.en},
-                "citation": f"{tr.he} {daf_citation(daf, amud)}",
-                "sefariaUrl": f"https://www.sefaria.org/{tr.en.replace(' ', '_')}.{daf}{amud}",
+                "citation": tr.citation(lo),
+                "sefariaUrl": tr.sefaria_url(lo),
             }
         )
     return {"total": total, "results": results}

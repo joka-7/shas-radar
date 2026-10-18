@@ -29,20 +29,36 @@ fuse the two words into one for matching purposes; treating it as
 non-letter (and therefore a boundary in `NON_LETTERS`/`WORD_RUN`) keeps
 `אשר` and `אמר` as two tokens.
 
+## `app/citation.py` — locations and how they are cited
+
+A location is a `Ref`: a tuple of small integers in the source text's own
+numbering (Bavli: `(daf, amud)`, with amud `0` for "a" and `1` for "b"). A
+`CitationScheme` turns a `Ref` into the printed citation, the English
+citation, the Sefaria link, and any extra result fields.
+
+| Name | Contract |
+| --- | --- |
+| `pack_ref(ref, arity)` | One `int`, up to four 16-bit parts; raises `ValueError` if the part count or a value does not fit |
+| `unpack_ref(packed, arity)` | Inverse of `pack_ref` |
+| `CitationScheme` | Protocol: `arity`, `hebrew(tractate_he, ref)`, `english(tractate_en, ref)`, `sefaria_url(sefaria_title, ref)`, `fields(ref)` |
+| `DafScheme` | The folio scheme; `fields()` returns `daf` and `amud` |
+| `CITATION_SCHEMES` | Name → scheme; the dataset's `citationScheme` key selects one (`"daf"`) |
+
 ## `app/corpus.py` — model and indexes
 
 ### `Segment`
 
-A `__slots__` record: one paragraph's `daf`, `amud`, full `text`, and its
-`[start, end)` token-position range in the tractate's stream.
+A `__slots__` record: one paragraph's full `text` and its `[start, end)`
+token-position range in the tractate's stream. Its location lives in the
+tractate's parallel `segment_refs` column.
 
 ### `Tractate`
 
 ```python
-Tractate(he: str, en: str, seder_he: str, seder_en: str)
+Tractate(he, en, seder_he, seder_en, sefaria_title, scheme)
 ```
 
-Built incrementally: `add_segment(daf, amud, text)` tokenizes one segment
+Built incrementally: `add_segment(ref, text)` tokenizes one segment
 and appends it to the tractate's flat, continuous token stream (see
 **HLD — Data storage** for why interning and `array.array` are used here),
 then `build_index()` builds `by_word` once all segments are in.
@@ -50,11 +66,11 @@ then `build_index()` builds `by_word` once all segments are in.
 | Field / method | Contract |
 | --- | --- |
 | `tokens` / `tokens_raw` | Normalized / as-printed token stream, interned |
-| `token_daf` / `token_amud` | Parallel `array.array("B")` columns |
+| `segment_refs` | `array.array("Q")`, one packed `Ref` per segment, parallel to `segments` |
 | `by_word` | `dict[str, array.array[int]]` — normalized word → sorted token positions |
 | `segment_at(position)` | The `Segment` (paragraph) containing that token, via `bisect` on `segment_starts` |
-| `amud_at(position)` | `"a"`/`"b"`, decoded from the packed `token_amud` byte |
-| `citation(position)` | The traditional printed citation for that token |
+| `ref_at(position)` | The `Ref` of the segment containing that token |
+| `ref_fields(position)` / `citation(position)` / `citation_en(position)` / `sefaria_url(position)` | The scheme's output for that token's `Ref` |
 | `__len__` | Token count |
 
 ### `Corpus`
@@ -63,8 +79,9 @@ then `build_index()` builds `by_word` once all segments are in.
 Corpus(dataset: dict[str, Any])
 ```
 
-Builds one `Tractate` per entry in the dataset, in the order the file lists
-them (the traditional Vilna Shas order — see `scripts/build_dataset.py`).
+Builds one `Tractate` per entry in the dataset (`sections`, each with a `ref`
+and its `segments`), using the scheme named by the dataset's
+`citationScheme`, in the order the file lists them (the traditional Vilna Shas order — see `scripts/build_dataset.py`).
 
 | Method | Contract |
 | --- | --- |
