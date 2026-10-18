@@ -41,9 +41,9 @@ citation, the Sefaria link, and any extra result fields.
 | `pack_ref(ref, arity)` | One `int`, up to four 16-bit parts; raises `ValueError` if the part count or a value does not fit |
 | `unpack_ref(packed, arity)` | Inverse of `pack_ref` |
 | `CitationScheme` | Protocol: `arity`, `hebrew(tractate_he, ref)`, `english(tractate_en, ref)`, `sefaria_url(sefaria_title, ref)`, `fields(ref)` |
-| `DafScheme` | The folio scheme; `fields()` returns `daf` and `amud` |
+| `DafScheme(arity=2)` | The folio scheme; `fields()` returns `daf` and `amud`. With arity 4 (`"daf-comment"`, Rashi) the ref also carries `line` and `comment`: they are in the Sefaria link and the fields, not in the printed citation |
 | `ChapterScheme(arity)` | `chapter:section` (arity 2) or with a segment (arity 3). The printed citation shows only chapter and section, in Hebrew numerals (`ט״ו`); the Sefaria link carries every part; `fields()` returns `chapter`, `section` and, for arity 3, `segment` |
-| `CITATION_SCHEMES` | Name → scheme; the dataset's `citationScheme` key selects one: `"daf"`, `"chapter"`, `"chapter-segment"` |
+| `CITATION_SCHEMES` | Name → scheme; the dataset's `citationScheme` key selects one: `"daf"`, `"daf-comment"`, `"chapter"`, `"chapter-segment"` |
 
 ## `app/books.py` — which books exist, and which are loaded
 
@@ -263,8 +263,9 @@ Build-time only; never imported by the running service.
 | `toc_leaves(contents, path, skip)` | The texts under a category path in Sefaria's table of contents, in order; `KeyError` if the path is missing |
 | `walk_sections(text, arity)` | Yields `(ref, segment)` with 1-based indices; `ValueError` if the text is not `arity` levels deep |
 | `fetch_chaptered_tractate(spec, leaf)` | Fetches the chosen version file (not `merged.json`), stops if its license is not allowed, shapes the sections |
-| `build_chaptered_book(spec)` | Builds Mishnah, Tosefta or Yerushalmi; stops if tractate names repeat |
-| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
+| `daf_ref(ref)` | A leading 1-based daf index to `daf, amud` (index 1 is 1a, 3 is 2a); used for Rashi |
+| `build_chaptered_book(spec)` | Builds Mishnah, Tosefta, Yerushalmi or Rashi; stops if tractate names repeat. A spec with `omit_disallowed` (Rashi) leaves out a tractate whose license is not allowed (`OmittedTractate`) and lists it under `omitted` in the dataset header |
+| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi` / `rashi`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
 
 ## Logging
 
@@ -286,7 +287,7 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | `tests/test_build_dataset.py` | The build script's pure helpers: cleaning, the nested-text walk, table-of-contents lookup |
 | `tests/test_ai.py` | `analyze_connections` and its supporting functions against ModelDispatcher's keyless `MockProvider`, including the no-credential, timeout, and chat-history (ordering, capping) paths |
 
-`tests/conftest.py` enables all four books, so the real datasets load once per session and are shared by `test_search.py` and `test_books.py`. The real ~1.86M-token Bavli corpus is among them. The
+`tests/conftest.py` enables all five books, so the real datasets load once per session and are shared by `test_search.py` and `test_books.py`. The real ~1.86M-token Bavli corpus is among them. The
 trade is a startup cost for tests that exercise matching against genuine
 text — `אביי` and `רבא` each turning up thousands of times is itself part of
 what the tests assert — rather than a fixture that agrees with the

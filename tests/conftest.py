@@ -3,4 +3,4 @@
 import os
 
 # Set before app.main is imported (it builds its BookLibrary from this at import).
-os.environ["ENABLED_BOOKS"] = "bavli,yerushalmi,mishnah,tosefta"
+os.environ["ENABLED_BOOKS"] = "bavli,yerushalmi,mishnah,tosefta,rashi"

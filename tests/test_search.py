@@ -239,7 +239,7 @@ class TestApi:
 
     def test_health_reports_enabled_and_loaded_books(self, client):
         body = client.get("/api/health").json()
-        assert body["books"] == ["bavli", "yerushalmi", "mishnah", "tosefta"]
+        assert body["books"] == ["bavli", "yerushalmi", "mishnah", "tosefta", "rashi"]
         assert "bavli" in body["loadedBooks"]
 
     def test_books_endpoint_describes_enabled_books_without_loading_them(self, client):
@@ -250,6 +250,7 @@ class TestApi:
             "yerushalmi",
             "mishnah",
             "tosefta",
+            "rashi",
         ]
         bavli = body["books"][0]
         assert bavli["en"] == "Babylonian Talmud"
@@ -368,6 +369,7 @@ class TestOtherBooks:
             ("yerushalmi", 39, "chapter-segment", "CC-BY"),
             ("mishnah", 63, "chapter", "Public Domain"),
             ("tosefta", 61, "chapter", "Public Domain"),
+            ("rashi", 35, "daf-comment", "Public Domain"),
         ],
     )
     def test_listed_with_its_scheme_and_license(self, client, book, tractates, scheme, license):
@@ -435,3 +437,18 @@ class TestOtherBooks:
         body = client.get("/api/proximity", params=params).json()
         assert body["total"] > 0
         assert body["results"][0]["citation"].startswith("משנה ")
+
+
+class TestRashiApi:
+    def test_a_comment_is_cited_by_folio_and_linked_to_the_comment(self, client):
+        params = {"q": "מאימתי קורין את שמע", "book": "rashi", "limit": 1}
+        first = client.get("/api/search", params=params).json()["groups"][0]["results"][0]
+        assert first["book"] == "rashi"
+        assert first["citation"] == 'רש"י על ברכות ב.'
+        assert first["citationEn"] == "Rashi on Berakhot 2a"
+        assert re.match(
+            r"^https://www\.sefaria\.org/Rashi_on_Berakhot\.2a\.\d+\.\d+$", first["sefariaUrl"]
+        )
+        assert first["ref"][:2] == [2, 0]
+        assert (first["daf"], first["amud"]) == (2, "a")
+        assert first["fullParagraph"].startswith("מאימתי קורין את שמע")

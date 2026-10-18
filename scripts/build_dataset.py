@@ -12,19 +12,15 @@ refresh a corpus); the resulting file is committed to the repository, and
 the running application never touches the network.
 
     python scripts/build_dataset.py                  # the Bavli
-    python scripts/build_dataset.py --book mishnah   # or tosefta, yerushalmi
+    python scripts/build_dataset.py --book mishnah   # or tosefta, yerushalmi, rashi
 
-The other books are chaptered texts. For each tractate the script fetches one
-specific Sefaria version and checks that version's license against the list
-the book allows, because Sefaria's "merged" text can blend in a second version
-with a different (or unknown) license. It stops, naming the tractate, if a
-license is not allowed or the text is not nested as the book's citation
-scheme expects.
-
-Source : https://github.com/Sefaria/Sefaria-Export  (William Davidson Edition,
-         hosted by Sefaria; page numbering follows the Vilna Shas)
-License: CC-BY-NC, per Sefaria's version record -- credit required, no
-         commercial use. Menachot and Chullin are recorded as "unknown" there.
+The other books are chaptered texts (Rashi is keyed to the Bavli's folios). For
+each tractate the script fetches one specific Sefaria version and checks that
+version's license against the list the book allows, because Sefaria's "merged"
+text can blend in a second version with a different (or unknown) license. It
+stops, naming the tractate, if a license is not allowed (Rashi instead leaves
+such a tractate out and records it) or the text is not nested as the book's
+citation scheme expects.
 """
 
 from __future__ import annotations
@@ -241,13 +237,24 @@ class BookSpec:
     id: str
     output: str  # file name under data/
     scheme: str  # the dataset's citationScheme
-    arity: int  # nesting depth of the text: chapter, section[, segment]
+    arity: int  # parts in a ref, as the scheme counts them
     toc_path: tuple[str, ...]
     skip_categories: tuple[str, ...]
     version: str | None  # exact Sefaria version title; None = the tractate's only version
     allowed_licenses: frozenset[str]
     text_source: str
     license: str
+    # Sefaria indexes a folio-keyed commentary by daf index (index 1 is 1a, 2 is
+    # 1b, ...), which becomes two ref parts, daf and amud.
+    daf_index: bool = False
+    # Leave out a tractate whose license is not allowed, recording it, instead
+    # of stopping the build.
+    omit_disallowed: bool = False
+
+    @property
+    def depth(self) -> int:
+        """How many levels deep the text is nested."""
+        return self.arity - 1 if self.daf_index else self.arity
 
 
 SPECS: dict[str, BookSpec] = {
@@ -295,6 +302,20 @@ SPECS: dict[str, BookSpec] = {
             allowed_licenses=frozenset({"CC-BY"}),
             text_source="Guggenheimer edition (De Gruyter, 1999-2015)",
             license="CC-BY",
+        ),
+        BookSpec(
+            id="rashi",
+            output="rashi.json.gz",
+            scheme="daf-comment",
+            arity=4,
+            toc_path=("Talmud", "Bavli", "Rishonim on Talmud", "Rashi"),
+            skip_categories=(),
+            version=None,
+            allowed_licenses=frozenset({"Public Domain"}),
+            text_source="Vilna edition (Rosh Hashanah: Wikisource)",
+            license="Public Domain",
+            daf_index=True,
+            omit_disallowed=True,
         ),
     )
 }
@@ -355,6 +376,21 @@ def walk_sections(text: object, arity: int) -> Iterator[tuple[tuple[int, ...], s
     yield from descend(text, ())
 
 
+def daf_ref(ref: tuple[int, ...]) -> tuple[int, ...]:
+    """Turn a leading 1-based daf index into ``daf, amud`` (index 1 is 1a, 2 is 1b, 3 is 2a)."""
+    index, *rest = ref
+    return ((index - 1) // 2 + 1, (index - 1) % 2, *rest)
+
+
+class OmittedTractate(Exception):
+    """A tractate left out of a book because its license is not allowed."""
+
+    def __init__(self, title: str, license: str | None):
+        super().__init__(title)
+        self.title = title
+        self.license = license
+
+
 def fetch_json(url: str) -> Any:
     try:
         with urllib.request.urlopen(url, timeout=180) as response:
@@ -377,6 +413,8 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
 
     data = fetch_json(base + urllib.parse.quote(version + ".json"))
     if data.get("license") not in spec.allowed_licenses:
+        if spec.omit_disallowed:
+            raise OmittedTractate(title, data.get("license"))
         raise SystemExit(
             f"{title}: version {version!r} is licensed {data.get('license')!r}, "
             f"not one of {sorted(spec.allowed_licenses)}"
@@ -384,8 +422,8 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
 
     try:
         sections = [
-            {"ref": list(ref), "segments": [segment]}
-            for ref, raw in walk_sections(data["text"], spec.arity)
+            {"ref": list(daf_ref(ref) if spec.daf_index else ref), "segments": [segment]}
+            for ref, raw in walk_sections(data["text"], spec.depth)
             if (segment := clean_segment(raw))
         ]
     except ValueError as exc:
@@ -411,14 +449,27 @@ def build_chaptered_book(spec: BookSpec) -> dict[str, Any]:
     leaves = toc_leaves(toc, spec.toc_path, spec.skip_categories)
     print(f"Fetching {len(leaves)} tractates…", file=sys.stderr)
 
+    def fetch(leaf: dict[str, Any]) -> dict[str, Any] | OmittedTractate:
+        try:
+            return fetch_chaptered_tractate(spec, leaf)
+        except OmittedTractate as omitted:
+            print(f"  {omitted.title}: omitted, licensed {omitted.license!r}", file=sys.stderr)
+            return omitted
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        tractates = list(pool.map(lambda leaf: fetch_chaptered_tractate(spec, leaf), leaves))
+        results = list(pool.map(fetch, leaves))
+    tractates = [r for r in results if isinstance(r, dict)]
+    omitted = [
+        {"tractate": r.title, "license": r.license}
+        for r in results
+        if isinstance(r, OmittedTractate)
+    ]
 
     names = [t["he"] for t in tractates]
     if len(set(names)) != len(names):
         raise SystemExit(f"{spec.id}: tractate names are not unique")
 
-    return {
+    dataset: dict[str, Any] = {
         "book": spec.id,
         "citationScheme": spec.scheme,
         "source": SOURCE,
@@ -426,8 +477,11 @@ def build_chaptered_book(spec: BookSpec) -> dict[str, Any]:
         "license": spec.license,
         "tractateCount": len(tractates),
         "wordCount": count_words(tractates),
-        "tractates": tractates,
     }
+    if omitted:
+        dataset["omitted"] = omitted  # still ahead of tractates, as read_header requires
+    dataset["tractates"] = tractates
+    return dataset
 
 
 def main(argv: Sequence[str] | None = None) -> int:

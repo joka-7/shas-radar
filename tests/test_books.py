@@ -59,8 +59,8 @@ class TestBookLibraryConfiguration:
             ({"ENABLED_BOOKS": "bavli"}, ["bavli"]),
             ({"ENABLED_BOOKS": " bavli , "}, ["bavli"]),
             (
-                {"ENABLED_BOOKS": "bavli,yerushalmi,mishnah,tosefta"},
-                ["bavli", "yerushalmi", "mishnah", "tosefta"],
+                {"ENABLED_BOOKS": "bavli,yerushalmi,mishnah,tosefta,rashi"},
+                ["bavli", "yerushalmi", "mishnah", "tosefta", "rashi"],
             ),
             ({"ENABLED_BOOKS": "mishnah,bavli"}, ["mishnah", "bavli"]),  # order is kept
         ],
@@ -167,3 +167,13 @@ class TestDatasets:
             if leftovers.search(segment.text)
         ]
         assert dirty == []
+
+
+class TestRashi:
+    def test_the_tractate_whose_license_is_not_allowed_is_left_out_and_recorded(self):
+        names = {t.en for t in library.corpus("rashi").tractates}
+        assert "Rashi on Sanhedrin" not in names
+        assert len(names) == 35
+        assert library.header("rashi")["omitted"] == [
+            {"tractate": "Rashi on Sanhedrin", "license": "CC-BY-SA"}
+        ]

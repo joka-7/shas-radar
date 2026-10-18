@@ -32,8 +32,10 @@ what links a set of results the visitor has selected.
   `array.array` columns — see **Data storage**. Measured on the real server:
   the Bavli alone is about 203MB, and all four enabled books (Bavli,
   Yerushalmi, Mishnah, Tosefta) about 316MB once each has been used.
-  `ENABLED_BOOKS` is the switch: Rashi would add roughly 144MB and Tosafot
-  roughly 123MB on top, which is why they are not included.
+  `ENABLED_BOOKS` is the switch: Rashi adds about 185MB (all five books reach
+  about 500MB, too close to 512MB), so it is built and tested but not enabled
+  in `render.yaml`; Bavli plus Rashi alone is about 390MB. Tosafot is not
+  included: it would add well over 100MB more.
 - *Installable, not offline.* The PWA shell lets a phone add the app to its
   home screen and paints instantly from the cached shell, but every search
   is still a live API call — there is no offline corpus on the client.
@@ -151,7 +153,7 @@ own first API call starts Render waking in the background.
 
 There is no database, cache, or blob store. The stores are the dataset files
 under `data/`: `shas.json.gz` (the Bavli, ~5.3 MB, all 37 tractates) and one
-per other book (`yerushalmi`, `mishnah`, `tosefta`; ~3.6 MB together), each decompressed and indexed
+per other book (`yerushalmi`, `mishnah`, `tosefta`, `rashi`; ~8.8 MB together), each decompressed and indexed
 into process memory at startup by `BookLibrary.corpus()`, which keeps one
 instance so every request shares it. Other enabled books are read the first
 time a request asks for one and then stay resident.

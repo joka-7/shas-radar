@@ -84,18 +84,30 @@ _AMUD_CHARS = ("a", "b")
 
 
 class DafScheme:
-    """Folio citation: ``(daf, amud)``, with amud stored as 0 for "a" and 1 for "b"."""
+    """Folio citation: ``(daf, amud)``, with amud stored as 0 for "a" and 1 for "b".
+
+    A commentary keyed to the same folios adds parts after the amud (Rashi:
+    ``(daf, amud, line, comment)``, arity 4). They are part of the Sefaria
+    link and the result fields, but not of the printed citation.
+    """
+
+    _EXTRA_FIELDS = ("line", "comment")
+
+    def __init__(self, arity: int = 2):
+        if not 2 <= arity <= 2 + len(self._EXTRA_FIELDS):
+            raise ValueError(f"a folio scheme has 2 to 4 parts, not {arity}")
+        self._arity = arity
 
     @property
     def arity(self) -> int:
-        return 2
+        return self._arity
 
     def hebrew(self, tractate_he: str, ref: Ref) -> str:
-        daf, amud = ref
+        daf, amud = ref[:2]
         return f"{tractate_he} {daf_citation(daf, _AMUD_CHARS[amud])}"
 
     def english(self, tractate_en: str, ref: Ref) -> str:
-        daf, amud = ref
+        daf, amud = ref[:2]
         return f"{tractate_en} {daf}{_AMUD_CHARS[amud]}"
 
     # Sefaria's ref-slug convention: spaces in a multi-word title become
@@ -103,12 +115,16 @@ class DafScheme:
     # unreachable from the build environment to verify directly; this matches
     # their documented convention -- worth a spot-check once deployed.
     def sefaria_url(self, sefaria_title: str, ref: Ref) -> str:
-        daf, amud = ref
-        return f"https://www.sefaria.org/{sefaria_title.replace(' ', '_')}.{daf}{_AMUD_CHARS[amud]}"
+        daf, amud = ref[:2]
+        slug = sefaria_title.replace(" ", "_")
+        extra = "".join(f".{part}" for part in ref[2:])
+        return f"https://www.sefaria.org/{slug}.{daf}{_AMUD_CHARS[amud]}{extra}"
 
     def fields(self, ref: Ref) -> dict[str, int | str]:
-        daf, amud = ref
-        return {"daf": daf, "amud": _AMUD_CHARS[amud]}
+        daf, amud = ref[:2]
+        named: dict[str, int | str] = {"daf": daf, "amud": _AMUD_CHARS[amud]}
+        named.update(zip(self._EXTRA_FIELDS, ref[2:], strict=False))
+        return named
 
 
 class ChapterScheme:
@@ -147,6 +163,7 @@ class ChapterScheme:
 
 CITATION_SCHEMES: dict[str, CitationScheme] = {
     "daf": DafScheme(),
+    "daf-comment": DafScheme(4),
     "chapter": ChapterScheme(2),
     "chapter-segment": ChapterScheme(3),
 }

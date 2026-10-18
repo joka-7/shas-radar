@@ -125,3 +125,24 @@ class TestChapterScheme:
     def test_rejects_an_arity_it_has_no_meaning_for(self, arity):
         with pytest.raises(ValueError):
             ChapterScheme(arity)
+
+
+class TestFolioCommentScheme:
+    scheme = CITATION_SCHEMES["daf-comment"]
+
+    def test_cites_the_folio_but_links_to_the_comment(self):
+        ref = (2, 0, 1, 3)
+        assert self.scheme.hebrew('רש"י על ברכות', ref) == 'רש"י על ברכות ב.'
+        assert self.scheme.english("Rashi on Berakhot", ref) == "Rashi on Berakhot 2a"
+        assert self.scheme.sefaria_url("Rashi on Berakhot", ref) == (
+            "https://www.sefaria.org/Rashi_on_Berakhot.2a.1.3"
+        )
+        assert self.scheme.fields(ref) == {"daf": 2, "amud": "a", "line": 1, "comment": 3}
+
+    def test_arity_is_four(self):
+        assert self.scheme.arity == 4
+
+    @pytest.mark.parametrize("arity", [1, 5])
+    def test_rejects_an_arity_it_has_no_meaning_for(self, arity):
+        with pytest.raises(ValueError):
+            DafScheme(arity)

@@ -74,6 +74,20 @@ TOC = [
 ]
 
 
+class TestDafRef:
+    @pytest.mark.parametrize(
+        ("ref", "expected"),
+        [
+            ((1, 1, 1), (1, 0, 1, 1)),  # index 1 is 1a
+            ((2, 3, 4), (1, 1, 3, 4)),  # index 2 is 1b
+            ((3, 1, 1), (2, 0, 1, 1)),  # the Gemara begins at 2a
+            ((128, 2, 5), (64, 1, 2, 5)),  # Berakhot ends at 64b
+        ],
+    )
+    def test_turns_a_daf_index_into_daf_and_amud(self, ref, expected):
+        assert build_dataset.daf_ref(ref) == expected
+
+
 class TestTocLeaves:
     def test_collects_leaves_in_order_and_skips_named_categories(self):
         leaves = build_dataset.toc_leaves(TOC, ["Mishnah"], ["Commentary"])
@@ -90,3 +104,8 @@ class TestSpecs:
 
         for spec in build_dataset.SPECS.values():
             assert CITATION_SCHEMES[spec.scheme].arity == spec.arity
+
+    def test_a_daf_indexed_book_is_one_level_shallower_than_its_refs(self):
+        rashi = build_dataset.SPECS["rashi"]
+        assert (rashi.arity, rashi.depth) == (4, 3)
+        assert build_dataset.SPECS["mishnah"].depth == 2

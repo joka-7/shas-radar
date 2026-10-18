@@ -61,6 +61,7 @@ KNOWN_BOOKS: tuple[Book, ...] = (
     Book("yerushalmi", "תלמוד ירושלמי", "Jerusalem Talmud", "yerushalmi.json.gz"),
     Book("mishnah", "משנה", "Mishnah", "mishnah.json.gz"),
     Book("tosefta", "תוספתא", "Tosefta", "tosefta.json.gz"),
+    Book("rashi", "רש״י על הבבלי", "Rashi on the Bavli", "rashi.json.gz"),
 )
 
 

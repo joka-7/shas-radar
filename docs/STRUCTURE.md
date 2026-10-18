@@ -23,6 +23,7 @@ shas-radar/
 │   └── search.py    # Talmud search: exact word, attached-prefix, exact phrase, and KWIC context.
 ├── data/
 │   ├── mishnah.json.gz
+│   ├── rashi.json.gz
 │   ├── shas.json.gz
 │   ├── tosefta.json.gz
 │   └── yerushalmi.json.gz

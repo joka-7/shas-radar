@@ -87,13 +87,19 @@ appears whenever more than one is enabled.
 | Jerusalem Talmud (`yerushalmi`) | Guggenheimer edition (De Gruyter) | CC-BY — credit required | 39 tractates, ~0.81M words | `תלמוד ירושלמי ברכות א:א` (chapter:halakhah) | `--book yerushalmi` |
 | Mishnah (`mishnah`) | Torat Emet | Public Domain | 63 tractates, ~0.19M words | `משנה ברכות א:א` (chapter:mishnah) | `--book mishnah` |
 | Tosefta (`tosefta`) | Mechon Mamre, Vilna edition | Public Domain | 61 tractates, ~0.29M words | `תוספתא ברכות א:א` (chapter:halakhah) | `--book tosefta` |
+| Rashi on the Bavli (`rashi`) | Vilna edition (Rosh Hashanah: Wikisource) | Public Domain | 35 tractates, ~2.10M words | `רש"י על ברכות ב.` (daf, amud; the link goes to the comment) | `--book rashi` |
 
 The licenses come from Sefaria's own version records. The build fetches one
 specific version per tractate and stops if its license is not on the book's
 allowed list, because Sefaria's "merged" text can blend in a second version
-with a different or unknown license. With all four loaded the running server
-uses about 316 MB (the Bavli alone: about 203 MB), measured on the real
-server.
+with a different or unknown license. Rashi on Sanhedrin is left out because
+Sefaria records it as CC-BY-SA (share-alike); the dataset's header lists it
+under `omitted`.
+
+**Memory, measured on the real server.** The Bavli alone: about 203 MB. Plus
+Yerushalmi, Mishnah and Tosefta: about 316 MB. Rashi adds about 185 MB more,
+so all five reach about **500 MB** — too close to a 512 MB limit, which is why
+`render.yaml` does not enable `rashi`. Bavli plus Rashi alone is about 390 MB.
 
 ### The text turned out to be vocalized, not plain print
 
