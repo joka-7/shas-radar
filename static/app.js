@@ -401,6 +401,60 @@
     return api;
   }
 
+  // "Rashi on this page": the comments on the result's page, fetched the first
+  // time the section is opened (a failed fetch can be retried by reopening it).
+  function commentaryBlock(result) {
+    var details = document.createElement("details");
+    details.className = "paragraph commentary";
+    var summary = document.createElement("summary");
+    summary.textContent = t(locale, "commentary.show");
+    var body = el("div", "commentary-body");
+    details.appendChild(summary);
+    details.appendChild(body);
+
+    var loaded = false;
+    details.addEventListener("toggle", function () {
+      if (!details.open || loaded) return;
+      loaded = true;
+      body.textContent = t(locale, "commentary.loading");
+      var params = new URLSearchParams({
+        book: result.book,
+        tractate: result.tractate.he,
+        daf: String(result.daf),
+        amud: result.amud,
+      });
+      apiFetch("/api/commentary?" + params.toString())
+        .then(function (response) {
+          if (!response.ok) throw new Error("commentary " + response.status);
+          return response.json();
+        })
+        .then(function (data) { renderCommentary(body, data); })
+        .catch(function () {
+          loaded = false;
+          body.textContent = t(locale, "commentary.error");
+        });
+    });
+    return details;
+  }
+
+  function renderCommentary(body, data) {
+    body.textContent = "";
+    if (!data.comments.length) {
+      body.textContent = t(locale, "commentary.none");
+      return;
+    }
+    data.comments.forEach(function (comment) {
+      body.appendChild(hebrewSpan("p", "paragraph-text commentary-comment", comment.text));
+    });
+    if (/^https:\/\//.test(data.sefariaUrl || "")) {
+      var link = el("a", "copy", t(locale, "openInSefaria"));
+      link.href = data.sefariaUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      body.appendChild(link);
+    }
+  }
+
   function resultCard(result, query, selection) {
     var card = el("article", "card");
 
@@ -429,6 +483,11 @@
     details.appendChild(summary);
     details.appendChild(hebrewSpan("p", "paragraph-text", result.fullParagraph));
     card.appendChild(details);
+
+    // A book keyed to the same pages (Rashi, for the Bavli) can be opened right
+    // under the result, for the page the match is on.
+    var host = bookById(result.book);
+    if (host && host.commentary && result.daf) card.appendChild(commentaryBlock(result));
 
     var foot = el("div", "card-foot");
     foot.appendChild(copyButton(result));

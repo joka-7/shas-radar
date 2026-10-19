@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import ai
 from .books import DEFAULT_BOOK, BookLibrary, UnknownBookError
+from .commentary import NoCommentaryError, UnknownTractateError, commentary_on_page
 from .corpus import Corpus
 from .search import (
     DEFAULT_CONTEXT,
@@ -203,9 +204,37 @@ def books_endpoint() -> dict[str, Any]:
                 "textSource": header["textSource"],
                 "license": header["license"],
                 "loaded": library.is_loaded(book.id),
+                "commentary": commentary.id
+                if (commentary := library.commentary_for(book.id))
+                else None,
             }
         )
     return {"default": library.default, "books": books}
+
+
+@app.get("/api/commentary")
+def commentary_endpoint(
+    tractate: str = Query(..., description="Tractate of the book, by Hebrew name"),
+    daf: int = Query(..., ge=1, le=65535, description="Page number"),
+    amud: Literal["a", "b"] = Query(..., description="Side of the page"),
+    book: str = Query(DEFAULT_BOOK, description="The book whose page it is; see /api/books"),
+) -> dict[str, Any]:
+    """The commentary (Rashi, for the Bavli) on one page of a book."""
+    try:
+        page = commentary_on_page(library, book, tractate, daf, 0 if amud == "a" else 1)
+    except UnknownBookError:
+        raise HTTPException(
+            status_code=400, detail=error("unknown_book", "הספר המבוקש אינו קיים")
+        ) from None
+    except NoCommentaryError:
+        raise HTTPException(
+            status_code=400, detail=error("no_commentary", "אין פירוש זמין לספר זה")
+        ) from None
+    except UnknownTractateError:
+        raise HTTPException(
+            status_code=400, detail=error("unknown_tractate", "המסכת המבוקשת אינה קיימת")
+        ) from None
+    return page.as_dict()
 
 
 @app.get("/api/tractates")

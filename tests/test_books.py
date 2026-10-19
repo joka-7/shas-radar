@@ -90,6 +90,21 @@ class TestBookLibraryLookup:
         assert not library.is_loaded("bavli")
 
 
+class TestBookLibraryCommentary:
+    RASHI = next(b for b in KNOWN_BOOKS if b.id == "rashi")
+
+    def test_finds_the_enabled_book_that_comments_on_another(self):
+        library = BookLibrary([BAVLI, self.RASHI])
+        assert library.commentary_for("bavli") is self.RASHI
+
+    @pytest.mark.parametrize("enabled", [[BAVLI], [BAVLI, RASHI]])
+    def test_a_book_nothing_comments_on_has_none(self, enabled):
+        assert BookLibrary(enabled).commentary_for("rashi") is None
+
+    def test_a_commentary_that_is_not_enabled_is_not_offered(self):
+        assert BookLibrary([BAVLI]).commentary_for("bavli") is None
+
+
 class TestBookLibraryLoading:
     def test_loads_on_first_use_and_returns_the_same_corpus_after(self, monkeypatch):
         loads = []

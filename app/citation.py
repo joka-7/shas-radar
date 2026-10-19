@@ -22,6 +22,7 @@ Ref = tuple[int, ...]
 MAX_REF_PARTS = 4
 _PART_BITS = 16
 _PART_MASK = (1 << _PART_BITS) - 1
+MAX_PART_VALUE = _PART_MASK
 
 
 def pack_ref(ref: Ref, arity: int) -> int:

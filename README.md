@@ -74,6 +74,13 @@ python scripts/build_dataset.py
 Because the data is committed, the running application never makes a network
 call and a fresh clone works offline.
 
+### Rashi under each Bavli result
+
+When `rashi` is enabled, every Bavli result gets a "Rashi on this page"
+section. Opening it fetches Rashi's comments on the result's page (daf and
+amud) from `/api/commentary` and links to that page's Rashi on Sefaria. It
+shows all of the page's comments, not only the one on the matched sentence.
+
 ### Other books
 
 The Bavli is the default; more books can be enabled with `ENABLED_BOOKS`
@@ -192,6 +199,7 @@ GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות&
 GET /api/proximity?a=אביי&b=רבא&within=6
 GET /api/books       -- the enabled books and their license/source, without loading any
 GET /api/tractates?book=bavli
+GET /api/commentary?book=bavli&tractate=ברכות&daf=2&amud=a   -- Rashi's comments on that page
 GET /api/health
 POST /api/analyze   {"groups": [...], "locale": "he", "credentials": [...], "history": [...]}   -- see "AI connections" below
 GET /api/ai-status   -- which vendors have a shared server key, for the AI settings panel
