@@ -35,8 +35,8 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -250,6 +250,9 @@ class BookSpec:
     # Leave out a tractate whose license is not allowed, recording it, instead
     # of stopping the build.
     omit_disallowed: bool = False
+    # Licenses allowed for named tractates only, kept on that tractate so the
+    # app can credit it. Everything else must match ``allowed_licenses``.
+    tractate_licenses: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def depth(self) -> int:
@@ -316,6 +319,8 @@ SPECS: dict[str, BookSpec] = {
             license="Public Domain",
             daf_index=True,
             omit_disallowed=True,
+            # Sefaria's only Hebrew text of Sanhedrin is typed in on Wikisource.
+            tractate_licenses={"Rashi on Sanhedrin": "CC-BY-SA"},
         ),
     )
 }
@@ -412,7 +417,8 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
         raise SystemExit(f"{title}: version {spec.version!r} not among {versions}")
 
     data = fetch_json(base + urllib.parse.quote(version + ".json"))
-    if data.get("license") not in spec.allowed_licenses:
+    tractate_license = spec.tractate_licenses.get(title)
+    if data.get("license") not in spec.allowed_licenses | {tractate_license}:
         if spec.omit_disallowed:
             raise OmittedTractate(title, data.get("license"))
         raise SystemExit(
@@ -433,7 +439,7 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
     if seder not in SEDER_HE:
         raise SystemExit(f"{title}: unexpected seder {seder!r}")
     print(f"  {title:<34} {len(sections):>5} sections", file=sys.stderr)
-    return {
+    tractate = {
         "he": merged["heTitle"],
         "en": merged["title"],
         "sefariaTitle": merged["title"],
@@ -441,6 +447,9 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
         "sederHe": SEDER_HE[seder],
         "sections": sections,
     }
+    if tractate_license:
+        tractate["license"] = tractate_license
+    return tractate
 
 
 def build_chaptered_book(spec: BookSpec) -> dict[str, Any]:

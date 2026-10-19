@@ -369,7 +369,7 @@ class TestOtherBooks:
             ("yerushalmi", 39, "chapter-segment", "CC-BY"),
             ("mishnah", 63, "chapter", "Public Domain"),
             ("tosefta", 61, "chapter", "Public Domain"),
-            ("rashi", 35, "daf-comment", "Public Domain"),
+            ("rashi", 36, "daf-comment", "Public Domain"),
         ],
     )
     def test_listed_with_its_scheme_and_license(self, client, book, tractates, scheme, license):

@@ -94,17 +94,21 @@ appears whenever more than one is enabled.
 | Jerusalem Talmud (`yerushalmi`) | Guggenheimer edition (De Gruyter) | CC-BY — credit required | 39 tractates, ~0.81M words | `תלמוד ירושלמי ברכות א:א` (chapter:halakhah) | `--book yerushalmi` |
 | Mishnah (`mishnah`) | Torat Emet | Public Domain | 63 tractates, ~0.19M words | `משנה ברכות א:א` (chapter:mishnah) | `--book mishnah` |
 | Tosefta (`tosefta`) | Mechon Mamre, Vilna edition | Public Domain | 61 tractates, ~0.29M words | `תוספתא ברכות א:א` (chapter:halakhah) | `--book tosefta` |
-| Rashi on the Bavli (`rashi`) | Vilna edition (Rosh Hashanah: Wikisource) | Public Domain | 35 tractates, ~2.10M words | `רש"י על ברכות ב.` (daf, amud; the link goes to the comment) | `--book rashi` |
+| Rashi on the Bavli (`rashi`) | Vilna edition (Rosh Hashanah: Wikisource) | Public Domain (Sanhedrin: CC-BY-SA) | 36 tractates, ~2.22M words | `רש"י על ברכות ב.` (daf, amud; the link goes to the comment) | `--book rashi` |
 
 The licenses come from Sefaria's own version records. The build fetches one
 specific version per tractate and stops if its license is not on the book's
 allowed list, because Sefaria's "merged" text can blend in a second version
-with a different or unknown license. Rashi on Sanhedrin is left out because
-Sefaria records it as CC-BY-SA (share-alike); the dataset's header lists it
-under `omitted`.
+with a different or unknown license. Rashi on Sanhedrin is the one exception:
+Sefaria records its only Hebrew text (typed in on Wikisource) as CC-BY-SA
+(share-alike), so that tractate alone carries `"license": "CC-BY-SA"` in the
+dataset, the `/api/commentary` response reports it, and the app credits it
+under the comments. Any other tractate with a license outside the list is
+still left out and listed under `omitted`. Share-alike applies to that
+tractate's text, not to the rest of the code or data.
 
 **Memory, measured on the real server.** The Bavli alone: about 168 MB. Plus
-Yerushalmi, Mishnah and Tosefta: about 247 MB. Rashi adds about 137 MB more,
+Yerushalmi, Mishnah and Tosefta: about 247 MB. Rashi adds about 137 MB more (Sanhedrin, added later, was not re-measured),
 so all five reach about **384 MB** of a 512 MB limit. `render.yaml` still
 does not enable `rashi`; add it to `ENABLED_BOOKS` to turn it on.
 

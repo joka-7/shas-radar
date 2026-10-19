@@ -82,7 +82,7 @@ tractate's parallel `segment_refs` column.
 ### `Tractate`
 
 ```python
-Tractate(he, en, seder_he, seder_en, sefaria_title, scheme)
+Tractate(he, en, seder_he, seder_en, sefaria_title, scheme, license)
 ```
 
 Built incrementally: `add_segment(ref, text)` tokenizes one segment
@@ -239,7 +239,7 @@ even though `/api/analyze` accepts a visitor's own API keys in its body.
 | `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
 | `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`); read from each dataset's header, so listing never loads a book |
 | `GET /api/tractates` | `book` | That book's tractate list, grouped by seder |
-| `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `comments[]` of `ref`, `text`, `sefariaUrl`; a page with no Rashi gives `comments: []` |
+| `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `sefariaUrl`; a page with no Rashi gives `comments: []` |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
 | `GET /api/ai-status` | — | Which vendors have a shared server key |
@@ -279,7 +279,7 @@ Build-time only; never imported by the running service.
 | `walk_sections(text, arity)` | Yields `(ref, segment)` with 1-based indices; `ValueError` if the text is not `arity` levels deep |
 | `fetch_chaptered_tractate(spec, leaf)` | Fetches the chosen version file (not `merged.json`), stops if its license is not allowed, shapes the sections |
 | `daf_ref(ref)` | A leading 1-based daf index to `daf, amud` (index 1 is 1a, 3 is 2a); used for Rashi |
-| `build_chaptered_book(spec)` | Builds Mishnah, Tosefta, Yerushalmi or Rashi; stops if tractate names repeat. A spec with `omit_disallowed` (Rashi) leaves out a tractate whose license is not allowed (`OmittedTractate`) and lists it under `omitted` in the dataset header |
+| `build_chaptered_book(spec)` | Builds Mishnah, Tosefta, Yerushalmi or Rashi; stops if tractate names repeat. A spec with `omit_disallowed` (Rashi) leaves out a tractate whose license is not allowed (`OmittedTractate`) and lists it under `omitted` in the dataset header; `tractate_licenses` (Rashi on Sanhedrin: CC-BY-SA) allows one named tractate another license and stores it as that tractate's `license` |
 | `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi` / `rashi`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
 
 ## Logging

@@ -31,7 +31,6 @@ class TestCommentaryOnPage:
         [
             (BERAKHOT, 900, 1, True),  # past the end of a tractate Rashi covers
             ("תמיד", 2, 0, False),  # not in the export
-            ("סנהדרין", 2, 0, False),  # left out for its license
         ],
     )
     def test_a_page_or_tractate_without_rashi_gives_no_comments_instead_of_an_error(
@@ -49,8 +48,21 @@ class TestCommentaryOnPage:
             "en": "Rashi on the Bavli",
         }
         assert body["tractate"] == {"he": 'רש"י על ברכות', "en": "Rashi on Berakhot"}
+        assert body["license"] == "Public Domain"
         assert body["comments"][0].keys() == {"ref", "text", "sefariaUrl"}
         assert body["comments"][0]["ref"] == [2, 0, 1, 1]
+
+    @pytest.mark.parametrize(
+        ("tractate", "license"),
+        [(BERAKHOT, "Public Domain"), ("סנהדרין", "CC-BY-SA"), ("תמיד", None)],
+    )
+    def test_each_page_reports_the_license_of_the_tractate_it_came_from(self, tractate, license):
+        body = commentary_on_page(library, "bavli", tractate, 2, 0).as_dict()
+        assert body["license"] == license
+
+    def test_sanhedrin_has_rashi_comments(self):
+        page = commentary_on_page(library, "bavli", "סנהדרין", 2, 0)
+        assert page.comments and all(c.ref[:2] == (2, 0) for c in page.comments)
 
     def test_a_tractate_without_rashi_has_null_links_in_the_json(self):
         body = commentary_on_page(library, "bavli", "תמיד", 2, 0).as_dict()
@@ -76,7 +88,7 @@ class TestCommentaryRelationship:
         rashi = library.book("rashi")
         covered = {t.en.removeprefix(rashi.title_prefix) for t in library.corpus("rashi").tractates}
         assert covered <= bavli
-        assert bavli - covered == {"Sanhedrin", "Tamid"}
+        assert bavli - covered == {"Tamid"}
 
     def test_only_rashi_comments_on_the_bavli(self):
         assert [b.id for b in KNOWN_BOOKS if b.commentary_on] == ["rashi"]

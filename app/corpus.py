@@ -128,6 +128,7 @@ class Tractate:
         "by_word",
         "en",
         "he",
+        "license",
         "scheme",
         "seder_en",
         "seder_he",
@@ -147,6 +148,7 @@ class Tractate:
         seder_en: str,
         sefaria_title: str,
         scheme: CitationScheme,
+        license: str,
     ):
         self.he = he
         self.en = en
@@ -154,6 +156,7 @@ class Tractate:
         self.seder_en = seder_en
         self.sefaria_title = sefaria_title
         self.scheme = scheme
+        self.license = license
 
         self.tokens: list[str] = []  # normalized (finals folded), interned
         self.tokens_raw: list[str] = []  # as printed, for display, interned
@@ -269,6 +272,7 @@ class Corpus:
                 entry["seder"],
                 entry["sefariaTitle"],
                 scheme,
+                entry.get("license", self.license),  # a tractate may be licensed apart
             )
             for section in entry["sections"]:
                 ref = tuple(section["ref"])

@@ -46,6 +46,7 @@ class PageCommentary:
     citation: str | None
     sefaria_url: str | None
     comments: list[Comment]
+    license: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """The JSON shape of ``GET /api/commentary``."""
@@ -56,6 +57,7 @@ class PageCommentary:
             ),
             "citation": self.citation,
             "sefariaUrl": self.sefaria_url,
+            "license": self.license,
             "comments": [
                 {"ref": list(c.ref), "text": c.text, "sefariaUrl": c.sefaria_url}
                 for c in self.comments
@@ -102,6 +104,7 @@ def commentary_on_page(
         tractate=tractate,
         citation=page.hebrew(tractate.he, page_ref),
         sefaria_url=page.sefaria_url(tractate.sefaria_title, page_ref),
+        license=tractate.license,
         comments=[
             Comment(
                 ref=ref,

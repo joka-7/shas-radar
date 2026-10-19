@@ -185,10 +185,9 @@ class TestDatasets:
 
 
 class TestRashi:
-    def test_the_tractate_whose_license_is_not_allowed_is_left_out_and_recorded(self):
-        names = {t.en for t in library.corpus("rashi").tractates}
-        assert "Rashi on Sanhedrin" not in names
-        assert len(names) == 35
-        assert library.header("rashi")["omitted"] == [
-            {"tractate": "Rashi on Sanhedrin", "license": "CC-BY-SA"}
-        ]
+    def test_the_one_tractate_under_another_license_carries_it_and_the_rest_do_not(self):
+        corpus = library.corpus("rashi")
+        assert len(corpus.tractates) == 36
+        assert "omitted" not in library.header("rashi")
+        by_license = {t.en: t.license for t in corpus.tractates if t.license != corpus.license}
+        assert by_license == {"Rashi on Sanhedrin": "CC-BY-SA"}
