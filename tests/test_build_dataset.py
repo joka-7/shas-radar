@@ -109,3 +109,34 @@ class TestSpecs:
         rashi = build_dataset.SPECS["rashi"]
         assert (rashi.arity, rashi.depth) == (4, 3)
         assert build_dataset.SPECS["mishnah"].depth == 2
+
+
+RASHI_CATEGORIES = ["Talmud", "Bavli", "Rishonim on Talmud", "Rashi", "Seder Nezikin"]
+
+
+class TestFetchChaptered:
+    @staticmethod
+    def fake_export(title, license):
+        def fetch(url):
+            if url.endswith("merged.json"):
+                return {"versions": [["Vilna Edition", "src"]], "heTitle": "רש", "title": title}
+            return {"license": license, "text": [[["a"], ["b"]]]}
+
+        return fetch
+
+    def fetch(self, monkeypatch, title, license):
+        monkeypatch.setattr(build_dataset, "fetch_json", self.fake_export(title, license))
+        leaf = {"title": title, "categories": RASHI_CATEGORIES}
+        return build_dataset.fetch_chaptered_tractate(build_dataset.SPECS["rashi"], leaf)
+
+    def test_the_named_tractate_keeps_its_own_license(self, monkeypatch):
+        tractate = self.fetch(monkeypatch, "Rashi on Sanhedrin", "CC-BY-SA")
+        assert tractate["license"] == "CC-BY-SA"
+
+    def test_a_tractate_under_the_books_license_carries_none_of_its_own(self, monkeypatch):
+        tractate = self.fetch(monkeypatch, "Rashi on Berakhot", "Public Domain")
+        assert "license" not in tractate
+
+    def test_another_tractate_under_that_license_is_still_left_out(self, monkeypatch):
+        with pytest.raises(build_dataset.OmittedTractate):
+            self.fetch(monkeypatch, "Rashi on Berakhot", "CC-BY-SA")

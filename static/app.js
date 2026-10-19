@@ -446,6 +446,9 @@
     data.comments.forEach(function (comment) {
       body.appendChild(hebrewSpan("p", "paragraph-text commentary-comment", comment.text));
     });
+    if (data.license) {
+      body.appendChild(el("p", "attribution", t(locale, "commentary.credit", { license: data.license })));
+    }
     if (/^https:\/\//.test(data.sefariaUrl || "")) {
       var link = el("a", "copy", t(locale, "openInSefaria"));
       link.href = data.sefariaUrl;

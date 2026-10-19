@@ -48,7 +48,9 @@ class TestWordIndexSuffixMatches:
 
 
 def make_commentary() -> Tractate:
-    tractate = Tractate("רש", "Rashi", "סדר", "Seder", "Rashi", CITATION_SCHEMES["daf-comment"])
+    tractate = Tractate(
+        "רש", "Rashi", "סדר", "Seder", "Rashi", CITATION_SCHEMES["daf-comment"], "CC0"
+    )
     for ref, text in [
         ((2, 0, 1, 1), "אמר רבא"),
         ((2, 0, 1, 2), "אמר אביי"),

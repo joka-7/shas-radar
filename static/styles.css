@@ -482,6 +482,7 @@ body {
 .paragraph summary { cursor: pointer; color: var(--accent-text); font-weight: 500; }
 .commentary-body { margin-top: .5rem; color: var(--text-soft); }
 .commentary-body .copy { display: inline-block; margin-top: .6rem; }
+.commentary-body .attribution { margin-top: .6rem; font-size: .85em; }
 .paragraph-text {
   margin: .5rem 0 0;
   padding: .65rem .8rem;
