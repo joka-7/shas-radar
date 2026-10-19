@@ -45,7 +45,14 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
-from .citation import CITATION_SCHEMES, CitationScheme, Ref, pack_ref, unpack_ref
+from .citation import (
+    CITATION_SCHEMES,
+    MAX_PART_VALUE,
+    CitationScheme,
+    Ref,
+    pack_ref,
+    unpack_ref,
+)
 from .hebrew import tokenize
 
 
@@ -166,9 +173,13 @@ class Tractate:
         """Tokenize one segment and append it to the tractate's stream.
 
         Raises:
-            ValueError: If ``ref`` does not fit this tractate's citation scheme.
+            ValueError: If ``ref`` does not fit this tractate's citation scheme, or
+                comes before the previous segment's (segments are kept in reading
+                order, which :meth:`segments_under` relies on).
         """
         packed = pack_ref(ref, self.scheme.arity)
+        if self.segment_refs and packed < self.segment_refs[-1]:
+            raise ValueError(f"segment {ref} is out of order in {self.en}")
         start = len(self.tokens)
         for raw, normalized in tokenize(text):
             self.tokens.append(sys.intern(normalized))
@@ -181,6 +192,29 @@ class Tractate:
 
     def build_index(self) -> None:
         self.by_word = WordIndex(self.tokens)
+
+    def segments_under(self, prefix: Ref) -> list[tuple[Ref, Segment]]:
+        """The segments whose location starts with ``prefix``, in reading order.
+
+        Args:
+            prefix: The leading parts of a location, e.g. ``(2, 0)`` for every
+                segment on daf 2a.
+
+        Raises:
+            ValueError: If ``prefix`` is empty or longer than the scheme's refs.
+        """
+        arity = self.scheme.arity
+        if not 1 <= len(prefix) <= arity:
+            raise ValueError(f"expected 1 to {arity} parts, got {prefix!r}")
+        pad = arity - len(prefix)
+        low = pack_ref((*prefix, *([0] * pad)), arity)
+        high = pack_ref((*prefix, *([MAX_PART_VALUE] * pad)), arity)
+        first = bisect.bisect_left(self.segment_refs, low)
+        end = bisect.bisect_right(self.segment_refs, high)
+        return [
+            (unpack_ref(self.segment_refs[index], arity), self.segments[index])
+            for index in range(first, end)
+        ]
 
     def _segment_index(self, position: int) -> int:
         return max(0, bisect.bisect_right(self.segment_starts, position) - 1)
@@ -248,6 +282,9 @@ class Corpus:
 
     def tractate_by_name(self, name_he: str) -> Tractate | None:
         return next((t for t in self.tractates if t.he == name_he), None)
+
+    def tractate_by_en(self, name_en: str) -> Tractate | None:
+        return next((t for t in self.tractates if t.en == name_en), None)
 
 
 def load_corpus(path: Path) -> Corpus:

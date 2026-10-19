@@ -50,6 +50,11 @@ class Book:
     he: str
     en: str
     data_file: str
+    # Set on a commentary keyed to another book's pages: the id of that book, and
+    # what to put before one of its tractate names to get this book's (Rashi on
+    # Berakhot is "Rashi on " + "Berakhot").
+    commentary_on: str | None = None
+    title_prefix: str = ""
 
     @property
     def data_path(self) -> Path:
@@ -61,7 +66,14 @@ KNOWN_BOOKS: tuple[Book, ...] = (
     Book("yerushalmi", "תלמוד ירושלמי", "Jerusalem Talmud", "yerushalmi.json.gz"),
     Book("mishnah", "משנה", "Mishnah", "mishnah.json.gz"),
     Book("tosefta", "תוספתא", "Tosefta", "tosefta.json.gz"),
-    Book("rashi", "רש״י על הבבלי", "Rashi on the Bavli", "rashi.json.gz"),
+    Book(
+        "rashi",
+        "רש״י על הבבלי",
+        "Rashi on the Bavli",
+        "rashi.json.gz",
+        commentary_on="bavli",
+        title_prefix="Rashi on ",
+    ),
 )
 
 
@@ -138,6 +150,10 @@ class BookLibrary:
     def books(self) -> list[Book]:
         """The enabled books, in configured order."""
         return list(self._books.values())
+
+    def commentary_for(self, book_id: str) -> Book | None:
+        """The enabled book that comments on ``book_id``'s pages, if there is one."""
+        return next((b for b in self._books.values() if b.commentary_on == book_id), None)
 
     def book(self, book_id: str) -> Book:
         """The enabled book with this id.

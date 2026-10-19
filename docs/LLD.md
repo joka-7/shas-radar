@@ -49,16 +49,27 @@ citation, the Sefaria link, and any extra result fields.
 
 | Name | Contract |
 | --- | --- |
-| `Book` | Frozen record: `id`, `he`, `en`, `data_file` (under `data/`) |
+| `Book` | Frozen record: `id`, `he`, `en`, `data_file` (under `data/`); a commentary also sets `commentary_on` (the base book's id) and `title_prefix` (`"Rashi on "`, put before a base tractate's name to get the commentary's) |
 | `KNOWN_BOOKS` | Every book the code knows; today just `bavli` |
 | `read_header(path)` | A dataset's descriptive fields, read without parsing its tractates; relies on the dataset writing them before `tractates` |
 | `BookLibrary(enabled, default)` | Raises `BookConfigError` for an empty or repeated set, a default that is not enabled, or a missing data file |
 | `BookLibrary.from_environ(environ)` | Reads `ENABLED_BOOKS` (comma-separated ids; unset means `bavli`) |
 | `books()` / `book(id)` / `header(id)` / `is_loaded(id)` | Listing and lookup; `book` raises `UnknownBookError` |
+| `commentary_for(id)` | The enabled book that comments on `id`'s pages (Rashi, for `bavli`), or `None` |
 | `corpus(id)` | The book's `Corpus`, loaded on first use under a per-book lock so two simultaneous first requests load it once |
 
 `BookError` is the base of `UnknownBookError` (a request named no enabled
 book) and `BookConfigError` (the configuration is invalid; raised at startup).
+
+## `app/commentary.py` — a commentary on one page
+
+`commentary_on_page(library, book_id, tractate_he, daf, amud)` finds the
+enabled commentary on `book_id` (`NoCommentaryError` if none), maps the base
+tractate to the commentary's (`title_prefix + base.en`; `UnknownTractateError` if
+the base has no such tractate), and returns a `PageCommentary` with that page's
+`Comment`s (`ref`, `text`, `sefaria_url`) in reading order. A page or tractate
+the commentary does not cover gives no comments, not an error. `as_dict()` is
+the JSON shape of `GET /api/commentary`.
 
 ## `app/corpus.py` — model and indexes
 
@@ -86,6 +97,7 @@ then `build_index()` builds `by_word` once all segments are in.
 | `by_word` | A `WordIndex`: `get(word)` gives the ascending token positions of a normalized word (binary search over the sorted words, then a slice of one shared positions array); `suffix_matches(suffix)` yields the words that end with `suffix`, in order of first appearance, so results page in the same order as before |
 | `segment_at(position)` | The `Segment` (paragraph) containing that token, via `bisect` on `segment_starts` |
 | `ref_at(position)` | The `Ref` of the segment containing that token |
+| `segments_under(prefix)` | `(Ref, Segment)` for every segment whose location starts with `prefix`, in reading order (`bisect` over the packed `segment_refs`; `add_segment` rejects out-of-order locations, which this relies on) |
 | `ref_fields(position)` / `citation(position)` / `citation_en(position)` / `sefaria_url(position)` | The scheme's output for that token's `Ref` |
 | `__len__` | Token count |
 
@@ -102,6 +114,7 @@ and its `segments`), using the scheme named by the dataset's
 | Method | Contract |
 | --- | --- |
 | `tractate_by_name(name_he)` | The `Tractate` with that Hebrew name, or `None` |
+| `tractate_by_en(name_en)` | The `Tractate` with that English name, or `None` |
 | `__len__` | Total token count across every tractate |
 
 `load_corpus(path)` reads and indexes one dataset and is not cached;
@@ -224,8 +237,9 @@ even though `/api/analyze` accepts a visitor's own API keys in its body.
 | Route | Query / body | Response |
 | --- | --- | --- |
 | `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
-| `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`; read from each dataset's header, so listing never loads a book |
+| `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`); read from each dataset's header, so listing never loads a book |
 | `GET /api/tractates` | `book` | That book's tractate list, grouped by seder |
+| `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `comments[]` of `ref`, `text`, `sefariaUrl`; a page with no Rashi gives `comments: []` |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
 | `GET /api/ai-status` | — | Which vendors have a shared server key |
@@ -242,7 +256,8 @@ and rendered by `http_exception_handler`:
 {"error": "<message, mostly Hebrew>", "code": "<stable machine code>"}
 ```
 
-`code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_credential`,
+`code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_commentary`,
+`unknown_tractate`, `no_credential`,
 `timeout`, plus whatever `ModelDispatcherError.error_code` supplies for a
 dispatch failure. The frontend's `error.code.*` lookup keys off these.
 
@@ -283,6 +298,7 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | `tests/test_hebrew.py` | Every normalization primitive, including niqqud stripping, maqaf as a separator, and the ט״ו/ט״ז gematria exception |
 | `tests/test_search.py` | Index correctness, all four match kinds (exact, with-prefix, phrase, phrase-with-prefix), proximity, offset/limit pagination, and the HTTP surface via `TestClient` — status codes, the error contract, clamping |
 | `tests/test_citation.py` | Ref packing, and the folio and chapter schemes' Hebrew/English/URL output |
+| `tests/test_commentary.py` | A page's comments on the real Bavli and Rashi data, the pages and tractates that have none, and the errors |
 | `tests/test_books.py` | The registry and `ENABLED_BOOKS` parsing, per-book lazy loading under a lock, and every shipped dataset (header matches corpus, unique tractate names, no markup or entities left in the text) |
 | `tests/test_build_dataset.py` | The build script's pure helpers: cleaning, the nested-text walk, table-of-contents lookup |
 | `tests/test_ai.py` | `analyze_connections` and its supporting functions against ModelDispatcher's keyless `MockProvider`, including the no-credential, timeout, and chat-history (ordering, capping) paths |

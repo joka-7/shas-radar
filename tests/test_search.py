@@ -452,3 +452,50 @@ class TestRashiApi:
         assert first["ref"][:2] == [2, 0]
         assert (first["daf"], first["amud"]) == (2, "a")
         assert first["fullParagraph"].startswith("מאימתי קורין את שמע")
+
+
+class TestCommentaryApi:
+    def test_books_say_which_one_has_a_commentary(self, client):
+        books = {b["id"]: b["commentary"] for b in client.get("/api/books").json()["books"]}
+        assert books == {
+            "bavli": "rashi",
+            "yerushalmi": None,
+            "mishnah": None,
+            "tosefta": None,
+            "rashi": None,
+        }
+
+    def test_gives_the_comments_on_a_bavli_page(self, client):
+        params = {"book": "bavli", "tractate": "ברכות", "daf": 2, "amud": "a"}
+        body = client.get("/api/commentary", params=params).json()
+        assert body["citation"] == 'רש"י על ברכות ב.'
+        assert body["sefariaUrl"] == "https://www.sefaria.org/Rashi_on_Berakhot.2a"
+        assert len(body["comments"]) == 17
+
+    def test_the_book_defaults_to_the_default_book(self, client):
+        params = {"tractate": "ברכות", "daf": 2, "amud": "b"}
+        assert client.get("/api/commentary", params=params).json()["comments"]
+
+    @pytest.mark.parametrize(
+        ("params", "code"),
+        [
+            ({"book": "nope", "tractate": "ברכות", "daf": 2, "amud": "a"}, "unknown_book"),
+            ({"book": "mishnah", "tractate": "משנה ברכות", "daf": 2, "amud": "a"}, "no_commentary"),
+            ({"book": "bavli", "tractate": "nope", "daf": 2, "amud": "a"}, "unknown_tractate"),
+        ],
+    )
+    def test_rejects_what_it_cannot_answer_with_a_stable_code(self, client, params, code):
+        response = client.get("/api/commentary", params=params)
+        assert response.status_code == 400
+        assert response.json()["code"] == code
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"tractate": "ברכות", "daf": 2, "amud": "c"},  # no such side
+            {"tractate": "ברכות", "daf": 0, "amud": "a"},  # no page 0
+            {"tractate": "ברכות", "amud": "a"},  # missing daf
+        ],
+    )
+    def test_rejects_malformed_requests(self, client, params):
+        assert client.get("/api/commentary", params=params).status_code == 422
