@@ -83,7 +83,7 @@ then `build_index()` builds `by_word` once all segments are in.
 | --- | --- |
 | `tokens` / `tokens_raw` | Normalized / as-printed token stream, interned |
 | `segment_refs` | `array.array("Q")`, one packed `Ref` per segment, parallel to `segments` |
-| `by_word` | `dict[str, array.array[int]]` — normalized word → sorted token positions |
+| `by_word` | A `WordIndex`: `get(word)` gives the ascending token positions of a normalized word (binary search over the sorted words, then a slice of one shared positions array); `suffix_matches(suffix)` yields the words that end with `suffix`, in order of first appearance, so results page in the same order as before |
 | `segment_at(position)` | The `Segment` (paragraph) containing that token, via `bisect` on `segment_starts` |
 | `ref_at(position)` | The `Ref` of the segment containing that token |
 | `ref_fields(position)` / `citation(position)` / `citation_en(position)` / `sefaria_url(position)` | The scheme's output for that token's `Ref` |
@@ -126,9 +126,9 @@ One place a query matched: `tractate`, `start` (token position), `length`
 
 | Function | Returns | Cost |
 | --- | --- | --- |
-| `find_exact_word(corpus, word)` | Every position for `word` | `by_word` dict hit per tractate |
+| `find_exact_word(corpus, word)` | Every position for `word` | One `by_word` binary search per tractate |
 | `find_with_prefix(corpus, word)` | Positions where a word *ends with* `word` but isn't it | Linear scan of each tractate's distinct vocabulary |
-| `find_phrase(corpus, words)` | Consecutive-position matches for a multi-word query | `by_word` hit on the first word, then a positional check |
+| `find_phrase(corpus, words)` | Consecutive-position matches for a multi-word query | `by_word` lookup of the first word, then a positional check |
 | `find_phrase_with_prefix(corpus, words)` | Same, but the phrase's first word also gets attached-prefix treatment | Vocabulary scan + positional check |
 | `find_proximity(corpus, a, b, within)` | `{tractate, posA, posB}` pairs within `within` tokens, either order | `by_word` hits on both, then a bounded double loop |
 

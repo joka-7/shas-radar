@@ -38,8 +38,10 @@ from __future__ import annotations
 import array
 import bisect
 import gzip
+import itertools
 import json
 import sys
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +58,60 @@ class Segment:
         self.text = text
         self.start = start  # token position, inclusive
         self.end = end  # token position, exclusive
+
+
+class WordIndex:
+    """Where each word occurs, kept as three flat arrays.
+
+    A dict of one ``array.array`` per distinct word costs about 100 bytes of
+    object overhead per word before it holds a single position -- more than
+    the positions themselves, since over half of a tractate's distinct words
+    occur exactly once. Here the sorted distinct words sit in one list, each
+    word's slice of one shared positions array is found through an offsets
+    array, and a lookup is a binary search.
+    """
+
+    __slots__ = ("_first_seen", "_offsets", "_positions", "_words")
+
+    def __init__(self, tokens: Sequence[str]):
+        """
+        Args:
+            tokens: A tractate's normalized token stream, in reading order.
+        """
+        self._words: list[str] = sorted(set(tokens))
+        word_id = {word: index for index, word in enumerate(self._words)}
+        ids = [word_id[token] for token in tokens]
+        # A stable sort by id keeps each word's positions ascending.
+        self._positions: array.array[int] = array.array(
+            "I", sorted(range(len(ids)), key=ids.__getitem__)
+        )
+        counts = [0] * (len(self._words) + 1)
+        for index in ids:
+            counts[index + 1] += 1
+        self._offsets: array.array[int] = array.array("I", itertools.accumulate(counts))
+        # Word ids in order of first appearance: the order suffix_matches reports in,
+        # so results page the same way they did when this was a dict built in reading order.
+        self._first_seen: array.array[int] = array.array(
+            "I", sorted(range(len(self._words)), key=lambda i: self._positions[self._offsets[i]])
+        )
+
+    def get(self, word: str, default: Sequence[int] = ()) -> Sequence[int]:
+        """The ascending token positions of ``word``, or ``default`` if it never occurs."""
+        index = bisect.bisect_left(self._words, word)
+        if index == len(self._words) or self._words[index] != word:
+            return default
+        return self._positions[self._offsets[index] : self._offsets[index + 1]]
+
+    def suffix_matches(self, suffix: str) -> Iterator[tuple[str, Sequence[int]]]:
+        """Every distinct word that ends with ``suffix`` but is not ``suffix`` itself.
+
+        Words come in order of first appearance. A linear scan over the distinct
+        words, not over the token stream.
+        """
+        for index in self._first_seen:
+            word = self._words[index]
+            if word != suffix and word.endswith(suffix):
+                yield word, self._positions[self._offsets[index] : self._offsets[index + 1]]
 
 
 class Tractate:
@@ -100,9 +156,8 @@ class Tractate:
         # Parallel to `segments`, kept sorted for bisect: start-position lookup.
         self.segment_starts: list[int] = []
 
-        # word -> sorted array of token positions where it occurs. Built as
-        # plain lists in build_index() below, then frozen into array.array.
-        self.by_word: dict[str, array.array[int]] = {}
+        # Where each word occurs; built by build_index() once every segment is in.
+        self.by_word = WordIndex(())
 
     def __len__(self) -> int:
         return len(self.tokens)
@@ -125,10 +180,7 @@ class Tractate:
             self.segment_refs.append(packed)
 
     def build_index(self) -> None:
-        positions: dict[str, list[int]] = {}
-        for position, word in enumerate(self.tokens):
-            positions.setdefault(word, []).append(position)
-        self.by_word = {word: array.array("I", where) for word, where in positions.items()}
+        self.by_word = WordIndex(self.tokens)
 
     def _segment_index(self, position: int) -> int:
         return max(0, bisect.bisect_right(self.segment_starts, position) - 1)

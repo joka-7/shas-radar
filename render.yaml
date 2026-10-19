@@ -20,9 +20,8 @@ services:
       # Which books are searchable (comma-separated ids, app/books.py). Unset
       # means just the Bavli. Every book adds to resident memory once someone
       # selects it -- see docs/HLD.md -- so this is the switch for the 512MB
-      # free plan. "rashi" is deliberately not listed: with all five books
-      # loaded the server reaches about 500MB. Add it on a larger plan, or
-      # drop some of the others (bavli,rashi alone is about 390MB).
+      # free plan. "rashi" is not listed yet: it adds about 137MB, so all five
+      # books reach about 384MB. Add it to this list to turn it on.
       - key: ENABLED_BOOKS
         value: bavli,yerushalmi,mishnah,tosefta
       # Optional AI "find connections" feature (app/ai.py, README's "AI
