@@ -332,10 +332,15 @@ A key a visitor adds:
 
 - Is stored **only** in that browser's `localStorage` (`shas-radar:ai-config`).
 - Is sent **only** to the AI vendor, straight from the browser
-  (`frontend/src/browserAi.ts`). This server never receives it: both
-  analysis endpoints reject a request body carrying any field they don't
-  know (`extra="forbid"` on `AnalyzeBody` in `app/main.py`), so a stale
-  client still sending keys gets a 422 instead of handing them over.
+  (`frontend/src/browserAi.ts`); the current client never sends it to this
+  server. As a backstop, both analysis endpoints reject a body carrying any
+  field they don't know (`extra="forbid"` on `AnalyzeBody` in
+  `app/main.py`), so a stale tab still sending keys gets a 422 and the key
+  is never used or stored.
+- If every one of the visitor's own providers fails (a bad key, a local
+  Ollama that isn't running), the analysis falls back to the server's
+  shared key when there is one; otherwise it says the visitor's key didn't
+  work and points to AI settings.
 - Is used instead of the server's keys whenever one is configured. The
   browser and the server build the same prompt (`ai.build_prompt`), so
   the answer is asked the same way on either path.

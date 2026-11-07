@@ -712,15 +712,37 @@
   function requestAnalysis(groups, history) {
     var payload = { locale: locale, groups: groups };
     if (history) payload.history = history;
-    return loadBrowserAi().then(function (browserAi) {
-      if (browserAi.hasOwnKey()) {
-        return postAnalyzeRequest("/api/analyze/prompt", payload).then(function (prompt) {
-          return browserAi.completeAnalysis(prompt);
-        });
-      }
+
+    function onServer() {
       return postAnalyzeRequest("/api/analyze", payload).then(function (result) {
         return result.connection;
       });
+    }
+
+    // A module that won't load (ad-blocker, offline) can't hold a usable own
+    // key either, so that visitor still gets the server path.
+    return loadBrowserAi().then(function (browserAi) {
+      if (!browserAi.hasOwnKey()) return onServer();
+      return postAnalyzeRequest("/api/analyze/prompt", payload)
+        .then(function (prompt) {
+          return browserAi.completeAnalysis(prompt);
+        })
+        .catch(function (err) {
+          if (err.code !== "all_providers_exhausted") throw err;
+          // Every own provider failed (a bad key, an Ollama that isn't
+          // running): the shared server key, when there is one, still answers.
+          if (serverHasAiKey()) return onServer();
+          var ownKeyErr = new Error(err.message);
+          ownKeyErr.code = "own_key_failed";
+          throw ownKeyErr;
+        });
+    }, onServer);
+  }
+
+  function serverHasAiKey() {
+    var providers = (lastAiStatus && lastAiStatus.providers) || {};
+    return Object.keys(providers).some(function (id) {
+      return providers[id] === true;
     });
   }
 
@@ -988,6 +1010,7 @@
   // external-AI fallback answers immediately either way.
   var NEEDS_KEY_CODES = [
     "no_credential", "authentication_error", "provider_invalid", "quota_exceeded", "all_providers_exhausted", "timeout",
+    "own_key_failed",
   ];
 
   function connectionsSection(data, selection) {
