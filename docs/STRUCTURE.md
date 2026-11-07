@@ -34,6 +34,7 @@ shas-radar/
 │   └── STRUCTURE.md
 ├── frontend/
 │   ├── src/
+│   │   ├── browserAi.ts
 │   │   └── main.tsx
 │   ├── .gitignore
 │   ├── .prettierrc
@@ -55,6 +56,8 @@ shas-radar/
 │   │   └── icon-512.png
 │   ├── vendor/
 │   │   └── model-picker/
+│   │       ├── browser-ai.js
+│   │       ├── chunk-config.js
 │   │       ├── main.css
 │   │       └── main.js
 │   ├── app.js

@@ -183,31 +183,35 @@ Constants: `DEFAULT_LIMIT = 50`, `MAX_LIMIT = 200`, `DEFAULT_CONTEXT = 5`,
 
 ## `app/ai.py` — optional AI connections
 
-Builds a [ModelDispatcher](https://github.com/joka-7/ModelDispatcher)
-gateway from whichever credentials exist for one request — server env vars,
-a visitor's own (BYOK), or both — via `model_dispatcher.byok`, which owns
-the registry-building, credential-metadata, and timeout-wiring this module
-used to hand-roll. `_build_registry`, `_credential_metadata`,
-`NoCredentialError`, `RequestTimeoutError` stay this module's own names
-(its public API, per its tests) but delegate straight through.
+Builds the analysis prompt, and answers it on the **server's own keys**
+through a [ModelDispatcher](https://github.com/joka-7/ModelDispatcher)
+gateway (`model_dispatcher.byok` owns the registry-building and
+timeout-wiring). A visitor's own key never reaches this module: the browser
+gets the prompt from `build_prompt` and calls the vendor itself.
+`_build_registry`, `NoCredentialError`, `RequestTimeoutError` stay this
+module's own names (its public API, per its tests) but delegate straight
+through.
 
 ```python
+build_prompt(groups: list[dict[str, Any]], locale: str = "he",
+             history: list[dict[str, str]] | None = None) -> AnalysisPrompt
+    # AnalysisPrompt(system: str, messages: list[{"role", "content"}]); pure
+
 analyze_connections(groups: list[dict[str, Any]], locale: str = "he", *,
-                     credentials: dict[str, list[str]] | None = None,
                      gateway: ModelGateway | None = None,
                      history: list[dict[str, str]] | None = None) -> AnalyzeResult
 ```
 
 | Behavior | Detail |
 | --- | --- |
-| Registry | Rebuilt per request, registering only vendors with a usable key for *this* request — a keyless vendor is left out entirely rather than included and left to hard-fail the dispatch chain |
+| Registry | Rebuilt per request from the server's env keys only — a keyless vendor is left out entirely rather than included and left to hard-fail the dispatch chain |
 | Quota | One app-wide `TenantQuota` (`AI_REQUESTS_PER_MIN`/`AI_TOKENS_PER_MIN`/`AI_TOKENS_PER_DAY`), shared across every visitor since there is no per-user auth |
 | Deadline | `dispatch_with_timeout` on a dedicated 4-worker thread pool, bounded to `AI_REQUEST_DEADLINE_SECONDS` (default 30) — no ModelDispatcher provider adapter sets its own HTTP timeout |
-| Prompt | `_SYSTEM_PROMPT` plus `_format_groups(groups)`, capped to `MAX_GROUPS` (5) groups and `MAX_RESULTS_PER_GROUP` (6) results each, each snippet capped to `SNIPPET_WORD_CAP` (40) words |
+| Prompt | `build_prompt`: `_SYSTEM_PROMPT` plus `_format_groups(groups)`, capped to `MAX_GROUPS` (5) groups and `MAX_RESULTS_PER_GROUP` (6) results each, each snippet capped to `SNIPPET_WORD_CAP` (40) words |
 | `history` param | A "continue chatting" follow-up's prior turns (`[{"role": "assistant"\|"user", "content": ...}, ...]`), appended as `Message`s after the groups prompt, capped at `MAX_HISTORY_TURNS` (20). Empty/omitted for the original single-shot analysis — the client resends the whole exchange on every follow-up since nothing is kept server-side |
 | `gateway` param | Injection seam for tests — a `MockProvider`-backed gateway, never a real network call in the suite |
 
-Raises `NoCredentialError` (no key anywhere), `RequestTimeoutError` (deadline
+Raises `NoCredentialError` (no server key), `RequestTimeoutError` (deadline
 exceeded), or lets any `model_dispatcher.exceptions.ModelDispatcherError`
 propagate — each already carries the HTTP status `main.py` needs to surface
 it as-is.
@@ -229,8 +233,8 @@ rather than a stale bundle outliving it (its URL never changes).
 **CORS.** `ALLOWED_ORIGINS` is an explicit allowlist plus an
 `allow_origin_regex` for Vercel's per-branch preview hostnames.
 `allow_credentials` stays `False` — no cookies, no auth — which is what lets
-the allowlist stay a plain list rather than a stricter per-request check,
-even though `/api/analyze` accepts a visitor's own API keys in its body.
+the allowlist stay a plain list rather than a stricter per-request check.
+The allowlist exists because `/api/analyze` spends the server's own keys.
 
 ### Routes
 
@@ -243,7 +247,8 @@ even though `/api/analyze` accepts a visitor's own API keys in its body.
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
 | `GET /api/ai-status` | — | Which vendors have a shared server key |
-| `POST /api/analyze` | `AnalyzeBody` (`groups`, `locale`, `credentials`, `history`) | `{connection, provider}` |
+| `POST /api/analyze` | `AnalyzeBody` (`groups`, `locale`, `history`; unknown fields → 422) | `{connection, provider}`, on the server's keys |
+| `POST /api/analyze/prompt` | `AnalyzeBody` | `{system, messages}` — no model call; the browser sends it with the visitor's own key |
 | `GET /` + `/static/*` | — | The frontend, same origin |
 
 ### Error contract

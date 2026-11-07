@@ -11,25 +11,25 @@ that stays true here too: a fresh clone with no keys set anywhere still runs
 the whole app -- this feature just answers ``no_credential`` on that one
 endpoint instead of crashing (see ``analyze_connections``).
 
-Two independent sources of credentials, either sufficient on its own:
+Two ways an analysis runs, and the server only ever sees its own keys:
 
 * **Server keys** -- ``GEMINI_API_KEY`` / ``OPENAI_API_KEY`` /
-  ``ANTHROPIC_API_KEY`` env vars, any subset, shared across every visitor
-  (this app has no per-user auth, so quota is one app-wide budget, not
-  scoped per visitor -- see ``_quota()``).
-* **A visitor's own key(s)** ("bring your own key"), pasted into the AI
-  settings panel in the UI, sent with the request and never persisted
-  server-side.
+  ``ANTHROPIC_API_KEY`` / ``GROQ_API_KEY`` env vars, any subset, shared
+  across every visitor (this app has no per-user auth, so quota is one
+  app-wide budget, not scoped per visitor -- see ``_quota()``). That is
+  ``analyze_connections``.
+* **A visitor's own key(s)** ("bring your own key") never reach this
+  server. The browser asks ``build_prompt`` (via ``POST
+  /api/analyze/prompt``) for the exact prompt, then calls the vendor itself
+  with modeldispatcher-browser-agent -- so the operator can't see, log or
+  spend a visitor's key, and the prompt stays defined in one place.
 
-Registering only the vendors with an available key, mapping BYOK keys onto
-tenant metadata, and bounding the dispatch with a hard deadline (no built-in
-provider adapter sets a network timeout of its own) are all
-``model_dispatcher.byok``'s job now, not this app's -- that wiring used to
-be hand-written here; it's exactly the same wiring every other single-backend
-BYOK app on top of ModelDispatcher needs, so it now lives in the library
-instead. ``_build_registry``/``_credential_metadata``/``NoCredentialError``/
-``RequestTimeoutError`` stay as this module's own names (and this module's
-public API, per its tests) but delegate straight through.
+Registering only the vendors with an available key and bounding the
+dispatch with a hard deadline (no built-in provider adapter sets a network
+timeout of its own) are ``model_dispatcher.byok``'s job, not this app's.
+``_build_registry``/``NoCredentialError``/``RequestTimeoutError`` stay as
+this module's own names (and its public API, per its tests) but delegate
+straight through.
 """
 
 from __future__ import annotations
@@ -55,7 +55,6 @@ from model_dispatcher import (
 from model_dispatcher.byok import ProviderSpec, dispatch_with_timeout
 from model_dispatcher.byok import build_registry as _build_registry_for
 from model_dispatcher.byok import configured_providers as _configured_providers
-from model_dispatcher.byok import credential_metadata as _credential_metadata
 from model_dispatcher.exceptions import DispatchTimeoutError, NoProviderAvailableError
 from model_dispatcher.providers import (
     AnthropicProvider,
@@ -85,17 +84,15 @@ SNIPPET_WORD_CAP = 40
 # therefore how much of the bill) keeps growing with the prompt.
 MAX_HISTORY_TURNS = 20
 
-# One shared tenant identity for the whole app -- individual visitors are
-# distinguished by which credentials *they* supplied (see analyze_connections),
-# not by a separate tenant id each, since there's no per-user auth here.
+# One shared tenant identity for the whole app: there's no per-user auth
+# here, and every server-side dispatch spends the same server keys.
 TENANT_ID = TenantId("shas-radar")
 
 # One vendor per entry: the ModelDispatcher provider adapter, the env vars a
 # server operator can set (a key, and an optional model override), and the
 # default model if no override is given. The dict key doubles as the "family"
 # name ModelDispatcher's own CredentialResolver derives from a provider's
-# ``name`` (the part before the first ":") -- match it exactly, since that's
-# also what a BYOK request's ``credentials[*].provider`` value must equal.
+# ``name`` (the part before the first ":") -- match it exactly.
 _PROVIDER_SPECS: dict[str, ProviderSpec] = {
     "gemini": ProviderSpec(GeminiProvider, "GEMINI_API_KEY", "GEMINI_MODEL", "gemini-2.5-flash"),
     "openai": ProviderSpec(OpenAIProvider, "OPENAI_API_KEY", "OPENAI_MODEL", "gpt-4o-mini"),
@@ -155,7 +152,7 @@ def _deadline_seconds() -> float:
 # This feature's own prompts are short and capped (MAX_GROUPS x
 # MAX_RESULTS_PER_GROUP snippets) and the task itself is modest ("suggest a
 # plausible connection"), not premium-only reasoning -- so whichever single
-# vendor key ends up available (server or BYOK, even just the CHEAP-tier
+# vendor key ends up available (even just the CHEAP-tier
 # Gemini default) should be able to serve it. Only a request the scorer
 # calls outright COMPLEX steps up to requiring at least a CHEAP-tier
 # candidate; escalation to a pricier available provider on failure still
@@ -195,6 +192,19 @@ _SYSTEM_PROMPT = (
 
 
 @dataclass(frozen=True, slots=True)
+class AnalysisPrompt:
+    """Everything a model needs for one analysis turn, vendor-neutral.
+
+    ``messages`` is the conversation after the system prompt: the formatted
+    search groups as the first user turn, then any follow-up history, each
+    ``{"role": "user"|"assistant", "content": ...}``.
+    """
+
+    system: str
+    messages: list[dict[str, str]]
+
+
+@dataclass(frozen=True, slots=True)
 class AnalyzeResult:
     """The model's answer, plus enough provenance to show/debug it."""
 
@@ -203,7 +213,7 @@ class AnalyzeResult:
 
 
 def server_configured_providers() -> frozenset[str]:
-    """Vendor names backed by a server-side key (env var), regardless of BYOK.
+    """Vendor names backed by a server-side key (env var).
 
     Used by ``GET /api/ai-status`` so the settings UI can tell a visitor
     "no key needed for this one" versus "bring your own" per vendor.
@@ -214,10 +224,8 @@ def server_configured_providers() -> frozenset[str]:
 def _quota() -> TenantQuota:
     """App-wide budget, tunable via env without a code change or redeploy.
 
-    Applies uniformly regardless of whether a request rides the shared
-    server key or a visitor's own -- this protects the *server's* key from
-    a runaway client, and BYOK requests are cheap to let through the same
-    gate since they cost the app nothing extra to route.
+    Protects the server's own keys from a runaway client; a visitor's own
+    key is spent from their browser and never passes through this gate.
     """
     return TenantQuota(
         requests_per_min=int(os.environ.get("AI_REQUESTS_PER_MIN", "10")),
@@ -226,19 +234,17 @@ def _quota() -> TenantQuota:
     )
 
 
-def _build_registry(credentials: dict[str, list[str]]) -> ProviderRegistry:
-    """Register only vendors with *some* usable key for this request.
+def _build_registry() -> ProviderRegistry:
+    """Register only the vendors that have a server key.
 
     Thin wrapper over ``model_dispatcher.byok.build_registry`` bound to this
-    app's own ``_PROVIDER_SPECS`` -- see that function for what "usable"
-    means and why a keyless vendor is left out entirely rather than included
-    and left to fail.
+    app's own ``_PROVIDER_SPECS``, with no visitor credentials -- a keyless
+    vendor is left out entirely rather than included and left to fail.
 
     Raises:
-        NoCredentialError: If no vendor in ``_PROVIDER_SPECS`` has a server
-            key or a visitor-supplied credential.
+        NoCredentialError: If no vendor in ``_PROVIDER_SPECS`` has a server key.
     """
-    return _build_registry_for(_PROVIDER_SPECS, credentials)
+    return _build_registry_for(_PROVIDER_SPECS, {})
 
 
 def _cap_words(text: str, limit: int = SNIPPET_WORD_CAP) -> str:
@@ -260,35 +266,58 @@ def _format_groups(groups: list[dict[str, Any]]) -> str:
     return "\n\n".join(blocks)
 
 
+def build_prompt(
+    groups: list[dict[str, Any]],
+    locale: str = "he",
+    history: list[dict[str, str]] | None = None,
+) -> AnalysisPrompt:
+    """Build the analysis prompt for ``groups``, with the same caps either path uses.
+
+    Pure: no keys, no network. ``POST /api/analyze/prompt`` returns this to
+    the browser for a visitor-key call, and ``analyze_connections`` sends it
+    with the server's keys, so both ask exactly the same question.
+
+    ``history`` is the "continue chatting" follow-up on a prior answer:
+    ``[{"role": "assistant"|"user", "content": ...}, ...]``, starting with
+    the assistant's own first answer, capped at ``MAX_HISTORY_TURNS``. Any
+    role other than ``"assistant"`` is sent as ``"user"``.
+    """
+    language = _LANGUAGE_NAMES.get(locale, _LANGUAGE_NAMES["he"])
+    messages = [{"role": "user", "content": _format_groups(groups)}]
+    messages.extend(
+        {
+            "role": "assistant" if turn.get("role") == "assistant" else "user",
+            "content": turn.get("content", ""),
+        }
+        for turn in (history or [])[:MAX_HISTORY_TURNS]
+    )
+    return AnalysisPrompt(
+        system=_SYSTEM_PROMPT.format(max_groups=MAX_GROUPS, language=language),
+        messages=messages,
+    )
+
+
 def analyze_connections(
     groups: list[dict[str, Any]],
     locale: str = "he",
     *,
-    credentials: dict[str, list[str]] | None = None,
     gateway: ModelGateway | None = None,
     history: list[dict[str, str]] | None = None,
 ) -> AnalyzeResult:
-    """Ask the configured model what connects ``groups``' search results.
+    """Ask a server-configured model what connects ``groups``' search results.
 
-    ``credentials`` is ``{vendor: [key, ...]}`` for a visitor's own,
-    bring-your-own keys (any subset of ``gemini``/``openai``/``anthropic``,
-    each optionally pooling more than one key) -- omit or pass ``{}`` to
-    rely solely on whatever the server has configured.
+    Uses only the server's own keys; a visitor's key is used from their
+    browser instead (see the module docstring and ``build_prompt``).
 
     ``gateway`` is an injection seam for tests (a ``MockProvider``-backed
-    gateway); real callers leave it unset and get a gateway built fresh from
-    ``credentials`` plus whatever the server has configured.
-
-    ``history`` is the "continue chatting" follow-up on a prior answer:
-    ``[{"role": "assistant"|"user", "content": ...}, ...]``, starting with
-    the assistant's own first answer and alternating from there, capped at
-    ``MAX_HISTORY_TURNS``. Omit or pass ``None``/``[]`` for a fresh
-    analysis with no prior turns -- the original single-shot behavior.
+    gateway); real callers leave it unset and get a gateway built from
+    whatever the server has configured. ``history`` is as in
+    ``build_prompt``.
 
     Raises:
-        NoCredentialError: Neither the server nor ``credentials`` has a key
-            for any vendor -- callers should answer a fast, cheap error
-            instead of letting a doomed request reach a vendor's API.
+        NoCredentialError: The server has no key for any vendor -- callers
+            should answer a fast, cheap error instead of letting a doomed
+            request reach a vendor's API.
         RequestTimeoutError: The dispatch didn't finish within
             ``AI_REQUEST_DEADLINE_SECONDS`` (default 30s).
         model_dispatcher.exceptions.ModelDispatcherError: Any dispatch
@@ -296,30 +325,22 @@ def analyze_connections(
             these already carry the right HTTP status for a web layer to
             surface as-is.
     """
-    credentials = credentials or {}
-
     active_gateway = gateway
     if active_gateway is None:
-        registry = _build_registry(credentials)
         active_gateway = ModelGateway.create(
-            registry, settings=GatewaySettings(routing=_ROUTING), quota_store=_QUOTA_STORE
+            _build_registry(), settings=GatewaySettings(routing=_ROUTING), quota_store=_QUOTA_STORE
         )
 
-    language = _LANGUAGE_NAMES.get(locale, _LANGUAGE_NAMES["he"])
-    system = _SYSTEM_PROMPT.format(max_groups=MAX_GROUPS, language=language)
-
-    tenant = TenantContext(
-        tenant_id=TENANT_ID,
-        quota=_quota(),
-        metadata=_credential_metadata(credentials),
+    prompt = build_prompt(groups, locale, history)
+    tenant = TenantContext(tenant_id=TENANT_ID, quota=_quota())
+    messages = [Message(role=Role.SYSTEM, content=prompt.system)]
+    messages.extend(
+        Message(
+            role=Role.ASSISTANT if turn["role"] == "assistant" else Role.USER,
+            content=turn["content"],
+        )
+        for turn in prompt.messages
     )
-    messages = [
-        Message(role=Role.SYSTEM, content=system),
-        Message(role=Role.USER, content=_format_groups(groups)),
-    ]
-    for turn in (history or [])[:MAX_HISTORY_TURNS]:
-        role = Role.ASSISTANT if turn.get("role") == "assistant" else Role.USER
-        messages.append(Message(role=role, content=turn.get("content", "")))
 
     request = CompletionRequest(
         messages=tuple(messages),

@@ -132,7 +132,7 @@ var I18N = (function () {
       "aiSettings.description": "\"מצא קשר בין התוצאות\" נעזר במודל שפה (AI). אפשר להשתמש במפתח משותף של השרת (אם מוגדר) או להוסיף מפתח אישי משלכם — חינמי אצל כמה מהספקים.",
       "aiSettings.trustNote": "מפתח שתוסיפו נשלח רק לשרת של האפליקציה הזו, ומועבר משם לספק שבחרתם בלבד — הוא לעולם לא נשמר בשרת ולא מופיע ביומן. השמירה עצמה היא רק בדפדפן שלכם (localStorage).",
       "aiSettings.serverKeysNote": "✓ יש כבר מפתח משותף בשרת עבור: {providers} — לא חובה להוסיף מפתח משלכם לספקים האלה",
-      "aiSettings.noLocalModels": "מודל מקומי (Ollama) לא נתמך כאן — האפליקציה קוראת ל-AI מהשרת שלה, לא מהדפדפן שלכם, ולכן לא יכולה להגיע לשרת Ollama שרץ במחשב שלכם.",
+      "aiSettings.localModels": "מודל מקומי (Ollama) עובד גם כאן — הדפדפן שלכם פונה אליו ישירות. צריך להפעיל את Ollama עם OLLAMA_ORIGINS שמתיר את האתר הזה.",
 
       "external.copiedToast": "השאלה הועתקה — הדביקו אותה בצ'אט שנפתח",
       "external.questionIntro": "הנה תוצאות חיפוש מתוך הש״ס. מה מחבר ביניהן?",
@@ -262,7 +262,7 @@ var I18N = (function () {
       "aiSettings.description": "\"Find connections between results\" uses a language model (AI). You can use the server's shared key (if one is set) or add your own — free with a few providers.",
       "aiSettings.trustNote": "A key you add is sent only to this app's own server, and forwarded from there only to the provider you picked — it's never stored on the server or logged. It's saved only in your own browser (localStorage).",
       "aiSettings.serverKeysNote": "✓ A shared server key is already set for: {providers} — your own key is optional for these",
-      "aiSettings.noLocalModels": "A local model (Ollama) isn't supported here — this app calls the AI from its own server, not your browser, so it could never reach an Ollama server running on your machine.",
+      "aiSettings.localModels": "A local model (Ollama) works here too — your browser calls it directly. Start Ollama with OLLAMA_ORIGINS allowing this site.",
 
       "external.copiedToast": "Question copied — paste it into the chat that opens",
       "external.questionIntro": "Here are search results from the Babylonian Talmud. What connects them?",
@@ -392,7 +392,7 @@ var I18N = (function () {
       "aiSettings.description": "« Trouver des liens entre les résultats » utilise un modèle de langage (IA). Vous pouvez utiliser la clé partagée du serveur (si définie) ou ajouter la vôtre — gratuite chez plusieurs fournisseurs.",
       "aiSettings.trustNote": "Une clé que vous ajoutez est envoyée uniquement au serveur de cette application, et transmise de là uniquement au fournisseur choisi — elle n'est jamais stockée sur le serveur ni journalisée. Elle n'est enregistrée que dans votre propre navigateur (localStorage).",
       "aiSettings.serverKeysNote": "✓ Une clé partagée du serveur est déjà configurée pour : {providers} — la vôtre est optionnelle pour ceux-ci",
-      "aiSettings.noLocalModels": "Un modèle local (Ollama) n'est pas pris en charge ici — cette application appelle l'IA depuis son propre serveur, pas depuis votre navigateur, et ne peut donc jamais atteindre un serveur Ollama qui tourne sur votre machine.",
+      "aiSettings.localModels": "Un modèle local (Ollama) fonctionne aussi ici — votre navigateur l'appelle directement. Lancez Ollama avec OLLAMA_ORIGINS autorisant ce site.",
 
       "external.copiedToast": "Question copiée — collez-la dans le chat qui s'ouvre",
       "external.questionIntro": "Voici des résultats de recherche dans le Talmud de Babylone. Qu'est-ce qui les relie ?",

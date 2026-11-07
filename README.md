@@ -205,7 +205,8 @@ GET /api/books       -- the enabled books and their license/source, without load
 GET /api/tractates?book=bavli
 GET /api/commentary?book=bavli&tractate=ברכות&daf=2&amud=a   -- Rashi's comments on that page
 GET /api/health
-POST /api/analyze   {"groups": [...], "locale": "he", "credentials": [...], "history": [...]}   -- see "AI connections" below
+POST /api/analyze          {"groups": [...], "locale": "he", "history": [...]}   -- answered on the server's own keys; see "AI connections" below
+POST /api/analyze/prompt   same body -- returns {"system", "messages"} for the browser to send with the visitor's own key
 GET /api/ai-status   -- which vendors have a shared server key, for the AI settings panel
 ```
 
@@ -272,12 +273,20 @@ resends the whole exchange so far (`history`) alongside the original
 
 This is the **one** thing in the app that makes an outbound network call —
 everything else (see "How the Talmud is packaged and loaded" above) runs off
-the bundled, offline corpus, on purpose. `app/ai.py` builds a
-[ModelDispatcher](https://github.com/joka-7/ModelDispatcher) gateway from
-whichever credentials actually exist for *this* request — server-side, a
-visitor's own, or both — and answers a clean `400 no_credential` rather than
-a crash when neither is available for any vendor. A fresh clone with no keys
-set anywhere runs the rest of the app exactly as before.
+the bundled, offline corpus, on purpose. There are two paths, and the
+server only ever holds its own keys:
+
+- **The visitor has a key of their own:** the browser asks
+  `POST /api/analyze/prompt` for the exact prompt (`ai.build_prompt`, no
+  model call), then sends it to the vendor itself with
+  `modeldispatcher-browser-agent`. The key never reaches this server.
+- **No key of their own:** `POST /api/analyze` answers on the server's keys
+  through a [ModelDispatcher](https://github.com/joka-7/ModelDispatcher)
+  gateway (`ai.analyze_connections`), and returns a clean
+  `400 no_credential` rather than a crash when the server has none.
+
+A fresh clone with no keys set anywhere runs the rest of the app exactly as
+before.
 
 ### Server-side keys (shared across every visitor)
 
@@ -313,35 +322,26 @@ of leaving the visitor watching a spinner.
 it's shown) opens the same `<ModelPicker>` settings screen every app on
 [ModelDispatcher](https://github.com/joka-7/ModelDispatcher) uses, mounted
 as a small React island (see "Frontend build step" below) -- a visitor can
-add their own key for Gemini, OpenAI, or Anthropic, several per vendor if
-they like, pooled for redundancy (ModelDispatcher rotates through them on a
-rate limit before giving up on that vendor), and pick a favorite free AI app
-as their no-key fallback. `/api/ai-status` still tells the dialog which
-vendors already have a shared server key, shown as one summary note above
-the picker ("a shared key is already set for: ...") rather than a per-vendor
-tag.
+add their own key for Gemini, OpenAI, Anthropic or Groq (several per vendor
+if they like, tried in order), point it at a local Ollama, and pick a
+favorite free AI app as their no-key fallback. `/api/ai-status` still tells
+the dialog which vendors already have a shared server key, shown as one
+summary note above the picker.
 
 A key a visitor adds:
 
-- Is stored **only** in that browser's `localStorage`
-  (`shas-radar:ai-config`) — never sent anywhere but this app's own `/api/analyze`.
-- Is **never** persisted server-side or logged; it's threaded straight into
-  the one ModelDispatcher dispatch the request makes and discarded
-  afterwards (`AnalyzeCredential` in `app/main.py`, `credentials` param on
-  `ai.analyze_connections`).
-- Always takes precedence over the shared server key **for that vendor**
-  (ModelDispatcher's own credential precedence) — different vendors can mix,
-  e.g. the server has a Gemini key, a visitor adds their own Anthropic key,
-  and both participate in the same cost-tiered fallback chain for that one
-  request.
+- Is stored **only** in that browser's `localStorage` (`shas-radar:ai-config`).
+- Is sent **only** to the AI vendor, straight from the browser
+  (`frontend/src/browserAi.ts`). This server never receives it: both
+  analysis endpoints reject a request body carrying any field they don't
+  know (`extra="forbid"` on `AnalyzeBody` in `app/main.py`), so a stale
+  client still sending keys gets a 422 instead of handing them over.
+- Is used instead of the server's keys whenever one is configured. The
+  browser and the server build the same prompt (`ai.build_prompt`), so
+  the answer is asked the same way on either path.
 
-The registry is rebuilt per request rather than once at startup, specifically
-so a vendor with *no* key at all for a given request (neither server nor
-visitor) is left out of it entirely — ModelDispatcher treats an auth failure
-as terminal, not fallback-worthy, so a keyless vendor sitting ahead of one
-the visitor actually gave a key for would otherwise hard-fail the whole
-request before ever reaching the one that would have worked. See the
-docstring at the top of `app/ai.py` for the full reasoning.
+A local Ollama works the same way, since it's the browser calling it; Ollama
+has to be started with `OLLAMA_ORIGINS` allowing this site.
 
 ### No key at all
 
@@ -358,14 +358,18 @@ product the visitor can already use for free.
 The rest of `static/` stays plain ES2020 with no build step (see Quick
 start above); the one exception is the AI settings dialog's provider/model/key
 picker, which is [`frontend/`](frontend/) — a small Vite + React + TypeScript
-project whose only output is `static/vendor/model-picker/` (`main.js` +
-`main.css`), committed like any other static asset. `static/app.js` never
-imports it and knows nothing about React; the two sides only agree on the
-`shas-radar:ai-config` `localStorage` key and a `shas-radar:locale-changed`
-event (see the comments at the top of `frontend/src/main.tsx` and above
-`getAllAiCredentials` in `app.js`). It's also lazy-loaded on first open of
-the settings dialog, not shipped with the rest of the page, since it bundles
-React itself (~180KB gzipped) for a panel most visitors never open.
+project whose only output is `static/vendor/model-picker/` (`main.js`,
+`main.css`, `browser-ai.js` and a shared `chunk-config.js`), committed like
+any other static asset. `static/app.js` never
+statically imports it and knows nothing about React; the two sides only agree
+on the `shas-radar:ai-config` `localStorage` key and a
+`shas-radar:locale-changed` event (see the comments at the top of
+`frontend/src/main.tsx`). The picker (`main.js`) is lazy-loaded on first open
+of the settings dialog, not shipped with the rest of the page, since it
+bundles React itself (~57KB gzipped) for a panel most visitors never open.
+A second entry, `browser-ai.js` (no React, ~3KB gzipped), is what
+`requestAnalysis` in `app.js` imports on demand to run an analysis on the
+visitor's own key.
 
 Editing it:
 

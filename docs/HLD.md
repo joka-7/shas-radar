@@ -67,21 +67,24 @@ flowchart TD
     Main --> Search
     Main --> Books
     Books --> Corpus
-    Main -->|"POST /api/analyze only"| AI
+    Main -->|"POST /api/analyze (server keys)<br/>and /api/analyze/prompt (no call)"| AI
     Search --> Corpus
     Search --> Hebrew
     Corpus --> Hebrew
     Corpus --> Citation
     Corpus -->|"each book read once, on first use"| Data
     AI -.->|"outbound call, this app's one exception<br/>to 'no network at runtime'"| Vendor
+    Browser -.->|"visitor's own key: straight from the browser,<br/>never through Main"| Vendor
     Build -.->|"regenerates, offline"| Data
     Sefaria -.->|"fetched by hand, not at runtime"| Build
 ```
 
 The dotted edges are deliberate: `build_dataset.py` is run by a maintainer
-to regenerate the corpus and is never invoked by the service, and the AI
-vendor call happens only inside `POST /api/analyze` — every other route
-never leaves the process.
+to regenerate the corpus and is never invoked by the service, and the
+server's AI vendor call happens only inside `POST /api/analyze` — every
+other route never leaves the process. A visitor's own key is used by the
+browser itself (`frontend/src/browserAi.ts`), after fetching the prompt
+from `POST /api/analyze/prompt`, so it never reaches `main.py`.
 
 Module boundaries run one way — `main` → `books`/`search`/`ai` → `corpus` →
 `citation`/`hebrew` — and nothing calls back upward. `hebrew.py` is pure string
@@ -119,19 +122,28 @@ sequenceDiagram
         M-->>B: 200 JSON
     end
     opt visitor checks >=2 results and asks for connections
-        B->>V: POST /api/analyze {groups, locale, credentials, history?}
-        V->>M: proxied
-        Note over B: history is empty on this first call; a follow-up<br/>question in the "continue chatting" dialog resends<br/>the whole exchange so far as history, same endpoint
-        M->>A: analyze_connections(groups, locale, credentials, history)
-        A->>A: build registry from server + BYOK credentials
-        alt no credential anywhere
-            A-->>M: NoCredentialError
-            M-->>B: 400 no_credential
-        else
-            A->>Vend: dispatch, bounded to AI_REQUEST_DEADLINE_SECONDS
-            Vend-->>A: completion
-            A-->>M: AnalyzeResult
-            M-->>B: 200 {connection, provider}
+        Note over B: history is empty on the first call; a follow-up<br/>question in the "continue chatting" dialog resends<br/>the whole exchange so far as history
+        alt visitor has a key of their own
+            B->>V: POST /api/analyze/prompt {groups, locale, history?}
+            V->>M: proxied
+            M->>A: build_prompt(groups, locale, history)
+            M-->>B: 200 {system, messages}
+            B->>Vend: browser-ai.js sends it with the visitor's key
+            Vend-->>B: completion
+        else no key of their own
+            B->>V: POST /api/analyze {groups, locale, history?}
+            V->>M: proxied
+            M->>A: analyze_connections(groups, locale, history)
+            A->>A: build registry from the server's keys
+            alt server has no key
+                A-->>M: NoCredentialError
+                M-->>B: 400 no_credential
+            else
+                A->>Vend: dispatch, bounded to AI_REQUEST_DEADLINE_SECONDS
+                Vend-->>A: completion
+                A-->>M: AnalyzeResult
+                M-->>B: 200 {connection, provider}
+            end
         end
     end
 ```
@@ -192,9 +204,10 @@ hostnames, not a secret) and `ENABLED_BOOKS` (comma-separated book ids, default
 the `AI_REQUESTS_PER_MIN` / `AI_TOKENS_PER_MIN` / `AI_TOKENS_PER_DAY` quota
 knobs. A fresh clone with none of these set still runs the whole app; the
 one endpoint that needs a key answers a clean `400 no_credential` instead of
-crashing. A visitor's own AI key ("bring your own key") travels in the
-request body, never as server configuration, and is never persisted or
-logged — see [`README.md`](../README.md#bring-your-own-key-per-visitor).
+crashing. A visitor's own AI key ("bring your own key") is never server
+configuration and never reaches the server at all: the browser sends it
+straight to the vendor, and the analysis endpoints reject unknown request
+fields — see [`README.md`](../README.md#bring-your-own-key-per-visitor).
 
 ## Validation at the edge
 
@@ -208,7 +221,8 @@ that code:
 | Empty or whitespace-only query | `empty` |
 | No Hebrew letters in a query | `invalid_query` |
 | More than `MAX_QUERIES` (5) | `too_many` |
-| `/api/analyze` with no usable AI credential anywhere | `no_credential` |
+| `/api/analyze` with no server AI key | `no_credential` |
+| An analysis request body with an unknown field (e.g. an API key) | 422 (pydantic) |
 | `/api/analyze` dispatch exceeding the deadline | `timeout` |
 
 `before`/`after`/`limit`/`offset` are clamped (not rejected) to their

@@ -3,7 +3,7 @@
 Uses ModelDispatcher's keyless ``MockProvider`` throughout, the same way
 ModelDispatcher's own test suite does, so this runs in CI with no API key
 and no network call. The "no credential anywhere" path (the state CI itself
-is actually in -- no *_API_KEY env vars set, and no BYOK credentials sent)
+is actually in -- no *_API_KEY env vars set)
 is covered separately at the API level, right here.
 """
 
@@ -179,27 +179,6 @@ class TestAnalyzeConnections:
         # 2 for system+groups, plus at most MAX_HISTORY_TURNS history messages.
         assert len(request.messages) == 2 + ai.MAX_HISTORY_TURNS
 
-    def test_byok_credentials_are_pooled_into_tenant_metadata(self):
-        assert ai._credential_metadata(
-            {"gemini": ["k1", "k2"], "openai": [], "anthropic": ["k3"]}
-        ) == {
-            "user_key:gemini": "k1,k2",
-            "user_key:anthropic": "k3",
-        }
-
-    def test_byok_key_is_actually_the_one_the_provider_receives(self):
-        """End-to-end: a BYOK key for the *matching* vendor family reaches the
-        provider's ``complete(api_key=...)`` -- not just present in metadata,
-        but actually resolved and threaded through by CredentialResolver."""
-        provider = MockProvider("gemini:mock-model", tier=ModelTier.FREE)
-        gateway = _make_gateway(provider)
-
-        ai.analyze_connections(
-            _sample_groups(), credentials={"gemini": ["user-key-1", "user-key-2"]}, gateway=gateway
-        )
-
-        assert provider.received_api_keys == ["user-key-1"]
-
     def test_quota_exhaustion_raises_the_libraries_own_error(self):
         provider = MockProvider("mock:free", tier=ModelTier.FREE)
         gateway = _make_gateway(provider)
@@ -232,47 +211,45 @@ class TestAnalyzeConnections:
         with pytest.raises(ai.NoCredentialError):
             ai.analyze_connections(_sample_groups())
 
-    def test_byok_credential_alone_is_enough_without_any_server_key(self, no_server_keys):
-        # No gateway injected, no server key -- only a BYOK credential. This
-        # exercises the real _build_registry() path (not the test helper
-        # above), so it doubles as an integration check that a visitor's own
-        # key is sufficient on its own. The real vendor SDK call itself will
-        # fail (the key is fake and there's no network in this sandbox), but
-        # that's a *different* exception than NoCredentialError -- proving
-        # the registry wasn't empty and a real dispatch was attempted.
-        with pytest.raises(Exception) as exc_info:
-            ai.analyze_connections(_sample_groups(), credentials={"gemini": ["fake-key-not-real"]})
-        assert not isinstance(exc_info.value, ai.NoCredentialError)
+
+class TestBuildPrompt:
+    def test_starts_with_the_groups_as_the_first_user_turn(self):
+        prompt = ai.build_prompt(_sample_groups(), "en")
+
+        assert "English" in prompt.system
+        assert [m["role"] for m in prompt.messages] == ["user"]
+        assert "Query: אביי" in prompt.messages[0]["content"]
+
+    def test_appends_history_and_sends_any_unknown_role_as_user(self):
+        history = [
+            {"role": "assistant", "content": "first answer"},
+            {"role": "system", "content": "not a real role"},
+        ]
+
+        prompt = ai.build_prompt(_sample_groups(), "he", history)
+
+        assert prompt.messages[1:] == [
+            {"role": "assistant", "content": "first answer"},
+            {"role": "user", "content": "not a real role"},
+        ]
 
 
 class TestBuildRegistry:
-    def test_raises_with_no_server_key_and_no_credentials(self, no_server_keys):
+    def test_raises_with_no_server_key(self, no_server_keys):
         # model_dispatcher.byok.build_registry raises rather than handing back
         # an empty registry -- a keyless registry is never valid to dispatch
         # against, so failing here (fail loudly, at the source) replaces what
         # used to be a separate emptiness check in analyze_connections itself.
         with pytest.raises(ai.NoCredentialError):
-            ai._build_registry({})
+            ai._build_registry()
 
-    def test_only_vendors_with_a_key_get_registered(self, no_server_keys, monkeypatch):
+    def test_only_vendors_with_a_server_key_get_registered(self, no_server_keys, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "server-side-key")
-        registry = ai._build_registry({"anthropic": ["byok-key"]})
-        names = {p.name.split(":", 1)[0] for p in registry.all()}
-        assert names == {"openai", "anthropic"}
-        assert "gemini" not in names
+        monkeypatch.setenv("GROQ_API_KEY", "server-side-key")
 
-    def test_a_vendor_with_only_a_byok_credential_is_included(self, no_server_keys):
-        registry = ai._build_registry({"gemini": ["byok-key"]})
-        assert len(registry) == 1
-        assert registry.all()[0].name.startswith("gemini:")
+        names = {p.name.split(":", 1)[0] for p in ai._build_registry().all()}
 
-    def test_groq_registers_from_a_byok_credential(self, no_server_keys):
-        """Groq rides ModelDispatcher's OpenAI-compatible adapter, so its
-        provider name still has to start with the family the credential map
-        is keyed by -- that is what CredentialResolver matches a BYOK key on."""
-        registry = ai._build_registry({"groq": ["byok-key"]})
-        assert len(registry) == 1
-        assert registry.all()[0].name.startswith("groq:")
+        assert names == {"openai", "groq"}
 
 
 class TestServerConfiguredProviders:
@@ -314,20 +291,22 @@ class TestAnalyzeEndpoint:
 
         assert response.status_code == 422  # pydantic's own max_length validation
 
-    def test_rejects_an_unknown_credential_provider(self, client):
+    def test_rejects_a_visitor_api_key_instead_of_accepting_it(self, client):
+        # Visitor keys are used from the browser only; a stale client still
+        # sending them must fail loudly, not have the server quietly take them.
         body = {
             "groups": [{"query": "a", "results": []}],
-            "credentials": [{"provider": "not-a-real-vendor", "apiKeys": ["x"]}],
+            "credentials": [{"provider": "gemini", "apiKeys": ["x"]}],
         }
 
         response = client.post("/api/analyze", json=body)
 
-        assert response.status_code == 422  # pydantic's Literal validation
+        assert response.status_code == 422
 
     def test_happy_path_end_to_end(self, client, monkeypatch):
-        # The endpoint's own wiring (request validation, credential shaping,
-        # response shaping) is what's under test here -- ai.analyze_connections
-        # itself (prompt building, gateway dispatch) is covered directly by
+        # The endpoint's own wiring (request validation, response shaping) is
+        # what's under test here -- ai.analyze_connections itself (prompt
+        # building, gateway dispatch) is covered directly by
         # TestAnalyzeConnections above, so it's stubbed out rather than routed
         # through a real MockProvider gateway again.
         captured: dict[str, object] = {}
@@ -343,7 +322,6 @@ class TestAnalyzeEndpoint:
             json={
                 "groups": _sample_groups(),
                 "locale": "he",
-                "credentials": [{"provider": "gemini", "apiKeys": ["k1", " k2 ", ""]}],
             },
         )
 
@@ -351,8 +329,6 @@ class TestAnalyzeEndpoint:
         body = response.json()
         assert body["connection"] == "הקשר: שניהם מדברים על אותה סוגיה."
         assert body["provider"] == "mock:free"
-        # Blank keys dropped, surrounding whitespace trimmed.
-        assert captured["credentials"] == {"gemini": ["k1", "k2"]}
 
     def test_history_is_forwarded_to_analyze_connections(self, client, monkeypatch):
         captured: dict[str, object] = {}
@@ -399,6 +375,38 @@ class TestAnalyzeEndpoint:
         response = client.post("/api/analyze", json=body)
 
         assert response.status_code == 422  # pydantic's Literal validation
+
+
+class TestAnalyzePromptEndpoint:
+    @pytest.fixture
+    def client(self):
+        return TestClient(app)
+
+    def test_returns_the_prompt_without_calling_any_model(self, client, no_server_keys):
+        # No server key is set, so any model call would fail with no_credential.
+        response = client.post(
+            "/api/analyze/prompt",
+            json={
+                "groups": _sample_groups(),
+                "locale": "fr",
+                "history": [{"role": "assistant", "content": "première réponse"}],
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert "French" in body["system"]
+        assert [m["role"] for m in body["messages"]] == ["user", "assistant"]
+
+    def test_rejects_a_visitor_api_key(self, client):
+        body = {
+            "groups": [{"query": "a", "results": []}],
+            "credentials": [{"provider": "gemini", "apiKeys": ["x"]}],
+        }
+
+        response = client.post("/api/analyze/prompt", json=body)
+
+        assert response.status_code == 422
 
 
 class TestAiStatusEndpoint:
