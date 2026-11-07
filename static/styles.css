@@ -888,15 +888,6 @@ body {
 }
 .ai-settings-trust { font-size: .75rem; color: var(--text-faint); }
 
-.ai-settings-server-note {
-  font-size: .8rem;
-  color: var(--accent-text);
-  background: var(--accent-soft);
-  border-radius: var(--radius-sm);
-  padding: .5rem .7rem;
-  margin: 0 0 .8rem;
-}
-
 /* The mounted <ModelPicker> island (frontend/src/main.tsx) styles its own
    contents via modeldispatcher-react-ui's stylesheet -- this just gives it
    dialog-appropriate vertical spacing on either side. */

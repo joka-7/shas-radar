@@ -26,14 +26,19 @@ export default defineConfig({
     // end, served straight to the browser, so it needs minifying itself.
     minify: "esbuild",
     cssMinify: "esbuild",
+    // Two entries: the picker (main.js, loaded when the settings dialog
+    // opens) and browser-ai.js (no React; loaded by app.js when an analysis
+    // runs on the visitor's own key -- see src/browserAi.ts). What they share
+    // goes into fixed-name chunks so the committed output stays stable.
     lib: {
-      entry: "src/main.tsx",
+      entry: { main: "src/main.tsx", "browser-ai": "src/browserAi.ts" },
       formats: ["es"],
-      fileName: () => "main.js",
+      fileName: (_format, entryName) => `${entryName}.js`,
     },
     rollupOptions: {
       output: {
         assetFileNames: "main.[ext]",
+        chunkFileNames: "chunk-[name].js",
       },
     },
   },

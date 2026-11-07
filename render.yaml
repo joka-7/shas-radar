@@ -24,15 +24,3 @@ services:
       # books reach about 384MB. Add it to this list to turn it on.
       - key: ENABLED_BOOKS
         value: bavli,yerushalmi,mishnah,tosefta
-      # Optional AI "find connections" feature (app/ai.py, README's "AI
-      # connections" section) -- set any one of these in the Render dashboard
-      # to turn it on; leave all three unset and the app runs exactly as
-      # before, with that one button simply unavailable.
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false

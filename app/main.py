@@ -22,7 +22,6 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from model_dispatcher.exceptions import ModelDispatcherError
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import ai
@@ -73,12 +72,11 @@ app = FastAPI(
 
 # Who may call this API from a browser on another origin.
 #
-# An explicit allowlist rather than "*": POST /api/analyze accepts a visitor's
-# own API keys in its request body (see AnalyzeCredential below), and an
-# allowlist keeps an unrelated page from driving that endpoint through their
-# browser. allow_credentials stays False -- this API has no cookies and no auth,
-# so there is nothing for a credentialed cross-origin request to carry, and
-# leaving it off is what lets the allowlist stay this simple.
+# An explicit allowlist rather than "*", so an unrelated page can't use this
+# API through its visitors' browsers. allow_credentials stays False -- this
+# API has no cookies and no auth, so there is nothing for a credentialed
+# cross-origin request to carry, and leaving it off is what lets the
+# allowlist stay this simple.
 #
 # Override in the Render dashboard (ALLOWED_ORIGINS, comma-separated) when the
 # frontend moves to a custom domain.
@@ -102,8 +100,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     allow_credentials=False,
-    # Cache the preflight, so POST /api/analyze doesn't pay an extra round trip
-    # on every call. Only /api/analyze triggers one at all -- the GET endpoints
+    # Cache the preflight, so POST /api/analyze/prompt doesn't pay an extra
+    # round trip on every call. Only that POST triggers one at all -- the GET endpoints
     # send no custom headers, so they are "simple" requests.
     max_age=3600,
 )
@@ -349,7 +347,7 @@ class ChatTurn(BaseModel):
     Sent back by the client on every follow-up question -- there is no
     server-side session, so the whole exchange since the initial answer
     (see ``AnalyzeBody.history``) rides along with each request, the same
-    way BYOK credentials do. Never persisted past the request.
+    way the groups do. Never persisted past the request.
     """
 
     model_config = ConfigDict(str_max_length=2000)
@@ -358,32 +356,22 @@ class ChatTurn(BaseModel):
     content: str
 
 
-class AnalyzeCredential(BaseModel):
-    """A visitor's own key(s) for one vendor -- "bring your own key" (BYOK).
+class AnalyzeBody(BaseModel):
+    """One analysis turn: the search groups, the UI locale, and any follow-up history.
 
-    Never persisted: threaded straight into the one ModelDispatcher
-    dispatch this request makes (see app/ai.py) and discarded afterwards.
-    Several keys for the same vendor are pooled -- ModelDispatcher rotates
-    through them on a rate limit before giving up on that vendor.
+    Unknown fields are rejected, not ignored: an older client sent visitors'
+    API keys in this body, and one still doing so must fail loudly rather
+    than have the server accept them. Keys are used only by the browser now
+    (see ``analyze_prompt_endpoint``).
     """
 
-    # Capped defensively (an unbounded list/string in a request body costs
-    # nothing to send but shouldn't cost us anything to accept either) --
-    # nobody legitimately pools more than a handful of keys for one vendor,
-    # and no real API key is anywhere near 200 characters.
-    model_config = ConfigDict(str_max_length=200)
+    model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["gemini", "openai", "anthropic", "groq"]
-    apiKeys: list[str] = Field(default_factory=list, max_length=5)
-
-
-class AnalyzeBody(BaseModel):
     # Same cap as a search's own comma-separated term limit (MAX_QUERIES) --
     # an analysis can never legitimately cover more groups than one search
     # response can contain.
     groups: list[AnalyzeGroup] = Field(min_length=1, max_length=MAX_QUERIES)
     locale: str = "he"
-    credentials: list[AnalyzeCredential] = Field(default_factory=list, max_length=3)
     # Empty on the first analysis of a set of groups; a follow-up question
     # in the "continue chatting" dialog resends everything said since (see
     # ChatTurn) so the model sees a coherent conversation, since nothing is
@@ -391,65 +379,20 @@ class AnalyzeBody(BaseModel):
     history: list[ChatTurn] = Field(default_factory=list, max_length=ai.MAX_HISTORY_TURNS)
 
 
-@app.get("/api/ai-status")
-def ai_status_endpoint() -> dict[str, Any]:
-    """Which vendors already have a shared server key -- for the AI settings UI.
+@app.post("/api/analyze/prompt")
+def analyze_prompt_endpoint(body: AnalyzeBody) -> dict[str, Any]:
+    """The exact prompt for an analysis, for the browser to send with the visitor's own key.
 
-    Lets the settings panel tell a visitor "no key needed for this one" per
-    vendor, versus "bring your own" for the rest.
+    No model call and no key: the browser calls the vendor directly (see
+    app/ai.py's module docstring), so a visitor's key -- and the model's
+    answer -- never reach this server.
     """
-    configured = ai.server_configured_providers()
-    return {
-        "providers": {
-            name: name in configured for name in ("gemini", "openai", "anthropic", "groq")
-        }
-    }
-
-
-@app.post("/api/analyze")
-def analyze_endpoint(body: AnalyzeBody) -> JSONResponse:
-    """AI-assisted: look for a connection across the groups' top results.
-
-    The one endpoint in this app that makes an outbound network call (see
-    app/ai.py) -- everything else runs off the bundled, offline corpus.
-    Works from a server-configured key, a visitor's own (``body.credentials``),
-    or both; answers a clean 400 ``no_credential`` rather than a crash when
-    neither is available for any vendor.
-    """
-    groups = [g.model_dump() for g in body.groups]
-    credentials: dict[str, list[str]] = {
-        cred.provider: [key.strip() for key in cred.apiKeys if key.strip()]
-        for cred in body.credentials
-    }
-    history = [turn.model_dump() for turn in body.history]
-    try:
-        result = ai.analyze_connections(
-            groups, body.locale, credentials=credentials, history=history
-        )
-    except ai.NoCredentialError:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": "אין מפתח AI זמין — הוסיפו מפתח משלכם בהגדרות ה-AI",
-                "code": "no_credential",
-            },
-        )
-    except ai.RequestTimeoutError:
-        return JSONResponse(
-            status_code=504,
-            content={"error": "הבקשה ל-AI ארכה יותר מדי זמן — נסו שוב", "code": "timeout"},
-        )
-    except ModelDispatcherError as exc:
-        # Reshaped into this app's own {"error", "code"} convention (the same
-        # one http_exception_handler below produces) rather than exposing
-        # ModelDispatcher's own {"error", "detail"} payload shape verbatim --
-        # so the frontend's existing `error.code.*` lookup pattern just works.
-        return JSONResponse(
-            status_code=exc.http_status,
-            content={"error": exc.message, "code": exc.error_code},
-        )
-
-    return JSONResponse(content={"connection": result.text, "provider": result.provider})
+    prompt = ai.build_prompt(
+        [g.model_dump() for g in body.groups],
+        body.locale,
+        [turn.model_dump() for turn in body.history],
+    )
+    return {"system": prompt.system, "messages": prompt.messages}
 
 
 @app.exception_handler(HTTPException)

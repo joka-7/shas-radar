@@ -14,7 +14,7 @@ shas-radar/
 │   ├── copilot-instructions.md
 │   └── dependabot.yml
 ├── app/
-│   ├── ai.py          # AI-assisted analysis: find connections across a set of search-result groups.
+│   ├── ai.py          # AI-assisted analysis: the prompt for finding connections across search results.
 │   ├── books.py       # The books the app can search, which are enabled, and which are loaded.
 │   ├── citation.py    # Where a passage sits in its book, and how that location is cited.
 │   ├── commentary.py  # A commentary's comments on one page of the book it is keyed to.
@@ -34,6 +34,7 @@ shas-radar/
 │   └── STRUCTURE.md
 ├── frontend/
 │   ├── src/
+│   │   ├── browserAi.ts
 │   │   └── main.tsx
 │   ├── .gitignore
 │   ├── .prettierrc
@@ -55,6 +56,8 @@ shas-radar/
 │   │   └── icon-512.png
 │   ├── vendor/
 │   │   └── model-picker/
+│   │       ├── browser-ai.js
+│   │       ├── chunk-config.js
 │   │       ├── main.css
 │   │       └── main.js
 │   ├── app.js
@@ -67,7 +70,7 @@ shas-radar/
 │   └── sw.js
 ├── tests/
 │   ├── conftest.py            # Test configuration: every book is enabled, so the API tests can reach all of them.
-│   ├── test_ai.py             # Tests for app/ai.py -- the optional "find connections" AI feature.
+│   ├── test_ai.py             # Tests for app/ai.py and POST /api/analyze/prompt -- the optional AI feature.
 │   ├── test_books.py          # Tests for app/books.py: the book registry, configuration, and lazy loading.
 │   ├── test_build_dataset.py  # Tests for scripts/build_dataset.py: the pure helpers, not the network fetches.
 │   ├── test_citation.py       # Tests for app/citation.py: ref packing and the folio citation scheme.

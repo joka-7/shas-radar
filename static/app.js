@@ -41,7 +41,6 @@
   var installBtn = document.getElementById("install-btn");
   var settingsBtn = document.getElementById("settings-btn");
   var aiDialog = document.getElementById("ai-settings-dialog");
-  var aiServerKeysNoteEl = document.getElementById("ai-server-keys-note");
 
   var before = 5;
   var after = 5;
@@ -61,7 +60,6 @@
   var lastSearchData = null;
   var lastSnapshot = null;
   var lastTractates = null;
-  var lastAiStatus = null;
 
   // The books the API offers (GET /api/books), and which one is selected.
   // "" means the server's own default until the list arrives. tractatesBook
@@ -666,67 +664,80 @@
   // frontend/src/main.tsx -> static/vendor/model-picker/) -- the same
   // <ModelPicker> every other app on this framework renders, so this
   // section only bridges the two sides of that boundary:
-  //   - reads the AgentConfig JSON the island writes to `localStorage`
-  //     (getAllAiCredentials, for POST /api/analyze's `credentials` field);
-  //   - shows which vendors already have a shared server key, since
-  //     <ModelPicker> has no notion of that (renderAiServerKeysNote);
+  //   - imports frontend/src/browserAi.ts's small build on demand to ask
+  //     whether the visitor has a key of their own, and if so has it run the
+  //     analysis straight from this browser (requestAnalysis);
   //   - forwards a locale switch into the island (see setLocale below).
-  // Keys the visitor adds live only in this browser's localStorage and are
-  // sent with an /api/analyze request only, never persisted server-side
+  // Keys the visitor adds live only in this browser's localStorage and go
+  // only to the AI vendor itself, never to this app's server: the server
+  // builds the prompt (POST /api/analyze/prompt) and the browser sends it
   // (see app/ai.py's module docstring / README's "AI connections" section).
+  // The server holds no AI key of its own: without the visitor's key, the
+  // "ask an external AI" links are the way to an answer.
 
-  var AI_CONFIG_STORAGE_KEY = "shas-radar:ai-config";
   var LOCALE_CHANGED_EVENT = "shas-radar:locale-changed";
 
-  // Labels only, for the "server already has a key for..." note -- the ids
-  // must match /api/ai-status's `providers` map (app/main.py).
-  var AI_SERVER_STATUS_PROVIDERS = [
-    { id: "gemini", label: "Gemini" },
-    { id: "groq", label: "Groq" },
-    { id: "openai", label: "OpenAI" },
-    { id: "anthropic", label: "Claude" },
-  ];
-
-  function loadAiConfig() {
-    try {
-      var raw = localStorage.getItem(AI_CONFIG_STORAGE_KEY);
-      if (!raw) return { providers: [] };
-      var parsed = JSON.parse(raw);
-      return { providers: Array.isArray(parsed.providers) ? parsed.providers : [] };
-    } catch (err) {
-      return { providers: [] }; // private browsing / storage disabled / corrupted JSON
-    }
-  }
-
-  /* Every configured provider + its pooled keys, shaped for POST /api/analyze's
-   * `credentials` field (AnalyzeCredential in app/main.py caps this at 3
-   * providers / 5 keys each; the slices below just avoid a pointless 422).
-   * Ollama is never included: this app calls the model from its own server,
-   * never the visitor's browser, so it could never reach a local Ollama --
-   * see the "no local models" note in the settings dialog. */
-  function getAllAiCredentials() {
-    return loadAiConfig()
-      .providers.filter(function (p) {
-        return p && p.provider !== "ollama" && Array.isArray(p.apiKeys) && p.apiKeys.length > 0;
-      })
-      .slice(0, 3)
-      .map(function (p) {
-        return { provider: p.provider, apiKeys: p.apiKeys.slice(0, 5) };
+  function postAnalyzeRequest(path, payload) {
+    return apiFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(function (response) {
+      return response.json().then(function (result) {
+        if (!response.ok) {
+          var err = new Error(result.error || "");
+          err.code = result.code;
+          throw err;
+        }
+        return result;
       });
+    });
   }
 
-  function renderAiServerKeysNote() {
-    var names = AI_SERVER_STATUS_PROVIDERS.filter(function (p) {
-      return lastAiStatus && lastAiStatus.providers && lastAiStatus.providers[p.id];
+  /* One analysis turn, run in this browser on the visitor's own key;
+   * resolves to the answer text. The server only builds the prompt. Rejects
+   * with an Error carrying `.code` (see analysisErrorMessage). */
+  function requestAnalysis(groups, history) {
+    var payload = { locale: locale, groups: groups };
+    if (history) payload.history = history;
+    return loadBrowserAi().then(function (browserAi) {
+      if (!browserAi.hasOwnKey()) throw codedError("no_credential");
+      return postAnalyzeRequest("/api/analyze/prompt", payload)
+        .then(function (prompt) {
+          return browserAi.completeAnalysis(prompt);
+        })
+        .catch(function (err) {
+          // Every one of the visitor's providers failed: a bad key, or a
+          // local Ollama that isn't running.
+          if (err.code === "all_providers_exhausted") throw codedError("own_key_failed", err.message);
+          throw err;
+        });
     });
-    if (names.length === 0) {
-      aiServerKeysNoteEl.hidden = true;
-      return;
-    }
-    aiServerKeysNoteEl.hidden = false;
-    aiServerKeysNoteEl.textContent = t(locale, "aiSettings.serverKeysNote", {
-      providers: names.map(function (p) { return p.label; }).join(", "),
+  }
+
+  function codedError(code, message) {
+    var err = new Error(message || code);
+    err.code = code;
+    return err;
+  }
+
+  /* Small (no React) and only needed once an analysis runs, so it's
+   * imported then rather than shipped with the page. */
+  var browserAiModule = null;
+  function loadBrowserAi() {
+    browserAiModule = browserAiModule || import("/vendor/model-picker/browser-ai.js").catch(function (err) {
+      browserAiModule = null; // a failed load (offline) is retried next time
+      throw err;
     });
+    return browserAiModule;
+  }
+
+  /* `t` answers its own key for a missing string, so an unknown code
+   * falls back to the generic message instead of showing that key. */
+  function analysisErrorMessage(err, fallbackKey) {
+    var key = "connections.error.code." + (err && err.code);
+    var message = err && err.code ? t(locale, key) : key;
+    return message === key ? t(locale, fallbackKey) : message;
   }
 
   // The <ModelPicker> island (~180KB gzipped: React + ReactDOM, bundled --
@@ -753,7 +764,6 @@
 
   function openAiSettings() {
     ensureModelPickerLoaded();
-    renderAiServerKeysNote();
     if (typeof aiDialog.showModal === "function") {
       aiDialog.showModal();
     } else {
@@ -945,22 +955,16 @@
   // disabled until at least 2 are (a single row has nothing to connect to).
   // Posts exactly the checked rows -- selection.groups() -- rather than
   // re-searching or auto-including everything on screen, so what gets
-  // analyzed is always what the visitor actually chose, plus any BYOK
-  // credentials saved above. A server with no shared key still works as
-  // long as the visitor supplied their own; a request that fails either way
+  // analyzed is always what the visitor actually chose. The browser runs it
+  // on the visitor's own key (requestAnalysis above). A request that fails
   // surfaces a plain inline error, with a nudge toward AI settings and the
-  // external-AI fallback for the failure codes that mean "our own AI path
-  // can't serve this" (see NEEDS_KEY_CODES below).
+  // external-AI fallback for the failure codes that mean "no usable key
+  // here" (see NEEDS_KEY_CODES below).
 
-  // provider_invalid is included alongside authentication_error because at
-  // least one real vendor (Gemini) returns a plain 400 for an invalid key
-  // rather than 401/403 -- ModelDispatcher classifies that as INVALID, not
-  // AUTH, so it surfaces under this code instead (confirmed against the
-  // real API, not assumed). timeout is included too: whatever's slow, the
-  // external-AI fallback answers immediately either way.
-  var NEEDS_KEY_CODES = [
-    "no_credential", "authentication_error", "provider_invalid", "quota_exceeded", "all_providers_exhausted", "timeout",
-  ];
+  // Every way this browser's own AI path can fail: no key configured, every
+  // configured provider failed, or some other provider error. Each gets the
+  // settings nudge and the external-AI links, which always answer.
+  var NEEDS_KEY_CODES = ["no_credential", "own_key_failed", "provider_error"];
 
   function connectionsSection(data, selection) {
     var section = el("section", "connections");
@@ -1028,36 +1032,14 @@
       body.hidden = true;
       body.innerHTML = "";
 
-      var payload = {
-        locale: locale,
-        groups: groups,
-        credentials: getAllAiCredentials(),
-      };
-
-      apiFetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-        .then(function (response) {
-          return response.json().then(function (result) {
-            if (!response.ok) {
-              var err = new Error(
-                (result.code && t(locale, "connections.error.code." + result.code)) || t(locale, "connections.error.generic")
-              );
-              err.code = result.code;
-              throw err;
-            }
-            return result;
-          });
-        })
-        .then(function (result) {
+      requestAnalysis(groups)
+        .then(function (connection) {
           body.appendChild(el("p", "connections-answer-label", t(locale, "connections.answerLabel")));
-          body.appendChild(el("p", "connections-text", result.connection));
+          body.appendChild(el("p", "connections-text", connection));
           var chatBtn = el("button", "connections-btn connections-chat-btn", t(locale, "chat.continueButton"));
           chatBtn.type = "button";
           chatBtn.addEventListener("click", function () {
-            openAiChat(groups, result.connection);
+            openAiChat(groups, connection);
           });
           body.appendChild(chatBtn);
           body.hidden = false;
@@ -1073,10 +1055,11 @@
           button.textContent = t(locale, "connections.button");
         })
         .catch(function (err) {
+          var message = analysisErrorMessage(err, "connections.error.generic");
           if (err.code && NEEDS_KEY_CODES.indexOf(err.code) !== -1) {
-            body.appendChild(noProviderNotice(err.message, groups));
+            body.appendChild(noProviderNotice(message, groups));
           } else {
-            body.appendChild(notice(t(locale, "error.title"), err.message, "error"));
+            body.appendChild(notice(t(locale, "error.title"), message, "error"));
           }
           body.hidden = false;
           button.disabled = selection.count() < 2;
@@ -1149,37 +1132,16 @@
     // so a failed question can be retried without duplicating it in history.
     var turnsForRequest = chatTurns.concat([{ role: "user", content: question }]);
 
-    apiFetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        locale: locale,
-        groups: chatGroups,
-        credentials: getAllAiCredentials(),
-        history: turnsForRequest,
-      }),
-    })
-      .then(function (response) {
-        return response.json().then(function (result) {
-          if (!response.ok) {
-            var err = new Error(
-              (result.code && t(locale, "connections.error.code." + result.code)) || t(locale, "chat.error.generic")
-            );
-            err.code = result.code;
-            throw err;
-          }
-          return result;
-        });
-      })
-      .then(function (result) {
+    requestAnalysis(chatGroups, turnsForRequest)
+      .then(function (connection) {
         pending.remove();
-        chatMessagesEl.appendChild(chatBubble("assistant", result.connection));
-        chatTurns = turnsForRequest.concat([{ role: "assistant", content: result.connection }]);
+        chatMessagesEl.appendChild(chatBubble("assistant", connection));
+        chatTurns = turnsForRequest.concat([{ role: "assistant", content: connection }]);
       })
       .catch(function (err) {
         pending.remove();
         var errorBubble = el("div", "ai-chat-bubble ai-chat-bubble-error");
-        errorBubble.appendChild(document.createTextNode(err.message));
+        errorBubble.appendChild(document.createTextNode(analysisErrorMessage(err, "chat.error.generic")));
         if (err.code && NEEDS_KEY_CODES.indexOf(err.code) !== -1) {
           var settingsLink = el("button", "connections-settings-link", t(locale, "aiSettings.openButton"));
           settingsLink.type = "button";
@@ -1270,7 +1232,6 @@
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
     // other way to learn about a locale switch (see frontend/src/main.tsx).
     window.dispatchEvent(new CustomEvent(LOCALE_CHANGED_EVENT, { detail: locale }));
-    if (aiDialog.open) renderAiServerKeysNote();
     if (installHelpDialog.open) openInstallHelp();
 
     var buttons = langSwitch.querySelectorAll(".lang-btn");
@@ -1680,15 +1641,6 @@
   apiFetch("/api/health")
     .catch(function () {})
     .then(disarmHealthWaking);
-
-  // Not waking-gated (unlike the fetches above): this one is purely
-  // informational for the AI settings dialog, which a visitor may never
-  // even open, so it shouldn't contribute to the "waking the server" notice
-  // on an ordinary page load.
-  apiFetch("/api/ai-status")
-    .then(function (r) { return r.json(); })
-    .then(function (status) { lastAiStatus = status; })
-    .catch(function () { /* the settings dialog's server-keys note just stays hidden */ });
 
   var initial = fromHash();
   if (initial) runSearch(initial, false);

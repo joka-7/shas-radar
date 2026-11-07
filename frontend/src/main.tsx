@@ -4,8 +4,8 @@
  * static/index.html loads this as a plain `<script type="module">` next to
  * static/app.js -- the two never import each other. They agree only on two
  * things, both already documented at the boundary they cross:
- *   - the `localStorage` key this writes `AgentConfig` JSON to (app.js reads
- *     it back in `getAllAiCredentials()` for the `/api/analyze` request);
+ *   - the `localStorage` key this writes `AgentConfig` JSON to (browserAi.ts,
+ *     the small module app.js imports to run an analysis, reads it back);
  *   - the `shas-radar:locale-changed` CustomEvent app.js dispatches on
  *     `setLocale()`, so a language switch while the dialog is open updates
  *     this picker's labels without a remount.
