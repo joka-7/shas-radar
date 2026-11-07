@@ -183,38 +183,21 @@ Constants: `DEFAULT_LIMIT = 50`, `MAX_LIMIT = 200`, `DEFAULT_CONTEXT = 5`,
 
 ## `app/ai.py` — optional AI connections
 
-Builds the analysis prompt, and answers it on the **server's own keys**
-through a [ModelDispatcher](https://github.com/joka-7/ModelDispatcher)
-gateway (`model_dispatcher.byok` owns the registry-building and
-timeout-wiring). A visitor's own key never reaches this module: the browser
-gets the prompt from `build_prompt` and calls the vendor itself.
-`_build_registry`, `NoCredentialError`, `RequestTimeoutError` stay this
-module's own names (its public API, per its tests) but delegate straight
-through.
+Builds the analysis prompt. Pure: no model call, no key, no network. The
+browser gets it from `POST /api/analyze/prompt` and sends it to the vendor
+with the visitor's own key (`frontend/src/browserAi.ts`, on
+modeldispatcher-browser-agent); the server has no AI key of its own.
 
 ```python
 build_prompt(groups: list[dict[str, Any]], locale: str = "he",
              history: list[dict[str, str]] | None = None) -> AnalysisPrompt
-    # AnalysisPrompt(system: str, messages: list[{"role", "content"}]); pure
-
-analyze_connections(groups: list[dict[str, Any]], locale: str = "he", *,
-                     gateway: ModelGateway | None = None,
-                     history: list[dict[str, str]] | None = None) -> AnalyzeResult
+    # AnalysisPrompt(system: str, messages: list[{"role", "content"}])
 ```
 
 | Behavior | Detail |
 | --- | --- |
-| Registry | Rebuilt per request from the server's env keys only — a keyless vendor is left out entirely rather than included and left to hard-fail the dispatch chain |
-| Quota | One app-wide `TenantQuota` (`AI_REQUESTS_PER_MIN`/`AI_TOKENS_PER_MIN`/`AI_TOKENS_PER_DAY`), shared across every visitor since there is no per-user auth |
-| Deadline | `dispatch_with_timeout` on a dedicated 4-worker thread pool, bounded to `AI_REQUEST_DEADLINE_SECONDS` (default 30) — no ModelDispatcher provider adapter sets its own HTTP timeout |
-| Prompt | `build_prompt`: `_SYSTEM_PROMPT` plus `_format_groups(groups)`, capped to `MAX_GROUPS` (5) groups and `MAX_RESULTS_PER_GROUP` (6) results each, each snippet capped to `SNIPPET_WORD_CAP` (40) words |
-| `history` param | A "continue chatting" follow-up's prior turns (`[{"role": "assistant"\|"user", "content": ...}, ...]`), appended as `Message`s after the groups prompt, capped at `MAX_HISTORY_TURNS` (20). Empty/omitted for the original single-shot analysis — the client resends the whole exchange on every follow-up since nothing is kept server-side |
-| `gateway` param | Injection seam for tests — a `MockProvider`-backed gateway, never a real network call in the suite |
-
-Raises `NoCredentialError` (no server key), `RequestTimeoutError` (deadline
-exceeded), or lets any `model_dispatcher.exceptions.ModelDispatcherError`
-propagate — each already carries the HTTP status `main.py` needs to surface
-it as-is.
+| Prompt | `_SYSTEM_PROMPT` (asking for the answer in the UI locale's language, Hebrew for an unknown locale) plus `_format_groups(groups)` as the first user turn, capped to `MAX_GROUPS` (5) groups and `MAX_RESULTS_PER_GROUP` (6) results each, each snippet side capped to `SNIPPET_WORD_CAP` (40) words |
+| `history` param | A "continue chatting" follow-up's prior turns (`[{"role": "assistant"\|"user", "content": ...}, ...]`), appended after the groups turn, capped at `MAX_HISTORY_TURNS` (20); any role but `assistant` is sent as `user`. The client resends the whole exchange on every follow-up since nothing is kept server-side |
 
 ## `app/main.py` — HTTP boundary
 
@@ -234,7 +217,6 @@ rather than a stale bundle outliving it (its URL never changes).
 `allow_origin_regex` for Vercel's per-branch preview hostnames.
 `allow_credentials` stays `False` — no cookies, no auth — which is what lets
 the allowlist stay a plain list rather than a stricter per-request check.
-The allowlist exists because `/api/analyze` spends the server's own keys.
 
 ### Routes
 
@@ -246,9 +228,7 @@ The allowlist exists because `/api/analyze` spends the server's own keys.
 | `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `sefariaUrl`; a page with no Rashi gives `comments: []` |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
-| `GET /api/ai-status` | — | Which vendors have a shared server key |
-| `POST /api/analyze` | `AnalyzeBody` (`groups`, `locale`, `history`; unknown fields → 422) | `{connection, provider}`, on the server's keys |
-| `POST /api/analyze/prompt` | `AnalyzeBody` | `{system, messages}` — no model call; the browser sends it with the visitor's own key |
+| `POST /api/analyze/prompt` | `AnalyzeBody` (`groups`, `locale`, `history`; unknown fields → 422) | `{system, messages}` — no model call; the browser sends it with the visitor's own key |
 | `GET /` + `/static/*` | — | The frontend, same origin |
 
 ### Error contract
@@ -262,9 +242,9 @@ and rendered by `http_exception_handler`:
 ```
 
 `code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_commentary`,
-`unknown_tractate`, `no_credential`,
-`timeout`, plus whatever `ModelDispatcherError.error_code` supplies for a
-dispatch failure. The frontend's `error.code.*` lookup keys off these.
+`unknown_tractate`. The frontend's `error.code.*` lookup keys off these. The
+AI analysis's own codes (`no_credential`, `own_key_failed`,
+`provider_error`) are raised in the browser, not by the server.
 
 `parse_queries(raw)` splits on `,`، or `;`, drops blanks, enforces
 `MAX_QUERIES` (5), and parses each part as a `SearchQuery`.
@@ -306,7 +286,7 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | `tests/test_commentary.py` | A page's comments on the real Bavli and Rashi data, the pages and tractates that have none, and the errors |
 | `tests/test_books.py` | The registry and `ENABLED_BOOKS` parsing, per-book lazy loading under a lock, and every shipped dataset (header matches corpus, unique tractate names, no markup or entities left in the text) |
 | `tests/test_build_dataset.py` | The build script's pure helpers: cleaning, the nested-text walk, table-of-contents lookup |
-| `tests/test_ai.py` | `analyze_connections` and its supporting functions against ModelDispatcher's keyless `MockProvider`, including the no-credential, timeout, and chat-history (ordering, capping) paths |
+| `tests/test_ai.py` | `build_prompt` (language, group/result/word caps, history order and cap) and `POST /api/analyze/prompt` (success, invalid bodies including a visitor key, and that the old server-side AI endpoints are gone) — pure, no network |
 
 `tests/conftest.py` enables all five books, so the real datasets load once per session and are shared by `test_search.py` and `test_books.py`. The real ~1.86M-token Bavli corpus is among them. The
 trade is a startup cost for tests that exercise matching against genuine

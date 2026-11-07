@@ -59,7 +59,7 @@ flowchart TD
     Data[("data/shas.json.gz<br/>~1.86M words, 37 tractates, 5.1MB")]
     Build["scripts/build_dataset.py<br/>build-time only"]
     Sefaria[("Sefaria export<br/>William Davidson Edition text")]
-    Vendor[("Gemini / OpenAI / Anthropic / Groq<br/>via ModelDispatcher")]
+    Vendor[("Gemini / OpenAI / Anthropic / Groq / local Ollama<br/>the visitor's own key")]
 
     Browser -->|"same origin (Render)"| Main
     Browser -->|"or via"| Vercel
@@ -67,24 +67,23 @@ flowchart TD
     Main --> Search
     Main --> Books
     Books --> Corpus
-    Main -->|"POST /api/analyze (server keys)<br/>and /api/analyze/prompt (no call)"| AI
+    Main -->|"POST /api/analyze/prompt<br/>(builds the prompt, no call)"| AI
     Search --> Corpus
     Search --> Hebrew
     Corpus --> Hebrew
     Corpus --> Citation
     Corpus -->|"each book read once, on first use"| Data
-    AI -.->|"outbound call, this app's one exception<br/>to 'no network at runtime'"| Vendor
-    Browser -.->|"visitor's own key: straight from the browser,<br/>never through Main"| Vendor
+    Browser -.->|"browser-ai.js, visitor's own key:<br/>never through Main"| Vendor
     Build -.->|"regenerates, offline"| Data
     Sefaria -.->|"fetched by hand, not at runtime"| Build
 ```
 
 The dotted edges are deliberate: `build_dataset.py` is run by a maintainer
-to regenerate the corpus and is never invoked by the service, and the
-server's AI vendor call happens only inside `POST /api/analyze` — every
-other route never leaves the process. A visitor's own key is used by the
-browser itself (`frontend/src/browserAi.ts`), after fetching the prompt
-from `POST /api/analyze/prompt`, so it never reaches `main.py`.
+to regenerate the corpus and is never invoked by the service, and the AI
+call is made by the browser (`frontend/src/browserAi.ts`) with the
+visitor's own key, after fetching the prompt from
+`POST /api/analyze/prompt`. The service itself never leaves the process
+at runtime and holds no AI key.
 
 Module boundaries run one way — `main` → `books`/`search`/`ai` → `corpus` →
 `citation`/`hebrew` — and nothing calls back upward. `hebrew.py` is pure string
@@ -130,20 +129,8 @@ sequenceDiagram
             M-->>B: 200 {system, messages}
             B->>Vend: browser-ai.js sends it with the visitor's key
             Vend-->>B: completion
-        else no key of their own
-            B->>V: POST /api/analyze {groups, locale, history?}
-            V->>M: proxied
-            M->>A: analyze_connections(groups, locale, history)
-            A->>A: build registry from the server's keys
-            alt server has no key
-                A-->>M: NoCredentialError
-                M-->>B: 400 no_credential
-            else
-                A->>Vend: dispatch, bounded to AI_REQUEST_DEADLINE_SECONDS
-                Vend-->>A: completion
-                A-->>M: AnalyzeResult
-                M-->>B: 200 {connection, provider}
-            end
+        else no key
+            B->>B: show AI settings + "ask an external AI" links
         end
     end
 ```
@@ -198,16 +185,12 @@ service is redeploying the image.
 Search itself needs no configuration beyond `$PORT` (supplied by the
 platform), `ALLOWED_ORIGINS` (the CORS allowlist — a plain list of
 hostnames, not a secret) and `ENABLED_BOOKS` (comma-separated book ids, default
-`bavli`; a typo or a missing data file stops the server at startup). The optional AI feature reads, if set:
-`GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GROQ_API_KEY`
-(any subset), their `*_MODEL` overrides, `AI_REQUEST_DEADLINE_SECONDS`, and
-the `AI_REQUESTS_PER_MIN` / `AI_TOKENS_PER_MIN` / `AI_TOKENS_PER_DAY` quota
-knobs. A fresh clone with none of these set still runs the whole app; the
-one endpoint that needs a key answers a clean `400 no_credential` instead of
-crashing. A visitor's own AI key ("bring your own key") is never server
-configuration and never reaches the server at all: the browser sends it
-straight to the vendor, and the analysis endpoints reject unknown request
-fields — see [`README.md`](../README.md#bring-your-own-key-per-visitor).
+`bavli`; a typo or a missing data file stops the server at startup). The
+optional AI feature needs no server configuration: there is no server AI
+key. A visitor's own key ("bring your own key") never reaches the server;
+the browser sends it straight to the vendor, and `POST /api/analyze/prompt`
+rejects unknown request fields — see
+[`README.md`](../README.md#bring-your-own-key-per-visitor).
 
 ## Validation at the edge
 
@@ -221,9 +204,7 @@ that code:
 | Empty or whitespace-only query | `empty` |
 | No Hebrew letters in a query | `invalid_query` |
 | More than `MAX_QUERIES` (5) | `too_many` |
-| `/api/analyze` with no server AI key | `no_credential` |
 | An analysis request body with an unknown field (e.g. an API key) | 422 (pydantic) |
-| `/api/analyze` dispatch exceeding the deadline | `timeout` |
 
 `before`/`after`/`limit`/`offset` are clamped (not rejected) to their
 allowed ranges inside `search()`, so a caller passing anything gets a sane
@@ -233,9 +214,9 @@ result back rather than a 4xx.
 
 `tests/test_search.py` and `tests/test_hebrew.py` run against the real
 committed corpus rather than a fixture — the point of most of them is that
-the actual Talmud gives the expected answer. `tests/test_ai.py` drives
-`app/ai.py` through ModelDispatcher's own keyless `MockProvider`, so the
-suite never makes a real network call or needs an API key; see
+the actual Talmud gives the expected answer. `tests/test_ai.py` covers the
+prompt the server builds for the AI feature; the server makes no AI call,
+so the suite never needs a network or an API key; see
 [`LLD.md`](LLD.md#test-plan) for the full breakdown. CI enforces a 95%
 coverage floor, set just under the measured ~97% so it ratchets rather than
 fails on arrival.

@@ -205,9 +205,7 @@ GET /api/books       -- the enabled books and their license/source, without load
 GET /api/tractates?book=bavli
 GET /api/commentary?book=bavli&tractate=ברכות&daf=2&amud=a   -- Rashi's comments on that page
 GET /api/health
-POST /api/analyze          {"groups": [...], "locale": "he", "history": [...]}   -- answered on the server's own keys; see "AI connections" below
-POST /api/analyze/prompt   same body -- returns {"system", "messages"} for the browser to send with the visitor's own key
-GET /api/ai-status   -- which vendors have a shared server key, for the AI settings panel
+POST /api/analyze/prompt   {"groups": [...], "locale": "he", "history": [...]}   -- the AI prompt, for the browser to send with the visitor's own key; see "AI connections" below
 ```
 
 `q` accepts one term, a phrase, or several comma/semicolon-separated terms
@@ -271,50 +269,14 @@ dialog is open -- there is no server-side session -- so each follow-up
 resends the whole exchange so far (`history`) alongside the original
 `groups`; see `ChatTurn`/`AnalyzeBody.history` in `app/main.py`.
 
-This is the **one** thing in the app that makes an outbound network call —
-everything else (see "How the Talmud is packaged and loaded" above) runs off
-the bundled, offline corpus, on purpose. There are two paths, and the
-server only ever holds its own keys:
-
-- **The visitor has a key of their own:** the browser asks
-  `POST /api/analyze/prompt` for the exact prompt (`ai.build_prompt`, no
-  model call), then sends it to the vendor itself with
-  `modeldispatcher-browser-agent`. The key never reaches this server.
-- **No key of their own:** `POST /api/analyze` answers on the server's keys
-  through a [ModelDispatcher](https://github.com/joka-7/ModelDispatcher)
-  gateway (`ai.analyze_connections`), and returns a clean
-  `400 no_credential` rather than a crash when the server has none.
-
-A fresh clone with no keys set anywhere runs the rest of the app exactly as
-before.
-
-### Server-side keys (shared across every visitor)
-
-Set any one (or more, for cross-provider fallback) of:
-
-| Env var | Vendor | Default model |
-| --- | --- | --- |
-| `GEMINI_API_KEY` | Google Gemini | `gemini-2.5-flash` (override: `GEMINI_MODEL`) |
-| `OPENAI_API_KEY` | OpenAI | `gpt-4o-mini` (override: `OPENAI_MODEL`) |
-| `ANTHROPIC_API_KEY` | Anthropic | `claude-opus-4-8` (override: `ANTHROPIC_MODEL`) |
-| `GROQ_API_KEY` | Groq | `openai/gpt-oss-120b` (override: `GROQ_MODEL`) |
-
-With more than one key set, ModelDispatcher's own router/fallback chain
-tries the cheaper model first and transparently escalates on failure — no
-extra wiring needed for that. An app-wide token budget (not per-visitor,
-since there's no auth here) protects against runaway cost, tunable via
-`AI_REQUESTS_PER_MIN` / `AI_TOKENS_PER_MIN` / `AI_TOKENS_PER_DAY`
-(defaults: 10 / 20,000 / 200,000); once spent, `/api/analyze` answers a
-`quota_exceeded` error until the window resets rather than calling the
-model.
-
-ModelDispatcher's provider adapters set no HTTP timeout of their own on
-the vendor client they construct, so a stuck connection or a slow vendor
-API can otherwise hang for as long as that SDK's own default allows —
-observed live, that's minutes, not seconds. `app/ai.py` bounds every
-dispatch to `AI_REQUEST_DEADLINE_SECONDS` (default 30) on its own small
-thread pool; past that, `/api/analyze` answers a `timeout` error instead
-of leaving the visitor watching a spinner.
+The server never calls an AI model and holds no AI key. The browser asks
+`POST /api/analyze/prompt` for the exact prompt (`ai.build_prompt`, pure),
+then sends it to the vendor itself with the visitor's own key, using
+`modeldispatcher-browser-agent` (`frontend/src/browserAi.ts`). So neither
+the key nor the model's answer passes through the server. A visitor without
+a key gets the **"ask an external AI"** links instead (see "No key at all"
+below). The app's runtime stays fully offline: everything else runs off the
+bundled corpus (see "How the Talmud is packaged and loaded" above).
 
 ### Bring your own key (per visitor)
 
@@ -324,35 +286,28 @@ it's shown) opens the same `<ModelPicker>` settings screen every app on
 as a small React island (see "Frontend build step" below) -- a visitor can
 add their own key for Gemini, OpenAI, Anthropic or Groq (several per vendor
 if they like, tried in order), point it at a local Ollama, and pick a
-favorite free AI app as their no-key fallback. `/api/ai-status` still tells
-the dialog which vendors already have a shared server key, shown as one
-summary note above the picker.
+favorite free AI app as their no-key fallback.
 
 A key a visitor adds:
 
 - Is stored **only** in that browser's `localStorage` (`shas-radar:ai-config`).
 - Is sent **only** to the AI vendor, straight from the browser
   (`frontend/src/browserAi.ts`); the current client never sends it to this
-  server. As a backstop, both analysis endpoints reject a body carrying any
-  field they don't know (`extra="forbid"` on `AnalyzeBody` in
+  server. As a backstop, `POST /api/analyze/prompt` rejects a body carrying
+  any field it doesn't know (`extra="forbid"` on `AnalyzeBody` in
   `app/main.py`), so a stale tab still sending keys gets a 422 and the key
   is never used or stored.
 - If every one of the visitor's own providers fails (a bad key, a local
-  Ollama that isn't running), the analysis falls back to the server's
-  shared key when there is one; otherwise it says the visitor's key didn't
-  work and points to AI settings.
-- Is used instead of the server's keys whenever one is configured. The
-  browser and the server build the same prompt (`ai.build_prompt`), so
-  the answer is asked the same way on either path.
+  Ollama that isn't running), the app says their key didn't work and points
+  to AI settings and the external-AI links.
 
 A local Ollama works the same way, since it's the browser calling it; Ollama
 has to be started with `OLLAMA_ORIGINS` allowing this site.
 
 ### No key at all
 
-Every failure mode that means "this app's own AI path can't serve this
-request" (`no_credential`, a rejected key, quota exhaustion, every provider
-failing) surfaces a nudge toward **⚙ AI settings**, plus **"ask an external
+Every failure mode that means "no usable key here" (`no_credential`, the
+visitor's own key failing, any other provider error) surfaces a nudge toward **⚙ AI settings**, plus **"ask an external
 AI"** links to ChatGPT, Claude, and Google's AI-mode search — the same
 question, copied to the clipboard and opened pre-filled in a new tab where
 the target supports it. No key, no backend call: just a deep link into a
@@ -449,9 +404,8 @@ of consecutive occurrences, and Berakhot really does end at the traditional
 64a. Includes explicit regression tests for the two bugs that only showed up
 against real data: niqqud fragmenting a vocalized word into several tokens,
 and a mark range wide enough to accidentally swallow maqaf. The AI
-connections feature (`tests/test_ai.py`) is tested against ModelDispatcher's
-own keyless `MockProvider`, so the suite never makes a real network call or
-needs an API key.
+connections feature's server side is only the prompt (`tests/test_ai.py`),
+so the suite never makes a network call or needs an API key.
 
 ## Deploying
 
@@ -501,8 +455,7 @@ The edge will not hold a request open for the full wake, so `apiFetch` in
 `static/app.js` retries on a gateway error or a dropped connection, backing off
 for up to ~90s. That is what turns the wake into the wait it appears to be: the
 "waking the server" notice stays up and the search completes on its own. Only
-GETs get the full budget — `POST /api/analyze` retries once, since it can spend
-a model call.
+GETs get the full budget — `POST /api/analyze/prompt` retries once, like any POST.
 
 `app/main.py` still carries a CORS allowlist (`ALLOWED_ORIGINS`). It is no
 longer on the path the frontend uses and is not needed for these deployments;

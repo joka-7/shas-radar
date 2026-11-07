@@ -41,7 +41,6 @@
   var installBtn = document.getElementById("install-btn");
   var settingsBtn = document.getElementById("settings-btn");
   var aiDialog = document.getElementById("ai-settings-dialog");
-  var aiServerKeysNoteEl = document.getElementById("ai-server-keys-note");
 
   var before = 5;
   var after = 5;
@@ -61,7 +60,6 @@
   var lastSearchData = null;
   var lastSnapshot = null;
   var lastTractates = null;
-  var lastAiStatus = null;
 
   // The books the API offers (GET /api/books), and which one is selected.
   // "" means the server's own default until the list arrives. tractatesBook
@@ -669,24 +667,15 @@
   //   - imports frontend/src/browserAi.ts's small build on demand to ask
   //     whether the visitor has a key of their own, and if so has it run the
   //     analysis straight from this browser (requestAnalysis);
-  //   - shows which vendors already have a shared server key, since
-  //     <ModelPicker> has no notion of that (renderAiServerKeysNote);
   //   - forwards a locale switch into the island (see setLocale below).
   // Keys the visitor adds live only in this browser's localStorage and go
   // only to the AI vendor itself, never to this app's server: the server
   // builds the prompt (POST /api/analyze/prompt) and the browser sends it
   // (see app/ai.py's module docstring / README's "AI connections" section).
+  // The server holds no AI key of its own: without the visitor's key, the
+  // "ask an external AI" links are the way to an answer.
 
   var LOCALE_CHANGED_EVENT = "shas-radar:locale-changed";
-
-  // Labels only, for the "server already has a key for..." note -- the ids
-  // must match /api/ai-status's `providers` map (app/main.py).
-  var AI_SERVER_STATUS_PROVIDERS = [
-    { id: "gemini", label: "Gemini" },
-    { id: "groq", label: "Groq" },
-    { id: "openai", label: "OpenAI" },
-    { id: "anthropic", label: "Claude" },
-  ];
 
   function postAnalyzeRequest(path, payload) {
     return apiFetch(path, {
@@ -705,45 +694,31 @@
     });
   }
 
-  /* One analysis turn; resolves to the answer text. With a key of the
-   * visitor's own, the browser sends the server-built prompt to the vendor
-   * itself; otherwise the server answers on its own keys. Rejects with an
-   * Error carrying `.code` (see analysisErrorMessage). */
+  /* One analysis turn, run in this browser on the visitor's own key;
+   * resolves to the answer text. The server only builds the prompt. Rejects
+   * with an Error carrying `.code` (see analysisErrorMessage). */
   function requestAnalysis(groups, history) {
     var payload = { locale: locale, groups: groups };
     if (history) payload.history = history;
-
-    function onServer() {
-      return postAnalyzeRequest("/api/analyze", payload).then(function (result) {
-        return result.connection;
-      });
-    }
-
-    // A module that won't load (ad-blocker, offline) can't hold a usable own
-    // key either, so that visitor still gets the server path.
     return loadBrowserAi().then(function (browserAi) {
-      if (!browserAi.hasOwnKey()) return onServer();
+      if (!browserAi.hasOwnKey()) throw codedError("no_credential");
       return postAnalyzeRequest("/api/analyze/prompt", payload)
         .then(function (prompt) {
           return browserAi.completeAnalysis(prompt);
         })
         .catch(function (err) {
-          if (err.code !== "all_providers_exhausted") throw err;
-          // Every own provider failed (a bad key, an Ollama that isn't
-          // running): the shared server key, when there is one, still answers.
-          if (serverHasAiKey()) return onServer();
-          var ownKeyErr = new Error(err.message);
-          ownKeyErr.code = "own_key_failed";
-          throw ownKeyErr;
+          // Every one of the visitor's providers failed: a bad key, or a
+          // local Ollama that isn't running.
+          if (err.code === "all_providers_exhausted") throw codedError("own_key_failed", err.message);
+          throw err;
         });
-    }, onServer);
+    });
   }
 
-  function serverHasAiKey() {
-    var providers = (lastAiStatus && lastAiStatus.providers) || {};
-    return Object.keys(providers).some(function (id) {
-      return providers[id] === true;
-    });
+  function codedError(code, message) {
+    var err = new Error(message || code);
+    err.code = code;
+    return err;
   }
 
   /* Small (no React) and only needed once an analysis runs, so it's
@@ -763,20 +738,6 @@
     var key = "connections.error.code." + (err && err.code);
     var message = err && err.code ? t(locale, key) : key;
     return message === key ? t(locale, fallbackKey) : message;
-  }
-
-  function renderAiServerKeysNote() {
-    var names = AI_SERVER_STATUS_PROVIDERS.filter(function (p) {
-      return lastAiStatus && lastAiStatus.providers && lastAiStatus.providers[p.id];
-    });
-    if (names.length === 0) {
-      aiServerKeysNoteEl.hidden = true;
-      return;
-    }
-    aiServerKeysNoteEl.hidden = false;
-    aiServerKeysNoteEl.textContent = t(locale, "aiSettings.serverKeysNote", {
-      providers: names.map(function (p) { return p.label; }).join(", "),
-    });
   }
 
   // The <ModelPicker> island (~180KB gzipped: React + ReactDOM, bundled --
@@ -803,7 +764,6 @@
 
   function openAiSettings() {
     ensureModelPickerLoaded();
-    renderAiServerKeysNote();
     if (typeof aiDialog.showModal === "function") {
       aiDialog.showModal();
     } else {
@@ -995,23 +955,16 @@
   // disabled until at least 2 are (a single row has nothing to connect to).
   // Posts exactly the checked rows -- selection.groups() -- rather than
   // re-searching or auto-including everything on screen, so what gets
-  // analyzed is always what the visitor actually chose. With a key of the
-  // visitor's own the browser runs it (requestAnalysis above); otherwise the
-  // server answers on its shared key. A request that fails either way
+  // analyzed is always what the visitor actually chose. The browser runs it
+  // on the visitor's own key (requestAnalysis above). A request that fails
   // surfaces a plain inline error, with a nudge toward AI settings and the
-  // external-AI fallback for the failure codes that mean "our own AI path
-  // can't serve this" (see NEEDS_KEY_CODES below).
+  // external-AI fallback for the failure codes that mean "no usable key
+  // here" (see NEEDS_KEY_CODES below).
 
-  // provider_invalid is included alongside authentication_error because at
-  // least one real vendor (Gemini) returns a plain 400 for an invalid key
-  // rather than 401/403 -- ModelDispatcher classifies that as INVALID, not
-  // AUTH, so it surfaces under this code instead (confirmed against the
-  // real API, not assumed). timeout is included too: whatever's slow, the
-  // external-AI fallback answers immediately either way.
-  var NEEDS_KEY_CODES = [
-    "no_credential", "authentication_error", "provider_invalid", "quota_exceeded", "all_providers_exhausted", "timeout",
-    "own_key_failed",
-  ];
+  // Every way this browser's own AI path can fail: no key configured, every
+  // configured provider failed, or some other provider error. Each gets the
+  // settings nudge and the external-AI links, which always answer.
+  var NEEDS_KEY_CODES = ["no_credential", "own_key_failed", "provider_error"];
 
   function connectionsSection(data, selection) {
     var section = el("section", "connections");
@@ -1279,7 +1232,6 @@
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
     // other way to learn about a locale switch (see frontend/src/main.tsx).
     window.dispatchEvent(new CustomEvent(LOCALE_CHANGED_EVENT, { detail: locale }));
-    if (aiDialog.open) renderAiServerKeysNote();
     if (installHelpDialog.open) openInstallHelp();
 
     var buttons = langSwitch.querySelectorAll(".lang-btn");
@@ -1689,15 +1641,6 @@
   apiFetch("/api/health")
     .catch(function () {})
     .then(disarmHealthWaking);
-
-  // Not waking-gated (unlike the fetches above): this one is purely
-  // informational for the AI settings dialog, which a visitor may never
-  // even open, so it shouldn't contribute to the "waking the server" notice
-  // on an ordinary page load.
-  apiFetch("/api/ai-status")
-    .then(function (r) { return r.json(); })
-    .then(function (status) { lastAiStatus = status; })
-    .catch(function () { /* the settings dialog's server-keys note just stays hidden */ });
 
   var initial = fromHash();
   if (initial) runSearch(initial, false);
