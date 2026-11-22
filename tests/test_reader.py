@@ -7,11 +7,13 @@ from app.books import UnknownBookError
 from app.hebrew import strip_marks, tokenize
 from app.main import app, library
 from app.reader import (
+    HEBREWBOOKS_NUMBERS,
     NotPagedBookError,
     PageNotFoundError,
     TractateNotFoundError,
     page_range,
     page_text,
+    print_scan_url,
 )
 
 BERAKHOT = "ברכות"
@@ -76,6 +78,7 @@ class TestPageText:
             "license",
             "segments",
             "plainSegments",
+            "printUrl",
             "previous",
             "next",
         }
@@ -86,12 +89,40 @@ class TestPageText:
         assert body["next"] == {"daf": 3, "amud": "a"}
         assert body["plainSegments"] == [strip_marks(segment) for segment in body["segments"]]
         assert body["plainSegments"] != body["segments"]  # the real text has niqqud
+        assert body["printUrl"] == "https://hebrewbooks.org/shas.aspx?mesechta=1&daf=2b&format=pdf"
 
     def test_json_has_null_neighbours_at_the_ends(self):
         first = page_text(library, "bavli", BERAKHOT, 2, 0).as_dict()
         last = page_text(library, "bavli", BERAKHOT, 64, 0).as_dict()
         assert first["previous"] is None
         assert last["next"] is None
+
+
+class TestPrintScanUrl:
+    @pytest.mark.parametrize(
+        ("tractate", "daf", "amud", "expected"),
+        [
+            # The last two are the addresses copied from the site for Sanhedrin 22 and Niddah 2b.
+            ("ברכות", 2, 0, "https://hebrewbooks.org/shas.aspx?mesechta=1&daf=2&format=pdf"),
+            ("סוכה", 3, 1, "https://hebrewbooks.org/shas.aspx?mesechta=7&daf=3b&format=pdf"),
+            ("סנהדרין", 22, 0, "https://hebrewbooks.org/shas.aspx?mesechta=24&daf=22&format=pdf"),
+            ("נדה", 2, 1, "https://hebrewbooks.org/shas.aspx?mesechta=37&daf=2b&format=pdf"),
+            ("תמיד", 26, 0, None),  # listed on the site, but its pages do not open
+        ],
+    )
+    def test_builds_the_address_with_the_side_in_the_daf_value(self, tractate, daf, amud, expected):
+        found = library.corpus("bavli").tractate_by_name(tractate)
+        assert found is not None
+        assert print_scan_url(found, daf, amud) == expected
+
+    def test_numbers_every_bavli_tractate_but_tamid_once_within_the_sites_range(self):
+        tractates = library.corpus("bavli").tractates
+        assert {t.en for t in tractates} - HEBREWBOOKS_NUMBERS.keys() == {"Tamid"}
+        assert HEBREWBOOKS_NUMBERS.keys() <= {t.en for t in tractates}
+        assert len(set(HEBREWBOOKS_NUMBERS.values())) == len(HEBREWBOOKS_NUMBERS)
+        assert (
+            max(HEBREWBOOKS_NUMBERS.values()) == 37
+        )  # mesechta=38 was tried on the site: not found
 
 
 class TestPageRange:

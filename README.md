@@ -103,10 +103,13 @@ Two views, chosen with the buttons above the page (the choice is remembered):
   It does not have Tosafot yet, and the text keeps the modern punctuation of the
   William Davidson edition, which the print does not have.
 
-An "Original print" link opens HebrewBooks' Shas index, where the scanned
-printed page can be found. It is the general index, not a link to the daf being
-read: the per-daf address format is not documented anywhere this project could
-verify.
+An "Original print (PDF)" link opens the scanned printed page on HebrewBooks
+(`app/reader.py`, `print_scan_url`). It is a PDF, so it opens outside the app, and
+Tamid has no link because its pages do not open on the site. The address
+format and the tractate numbers were taken from addresses copied from the site;
+Berakhot (1), Sukkah (7), Sanhedrin (24) and Niddah (37) are confirmed, the rest
+follow the printed order between them, and the project has no way to fetch the
+site to check them.
 
 ### Other books
 

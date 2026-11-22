@@ -15,6 +15,55 @@ from .citation import DafScheme, Ref
 from .corpus import Tractate
 from .hebrew import strip_marks
 
+# HebrewBooks numbers the Shas tractates in the printed (Vilna) order, which is not
+# the order of this app's data (there Rosh Hashanah follows Pesachim). Shekalim, a
+# Yerushalmi tractate printed in the Shas, is number 5, so it is skipped here.
+# Tamid has no number: its pages are listed on the site but do not open. Berakhot (1),
+# Sukkah (7), Sanhedrin (24) and Niddah (37) were confirmed against the site; the
+# others follow the printed order between those points.
+_HEBREWBOOKS_ORDER = (
+    "Berakhot",
+    "Shabbat",
+    "Eruvin",
+    "Pesachim",
+    None,  # Shekalim
+    "Yoma",
+    "Sukkah",
+    "Beitzah",
+    "Rosh Hashanah",
+    "Taanit",
+    "Megillah",
+    "Moed Katan",
+    "Chagigah",
+    "Yevamot",
+    "Ketubot",
+    "Nedarim",
+    "Nazir",
+    "Sotah",
+    "Gittin",
+    "Kiddushin",
+    "Bava Kamma",
+    "Bava Metzia",
+    "Bava Batra",
+    "Sanhedrin",
+    "Makkot",
+    "Shevuot",
+    "Avodah Zarah",
+    "Horayot",
+    "Zevachim",
+    "Menachot",
+    "Chullin",
+    "Bekhorot",
+    "Arakhin",
+    "Temurah",
+    "Keritot",
+    "Meilah",
+    "Niddah",
+)
+HEBREWBOOKS_NUMBERS = {
+    name: number for number, name in enumerate(_HEBREWBOOKS_ORDER, start=1) if name is not None
+}
+
 
 class ReaderError(BookError):
     """Base class for errors reading a page."""
@@ -44,6 +93,7 @@ class DafPage:
     sefaria_url: str
     previous: Ref | None
     next: Ref | None
+    print_url: str | None
 
     def as_dict(self) -> dict[str, Any]:
         """The JSON shape of ``GET /api/daf``."""
@@ -58,6 +108,7 @@ class DafPage:
             "license": self.tractate.license,
             "segments": self.segments,
             "plainSegments": [strip_marks(segment) for segment in self.segments],
+            "printUrl": self.print_url,
             "previous": page_json(self.previous),
             "next": page_json(self.next),
         }
@@ -80,6 +131,27 @@ def page_json(ref: Ref | None) -> dict[str, int | str] | None:
         return None
     daf, amud = ref
     return {"daf": daf, "amud": _amud_name(amud)}
+
+
+def print_scan_url(tractate: Tractate, daf: int, amud: int) -> str | None:
+    """Where the scanned printed page is, as a PDF on HebrewBooks.
+
+    The side is part of the ``daf`` value: ``2b`` for side b, the bare number for
+    side a. The PDF is not tested to hold only that page.
+
+    Args:
+        tractate: A Bavli tractate, by its English name.
+        daf: The page number.
+        amud: ``0`` for side a, ``1`` for side b.
+
+    Returns:
+        The address, or ``None`` for a tractate HebrewBooks has no working page for.
+    """
+    number = HEBREWBOOKS_NUMBERS.get(tractate.en)
+    if number is None:
+        return None
+    side = "b" if amud else ""
+    return f"https://hebrewbooks.org/shas.aspx?mesechta={number}&daf={daf}{side}&format=pdf"
 
 
 def is_paged(tractate: Tractate) -> bool:
@@ -145,4 +217,5 @@ def page_text(library: BookLibrary, book_id: str, tractate_he: str, daf: int, am
         sefaria_url=tractate.scheme.sefaria_url(tractate.sefaria_title, ref),
         previous=pages[index - 1] if index > 0 else None,
         next=pages[index + 1] if index + 1 < len(pages) else None,
+        print_url=print_scan_url(tractate, daf, amud),
     )

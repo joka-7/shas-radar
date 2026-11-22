@@ -1479,6 +1479,7 @@
   var readerRashiCheckbox = document.getElementById("reader-rashi");
   var readerPageEl = document.getElementById("reader-page");
   var readerViewGroup = document.getElementById("reader-viewmode");
+  var readerPrintLink = document.getElementById("reader-print-link");
 
   // GET /api/tractates for the Bavli, loaded the first time the reader opens
   // (the search filter's list is for whichever book is selected there).
@@ -1679,6 +1680,14 @@
     });
   }
 
+  // The scanned printed page is a PDF on HebrewBooks, so it opens outside the app.
+  // A tractate with no working page there (Tamid) has no link.
+  function syncReaderPrintLink(data) {
+    var url = data && data.printUrl;
+    readerPrintLink.hidden = !(typeof url === "string" && /^https:\/\/hebrewbooks\.org\//.test(url));
+    if (!readerPrintLink.hidden) readerPrintLink.href = url;
+  }
+
   function syncReaderNav(data) {
     readerEl.querySelectorAll(".reader-prev").forEach(function (button) {
       button.disabled = !(data && data.previous);
@@ -1762,6 +1771,7 @@
 
   function renderReaderPage(data) {
     readerPageEl.textContent = "";
+    syncReaderPrintLink(data);
     readerPageEl.appendChild(hebrewSpan("h2", "reader-citation", data.citation));
     // A server that predates plainSegments gets the vocalized view, not a blank page.
     if (readerView === "page" && Array.isArray(data.plainSegments)) {
@@ -1793,6 +1803,7 @@
     readerData = null;
     syncReaderPickers();
     syncReaderNav(null);
+    syncReaderPrintLink(null);
     if (pushHash && location.hash !== readerHash(position)) {
       history.pushState(null, "", readerHash(position));
     }
