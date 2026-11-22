@@ -12,6 +12,7 @@ Pure functions over `str`. No knowledge of the corpus, tractates, or HTTP.
 | `normalize_finals(text)` | Fold ך ם ן ף ץ onto כ מ נ פ צ |
 | `has_hebrew(text)` | Whether any Hebrew consonant is present |
 | `strip_marks(text)` | Niqqud and cantillation marks (`MARKS`) removed; letters, maqaf, spacing and ordinary punctuation stay |
+| `printed_text(text)` | `strip_marks`, plus comma, period, semicolon, `?`, `!` and dashes removed and spacing tidied; colon, geresh, gershayim, maqaf, brackets, parentheses and a hyphen between two letters (a range such as ו-ט) stay |
 | `words(text)` | Text split into normalized words on any non-letter run |
 | `tokenize(text)` | `(raw, normalized)` pairs in reading order, off runs of letters plus attached niqqud |
 | `he_number(value)` | Integer → Hebrew numeral (`15 → ט״ו`, not יה) |
@@ -243,8 +244,8 @@ the allowlist stay a plain list rather than a stricter per-request check.
 | `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
 | `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`); read from each dataset's header, so listing never loads a book |
 | `GET /api/tractates` | `book` | That book's tractate list, grouped by seder; each has `pageRange` (`{first, last}` as `{daf, amud}`, or `null` for a book not numbered by daf) |
-| `GET /api/daf` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `daf`, `amud`, `citation`, `sefariaUrl`, `license`, `segments[]` (vocalized paragraphs), `plainSegments[]` (the same, without niqqud, for the page layout), `printUrl` (HebrewBooks' PDF address for the page, or `null` for Tamid; see the note in `app/reader.py` on which numbers are confirmed), `previous` and `next` (`{daf, amud}` or `null`) |
-| `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `sefariaUrl`; a page with no Rashi gives `comments: []` |
+| `GET /api/daf` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `daf`, `amud`, `citation`, `sefariaUrl`, `license`, `segments[]` (vocalized paragraphs), `plainSegments[]` (the same as the print has it: no niqqud, no modern punctuation, via `printed_text`, for the page layout), `printUrl` (HebrewBooks' PDF address for the page, or `null` for Tamid; see the note in `app/reader.py` on which numbers are confirmed), `previous` and `next` (`{daf, amud}` or `null`) |
+| `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `plain` (`text` as the print has it, via `printed_text`), `sefariaUrl`; a page with no Rashi gives `comments: []` |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
 | `POST /api/analyze/prompt` | `AnalyzeBody` (`groups`, `locale`, `history`; unknown fields → 422) | `{system, messages}` — no model call; the browser sends it with the visitor's own key |

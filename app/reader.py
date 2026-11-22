@@ -13,7 +13,7 @@ from typing import Any
 from .books import Book, BookError, BookLibrary
 from .citation import DafScheme, Ref
 from .corpus import Tractate
-from .hebrew import strip_marks
+from .hebrew import printed_text
 
 # HebrewBooks numbers the Shas tractates in the printed (Vilna) order, which is not
 # the order of this app's data (there Rosh Hashanah follows Pesachim). Shekalim, a
@@ -107,7 +107,7 @@ class DafPage:
             "sefariaUrl": self.sefaria_url,
             "license": self.tractate.license,
             "segments": self.segments,
-            "plainSegments": [strip_marks(segment) for segment in self.segments],
+            "plainSegments": [printed_text(segment) for segment in self.segments],
             "printUrl": self.print_url,
             "previous": page_json(self.previous),
             "next": page_json(self.next),

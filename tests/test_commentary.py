@@ -4,6 +4,7 @@ import pytest
 
 from app.books import KNOWN_BOOKS, UnknownBookError
 from app.commentary import NoCommentaryError, UnknownTractateError, commentary_on_page
+from app.hebrew import printed_text
 from app.main import library
 
 BERAKHOT = "ברכות"
@@ -49,8 +50,9 @@ class TestCommentaryOnPage:
         }
         assert body["tractate"] == {"he": 'רש"י על ברכות', "en": "Rashi on Berakhot"}
         assert body["license"] == "Public Domain"
-        assert body["comments"][0].keys() == {"ref", "text", "sefariaUrl"}
+        assert body["comments"][0].keys() == {"ref", "text", "plain", "sefariaUrl"}
         assert body["comments"][0]["ref"] == [2, 0, 1, 1]
+        assert body["comments"][0]["plain"] == printed_text(body["comments"][0]["text"])
 
     @pytest.mark.parametrize(
         ("tractate", "license"),

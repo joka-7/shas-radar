@@ -1804,7 +1804,11 @@
       request,
       function (commentary) {
         text.textContent = commentary.comments.length
-          ? commentary.comments.map(function (comment) { return comment.text; }).join(" ")
+          ? commentary.comments.map(function (comment) {
+            // The page can be newer than the API (they deploy separately): an older
+            // server sends no `plain`, so fall back to the text as it is.
+            return typeof comment.plain === "string" ? comment.plain : comment.text;
+          }).filter(function (plain) { return plain.length > 0; }).join(" ")
           : t(locale, "commentary.none");
         if (commentary.license) {
           column.appendChild(el("p", "attribution", t(locale, "commentary.credit", { license: commentary.license })));

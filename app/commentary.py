@@ -13,6 +13,7 @@ from typing import Any
 from .books import Book, BookError, BookLibrary
 from .citation import CITATION_SCHEMES, Ref
 from .corpus import Tractate
+from .hebrew import printed_text
 
 
 class CommentaryError(BookError):
@@ -59,7 +60,12 @@ class PageCommentary:
             "sefariaUrl": self.sefaria_url,
             "license": self.license,
             "comments": [
-                {"ref": list(c.ref), "text": c.text, "sefariaUrl": c.sefaria_url}
+                {
+                    "ref": list(c.ref),
+                    "text": c.text,
+                    "plain": printed_text(c.text),
+                    "sefariaUrl": c.sefaria_url,
+                }
                 for c in self.comments
             ],
         }
