@@ -1007,3 +1007,61 @@ body {
     transition-duration: .01ms !important;
   }
 }
+
+/* Reader: one page of the Bavli read straight through (see "Read" in app.js). */
+.view-tabs {
+  display: flex;
+  gap: .3rem;
+  margin-top: .9rem;
+  background: rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  padding: .25rem;
+}
+.view-tab {
+  font: 600 .9rem var(--font);
+  color: #fff;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: .4rem 1.4rem;
+  min-height: 36px;
+  opacity: .75;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.view-tab:hover { opacity: 1; }
+/* A fixed dark ink: --accent-text turns light in dark mode, which the white pill can't carry. */
+.view-tab.active { background: #fff; color: #1f2c42; opacity: 1; }
+.view-tab:focus-visible { outline: 2.5px solid #fff; outline-offset: 2px; }
+
+.reader:not([hidden]) { display: block; margin-top: 1.25rem; }
+.reader-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.reader-picker .select { flex: 1 1 8rem; min-width: 0; }
+.reader-amud { display: flex; gap: .3rem; }
+.reader-amud .copy[aria-pressed="true"],
+.reader-rashi-toggle:has(input:checked) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.reader-rashi-toggle:not([hidden]) { display: inline-flex; }
+.reader-rashi-toggle input { margin: 0; }
+.reader-nav { display: flex; justify-content: space-between; gap: .5rem; margin: .75rem 0; }
+.reader-nav .copy:disabled { opacity: .4; cursor: default; }
+
+.reader-page {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+.reader-citation { margin: 0 0 .5rem; font-size: 1.1rem; color: var(--accent-text); }
+.reader-segment {
+  margin: 0 0 .6rem;
+  font-family: var(--font-verse);
+  font-size: 1.2rem;
+  line-height: 2;
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+.reader-rashi { margin-top: 1.2rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.reader-rashi-title { margin: 0 0 .4rem; font-size: .95rem; color: var(--text-soft); }
+.reader-page .attribution { margin-top: .8rem; font-size: .85em; color: var(--text-faint); }
+.reader-page .copy { display: inline-flex; margin-top: .6rem; text-decoration: none; }

@@ -71,6 +71,23 @@ the base has no such tractate), and returns a `PageCommentary` with that page's
 the commentary does not cover gives no comments, not an error. `as_dict()` is
 the JSON shape of `GET /api/commentary`.
 
+## `app/reader.py` — one page of the Bavli
+
+`page_text(library, book_id, tractate_he, daf, amud)` returns a `DafPage`: the
+page's paragraphs in reading order (`Tractate.segments_under`), its Hebrew
+citation and Sefaria link, and the `previous` and `next` pages that have text
+(`None` at either end of the tractate). Neighbours come from
+`Tractate.page_refs()`, so a tractate that begins on side b (Tamid, 25b) or
+ends on side a has no phantom page. `as_dict()` is the JSON shape of
+`GET /api/daf`; `page_json(ref)` and `page_range(tractate)` serve
+`GET /api/tractates`.
+
+`ReaderError` is rooted at `BookError`: `TractateNotFoundError` (no such
+tractate), `NotPagedBookError` (the tractate's scheme is not a two-part
+daf/amud one, which excludes the chapter-numbered books) and
+`PageNotFoundError` (no text on that page). An unknown book raises
+`UnknownBookError`.
+
 ## `app/corpus.py` — model and indexes
 
 ### `Segment`
@@ -224,7 +241,8 @@ the allowlist stay a plain list rather than a stricter per-request check.
 | --- | --- | --- |
 | `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
 | `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`); read from each dataset's header, so listing never loads a book |
-| `GET /api/tractates` | `book` | That book's tractate list, grouped by seder |
+| `GET /api/tractates` | `book` | That book's tractate list, grouped by seder; each has `pageRange` (`{first, last}` as `{daf, amud}`, or `null` for a book not numbered by daf) |
+| `GET /api/daf` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `daf`, `amud`, `citation`, `sefariaUrl`, `license`, `segments[]` (vocalized paragraphs), `previous` and `next` (`{daf, amud}` or `null`) |
 | `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `sefariaUrl`; a page with no Rashi gives `comments: []` |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
@@ -242,7 +260,7 @@ and rendered by `http_exception_handler`:
 ```
 
 `code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_commentary`,
-`unknown_tractate`. The frontend's `error.code.*` lookup keys off these. The
+`unknown_tractate`, `not_paged`, `page_not_found`. The frontend's `error.code.*` lookup keys off these. The
 AI analysis's own codes (`no_credential`, `own_key_failed`,
 `provider_error`) are raised in the browser, not by the server.
 
@@ -284,6 +302,7 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | `tests/test_search.py` | Index correctness, all four match kinds (exact, with-prefix, phrase, phrase-with-prefix), proximity, offset/limit pagination, and the HTTP surface via `TestClient` — status codes, the error contract, clamping |
 | `tests/test_citation.py` | Ref packing, and the folio and chapter schemes' Hebrew/English/URL output |
 | `tests/test_commentary.py` | A page's comments on the real Bavli and Rashi data, the pages and tractates that have none, and the errors |
+| `tests/test_reader.py` | A page's text and its neighbours at the start, middle and end of a tractate (including one that begins on side b), the page range, every error, and the `/api/daf` and `/api/tractates` JSON on the real data |
 | `tests/test_books.py` | The registry and `ENABLED_BOOKS` parsing, per-book lazy loading under a lock, and every shipped dataset (header matches corpus, unique tractate names, no markup or entities left in the text) |
 | `tests/test_build_dataset.py` | The build script's pure helpers: cleaning, the nested-text walk, table-of-contents lookup |
 | `tests/test_ai.py` | `build_prompt` (language, group/result/word caps, history order and cap) and `POST /api/analyze/prompt` (success, invalid bodies including a visitor key, and that the old server-side AI endpoints are gone) — pure, no network |

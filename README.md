@@ -81,6 +81,18 @@ section. Opening it fetches Rashi's comments on the result's page (daf and
 amud) from `/api/commentary` and links to that page's Rashi on Sefaria. It
 shows all of the page's comments, not only the one on the matched sentence.
 
+### Reading a page
+
+The **Read** tab opens one page of the Bavli (a daf side) to read straight
+through: pick a tractate, daf and side, or step with the previous/next page
+buttons. Rashi appears under the page when `rashi` is enabled, with a toggle
+(on by default). The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
+so it can be linked to and the back button steps between pages. The last page
+read is kept in `localStorage`, and the Read tab reopens it. Each Bavli search
+result has an "Open in reader" link to its page. The text comes from
+`GET /api/daf`; the other books are not numbered by daf, so they have no reader
+yet.
+
 ### Other books
 
 The Bavli is the default; more books can be enabled with `ENABLED_BOOKS`
@@ -202,7 +214,8 @@ The UI is a client of this API; nothing is private to it.
 GET /api/search?q=אביי,רבא&before=5&after=5&limit=50&tractate=ברכות&book=bavli
 GET /api/proximity?a=אביי&b=רבא&within=6
 GET /api/books       -- the enabled books and their license/source, without loading any
-GET /api/tractates?book=bavli
+GET /api/tractates?book=bavli   -- also each tractate's first and last page (`pageRange`; `null` outside the Bavli)
+GET /api/daf?book=bavli&tractate=ברכות&daf=2&amud=a   -- the text of that page, and the pages before and after it
 GET /api/commentary?book=bavli&tractate=ברכות&daf=2&amud=a   -- Rashi's comments on that page
 GET /api/health
 POST /api/analyze/prompt   {"groups": [...], "locale": "he", "history": [...]}   -- the AI prompt, for the browser to send with the visitor's own key; see "AI connections" below
