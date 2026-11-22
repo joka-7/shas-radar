@@ -1,6 +1,16 @@
 """Tests for the Hebrew/Aramaic normalization primitives."""
 
-from app.hebrew import daf_citation, has_hebrew, he_number, normalize_finals, tokenize, words
+import pytest
+
+from app.hebrew import (
+    daf_citation,
+    has_hebrew,
+    he_number,
+    normalize_finals,
+    strip_marks,
+    tokenize,
+    words,
+)
 
 
 class TestNormalizeFinals:
@@ -10,6 +20,27 @@ class TestNormalizeFinals:
     def test_has_hebrew(self):
         assert has_hebrew("שלום")
         assert not has_hebrew("hello 123")
+
+
+class TestStripMarks:
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("\u05e9\u05c1\u05b8\u05dc\u05d5\u05b9\u05dd", "שלום"),  # שָׁלוֹם: shin dot, qamats, holam
+            (
+                "\u05d0\u05b2\u05e9\u05b6\u05c1\u05e8\u05be\u05d0\u05b8\u05de\u05b7\u05e8",
+                "אשר־אמר",
+            ),  # maqaf stays
+            (
+                "\u05d0\u05b8\u05de\u05b7\u05e8: \u05db\u05b8\u05bc\u05da\u05b0?",
+                "אמר: כך?",
+            ),  # finals and punctuation stay
+            ("אמר רבא", "אמר רבא"),  # already plain
+            ("", ""),
+        ],
+    )
+    def test_removes_niqqud_and_nothing_else(self, text, expected):
+        assert strip_marks(text) == expected
 
 
 class TestWords:

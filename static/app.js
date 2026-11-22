@@ -1468,6 +1468,7 @@
   var READER_BOOK = "bavli";
   var READER_POSITION_KEY = "shas-radar:reader-position";
   var READER_RASHI_KEY = "shas-radar:reader-rashi";
+  var READER_VIEW_KEY = "shas-radar:reader-view";
 
   var viewTabs = document.getElementById("view-tabs");
   var readerEl = document.getElementById("reader");
@@ -1477,6 +1478,7 @@
   var readerRashiToggle = document.getElementById("reader-rashi-toggle");
   var readerRashiCheckbox = document.getElementById("reader-rashi");
   var readerPageEl = document.getElementById("reader-page");
+  var readerViewGroup = document.getElementById("reader-viewmode");
 
   // GET /api/tractates for the Bavli, loaded the first time the reader opens
   // (the search filter's list is for whichever book is selected there).
@@ -1526,6 +1528,32 @@
     }
   }
 
+  // "vocalized": the text with niqqud, one paragraph at a time, Rashi under it.
+  // "page": צורת הדף -- plain running text with Rashi beside it, as in the print.
+  function loadReaderView() {
+    try {
+      return localStorage.getItem(READER_VIEW_KEY) === "page" ? "page" : "vocalized";
+    } catch (err) {
+      return "vocalized";
+    }
+  }
+
+  function saveReaderView(view) {
+    try {
+      localStorage.setItem(READER_VIEW_KEY, view);
+    } catch (err) {
+      /* the choice holds until the page is reloaded */
+    }
+  }
+
+  var readerView = loadReaderView();
+
+  function syncReaderViewButtons() {
+    readerViewGroup.querySelectorAll("button").forEach(function (button) {
+      button.setAttribute("aria-pressed", button.dataset.view === readerView ? "true" : "false");
+    });
+  }
+
   function readerHash(position) {
     return "#/daf/" + encodeURIComponent(position.tractate) + "/" + position.daf + "/" + position.amud;
   }
@@ -1551,6 +1579,37 @@
   // Dafim count from the first page's daf; side a comes before side b.
   function pageNumber(page) {
     return page.daf * 2 + (page.amud === "b" ? 1 : 0);
+  }
+
+  var GEMATRIA = [
+    [400, "ת"], [300, "ש"], [200, "ר"], [100, "ק"], [90, "צ"], [80, "פ"], [70, "ע"], [60, "ס"],
+    [50, "נ"], [40, "מ"], [30, "ל"], [20, "כ"], [10, "י"], [9, "ט"], [8, "ח"], [7, "ז"], [6, "ו"],
+    [5, "ה"], [4, "ד"], [3, "ג"], [2, "ב"], [1, "א"],
+  ];
+
+  // The same numerals the citations use (app/hebrew.py he_number): 15 and 16
+  // are ט״ו and ט״ז, and a gershayim goes before the last of two or more letters.
+  function hebrewNumeral(value) {
+    var letters = "";
+    var remainder = value;
+    while (remainder > 0) {
+      if (remainder === 15 || remainder === 16) {
+        letters += remainder === 15 ? "טו" : "טז";
+        break;
+      }
+      for (var i = 0; i < GEMATRIA.length; i++) {
+        if (remainder >= GEMATRIA[i][0]) {
+          letters += GEMATRIA[i][1];
+          remainder -= GEMATRIA[i][0];
+          break;
+        }
+      }
+    }
+    return letters.length === 1 ? letters : letters.slice(0, -1) + "״" + letters.slice(-1);
+  }
+
+  function dafLabel(daf) {
+    return locale === "he" ? hebrewNumeral(daf) : String(daf);
   }
 
   function pageInRange(info, daf, amud) {
@@ -1609,7 +1668,7 @@
       for (var daf = info.pageRange.first.daf; daf <= info.pageRange.last.daf; daf++) {
         var option = document.createElement("option");
         option.value = String(daf);
-        option.textContent = String(daf);
+        option.textContent = dafLabel(daf);
         readerDafSelect.appendChild(option);
       }
       readerDafSelect.value = String(readerPosition.daf);
@@ -1639,37 +1698,81 @@
     readerRashiCheckbox.checked = rashiWanted();
   }
 
+  // Rashi on the page being read, from the cache or the network. Only the
+  // newest page's callbacks run: a slower, older response is dropped.
+  function loadReaderRashi(data, request, onLoaded, onFailed) {
+    var key = data.tractate.he + "|" + data.daf + data.amud;
+    if (readerRashiCache[key]) {
+      onLoaded(readerRashiCache[key]);
+      return;
+    }
+    fetchCommentary(READER_BOOK, data.tractate.he, data.daf, data.amud)
+      .then(function (commentary) {
+        readerRashiCache[key] = commentary;
+        if (request === readerRequest) onLoaded(commentary);
+      })
+      .catch(function () {
+        if (request === readerRequest) onFailed();
+      });
+  }
+
   function renderReaderRashi(data, request) {
     var box = el("section", "reader-rashi");
     box.appendChild(el("h3", "reader-rashi-title", t(locale, "reader.rashi")));
     var body = el("div", "commentary-body");
     box.appendChild(body);
-
-    var key = data.tractate.he + "|" + data.daf + data.amud;
-    if (readerRashiCache[key]) {
-      renderCommentary(body, readerRashiCache[key]);
-      return box;
-    }
     body.textContent = t(locale, "commentary.loading");
-    fetchCommentary(READER_BOOK, data.tractate.he, data.daf, data.amud)
-      .then(function (commentary) {
-        readerRashiCache[key] = commentary;
-        if (request === readerRequest) renderCommentary(body, commentary);
-      })
-      .catch(function () {
-        if (request === readerRequest) body.textContent = t(locale, "commentary.error");
-      });
+    loadReaderRashi(
+      data,
+      request,
+      function (commentary) { renderCommentary(body, commentary); },
+      function () { body.textContent = t(locale, "commentary.error"); }
+    );
     return box;
+  }
+
+  // צורת הדף: the Gemara without niqqud as one running text, and Rashi as
+  // another, laid out beside it (see .daf in styles.css).
+  function renderPrintLayout(data, request) {
+    var withRashi = readerRashiAvailable() && readerRashiCheckbox.checked;
+    var daf = el("div", "daf daf-amud-" + data.amud + (withRashi ? " daf-with-rashi" : ""));
+    daf.appendChild(hebrewSpan("p", "daf-gemara", data.plainSegments.join(" ")));
+    if (!withRashi) return daf;
+
+    var column = hebrewSpan("div", "daf-rashi");
+    column.appendChild(el("h3", "daf-rashi-title", t(locale, "reader.rashi")));
+    var text = hebrewSpan("p", "daf-rashi-text", t(locale, "commentary.loading"));
+    column.appendChild(text);
+    daf.appendChild(column);
+    loadReaderRashi(
+      data,
+      request,
+      function (commentary) {
+        text.textContent = commentary.comments.length
+          ? commentary.comments.map(function (comment) { return comment.text; }).join(" ")
+          : t(locale, "commentary.none");
+        if (commentary.license) {
+          column.appendChild(el("p", "attribution", t(locale, "commentary.credit", { license: commentary.license })));
+        }
+      },
+      function () { text.textContent = t(locale, "commentary.error"); }
+    );
+    return daf;
   }
 
   function renderReaderPage(data) {
     readerPageEl.textContent = "";
     readerPageEl.appendChild(hebrewSpan("h2", "reader-citation", data.citation));
-    data.segments.forEach(function (segment) {
-      readerPageEl.appendChild(hebrewSpan("p", "reader-segment", segment));
-    });
-    if (readerRashiAvailable() && readerRashiCheckbox.checked) {
-      readerPageEl.appendChild(renderReaderRashi(data, readerRequest));
+    // A server that predates plainSegments gets the vocalized view, not a blank page.
+    if (readerView === "page" && Array.isArray(data.plainSegments)) {
+      readerPageEl.appendChild(renderPrintLayout(data, readerRequest));
+    } else {
+      data.segments.forEach(function (segment) {
+        readerPageEl.appendChild(hebrewSpan("p", "reader-segment", segment));
+      });
+      if (readerRashiAvailable() && readerRashiCheckbox.checked) {
+        readerPageEl.appendChild(renderReaderRashi(data, readerRequest));
+      }
     }
     if (data.license) {
       readerPageEl.appendChild(el("p", "attribution", t(locale, "reader.credit", { license: data.license })));
@@ -1814,6 +1917,17 @@
     if (event.target.closest(".reader-prev") && readerData.previous) goToReaderPage(readerData.previous);
     if (event.target.closest(".reader-next") && readerData.next) goToReaderPage(readerData.next);
   });
+
+  readerViewGroup.addEventListener("click", function (event) {
+    var button = event.target.closest("button");
+    if (!button || button.dataset.view === readerView) return;
+    readerView = button.dataset.view;
+    saveReaderView(readerView);
+    syncReaderViewButtons();
+    if (readerData) renderReaderPage(readerData);
+  });
+
+  syncReaderViewButtons();
 
   readerRashiCheckbox.addEventListener("change", function () {
     saveRashiWanted(readerRashiCheckbox.checked);

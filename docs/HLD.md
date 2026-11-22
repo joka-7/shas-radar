@@ -34,7 +34,7 @@ what links a set of results the visitor has selected.
   the Bavli alone is about 168MB, and the four enabled books (Bavli,
   Yerushalmi, Mishnah, Tosefta) about 247MB once each has been used.
   `ENABLED_BOOKS` is the switch: Rashi adds about 137MB (all five books reach
-  about 384MB), so it is built and tested but not enabled in `render.yaml`.
+  about 384MB), which fits, so `render.yaml` enables it.
   Tosafot is not included: it would add well over 100MB more.
 - *Installable, not offline.* The PWA shell lets a phone add the app to its
   home screen and paints instantly from the cached shell, but every search
