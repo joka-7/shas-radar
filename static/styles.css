@@ -1070,6 +1070,7 @@ body {
 .reader-view { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .25rem; }
 .reader-viewmode { display: flex; gap: .3rem; }
 .reader-view a.copy { text-decoration: none; }
+.reader-view a.copy[hidden] { display: none; } /* .copy's display would otherwise win */
 
 /* צורת הדף: the Gemara and Rashi as plain running text, the way the print has
    them. Side by side from 640px; below that two columns would be too narrow to
