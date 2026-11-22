@@ -21,6 +21,7 @@ shas-radar/
 │   ├── corpus.py      # Loading and indexing the Talmud corpus.
 │   ├── hebrew.py      # Hebrew/Aramaic text normalization primitives.
 │   ├── main.py        # FastAPI application.
+│   ├── reader.py      # Reading one page of the Bavli: its text, and the pages on either side.
 │   └── search.py      # Talmud search: exact word, attached-prefix, exact phrase, and KWIC context.
 ├── data/
 │   ├── mishnah.json.gz
@@ -77,6 +78,7 @@ shas-radar/
 │   ├── test_commentary.py     # Tests for app/commentary.py: a commentary's comments on one page, on the real data.
 │   ├── test_corpus.py         # Tests for app/corpus.py: the compact word index.
 │   ├── test_hebrew.py         # Tests for the Hebrew/Aramaic normalization primitives.
+│   ├── test_reader.py         # Tests for app/reader.py: reading one page of the Bavli, on the real data.
 │   └── test_search.py         # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
 ├── .ai
 ├── .gitignore

@@ -28,6 +28,14 @@ from . import ai
 from .books import DEFAULT_BOOK, BookLibrary, UnknownBookError
 from .commentary import NoCommentaryError, UnknownTractateError, commentary_on_page
 from .corpus import Corpus
+from .reader import (
+    NotPagedBookError,
+    PageNotFoundError,
+    TractateNotFoundError,
+    page_json,
+    page_range,
+    page_text,
+)
 from .search import (
     DEFAULT_CONTEXT,
     DEFAULT_LIMIT,
@@ -235,6 +243,35 @@ def commentary_endpoint(
     return page.as_dict()
 
 
+@app.get("/api/daf")
+def daf_endpoint(
+    tractate: str = Query(..., description="Tractate of the book, by Hebrew name"),
+    daf: int = Query(..., ge=1, le=65535, description="Page number"),
+    amud: Literal["a", "b"] = Query(..., description="Side of the page"),
+    book: str = Query(DEFAULT_BOOK, description="The book to read; see /api/books"),
+) -> dict[str, Any]:
+    """The text of one page of a book, for reading it straight through."""
+    try:
+        page = page_text(library, book, tractate, daf, 0 if amud == "a" else 1)
+    except UnknownBookError:
+        raise HTTPException(
+            status_code=400, detail=error("unknown_book", "הספר המבוקש אינו קיים")
+        ) from None
+    except TractateNotFoundError:
+        raise HTTPException(
+            status_code=400, detail=error("unknown_tractate", "המסכת המבוקשת אינה קיימת")
+        ) from None
+    except NotPagedBookError:
+        raise HTTPException(
+            status_code=400, detail=error("not_paged", "הספר אינו ממוספר לפי דפים")
+        ) from None
+    except PageNotFoundError:
+        raise HTTPException(
+            status_code=400, detail=error("page_not_found", "אין טקסט בעמוד המבוקש")
+        ) from None
+    return page.as_dict()
+
+
 @app.get("/api/tractates")
 def tractates_endpoint(
     book: str = Query(DEFAULT_BOOK, description="Book id; see /api/books"),
@@ -249,6 +286,11 @@ def tractates_endpoint(
                 "sederHe": t.seder_he,
                 "sederEn": t.seder_en,
                 "words": len(t),
+                "pageRange": (
+                    {"first": page_json(pages[0]), "last": page_json(pages[1])}
+                    if (pages := page_range(t))
+                    else None
+                ),
             }
             for t in corpus.tractates
         ]

@@ -125,6 +125,7 @@ class Tractate:
     """One tractate's full token stream, plus the indexes built over it."""
 
     __slots__ = (
+        "_page_refs",
         "by_word",
         "en",
         "he",
@@ -158,6 +159,7 @@ class Tractate:
         self.scheme = scheme
         self.license = license
 
+        self._page_refs: list[Ref] | None = None  # built on first use; see page_refs()
         self.tokens: list[str] = []  # normalized (finals folded), interned
         self.tokens_raw: list[str] = []  # as printed, for display, interned
         self.segments: list[Segment] = []
@@ -218,6 +220,23 @@ class Tractate:
             (unpack_ref(self.segment_refs[index], arity), self.segments[index])
             for index in range(first, end)
         ]
+
+    def page_refs(self) -> list[Ref]:
+        """The pages that have text, in reading order.
+
+        Only meaningful for a book numbered by daf and amud. Computed once, on
+        first use, which is after every segment has been added.
+
+        Returns:
+            The distinct leading ``(daf, amud)`` of every segment. Shared, not
+            a copy: callers must not modify it.
+        """
+        if self._page_refs is None:
+            arity = self.scheme.arity
+            self._page_refs = list(
+                dict.fromkeys(unpack_ref(packed, arity)[:2] for packed in self.segment_refs)
+            )
+        return self._page_refs
 
     def _segment_index(self, position: int) -> int:
         return max(0, bisect.bisect_right(self.segment_starts, position) - 1)

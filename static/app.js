@@ -399,6 +399,15 @@
     return api;
   }
 
+  // The commentary on one page of a book, as GET /api/commentary answers it.
+  function fetchCommentary(book, tractate, daf, amud) {
+    var params = new URLSearchParams({ book: book, tractate: tractate, daf: String(daf), amud: amud });
+    return apiFetch("/api/commentary?" + params.toString()).then(function (response) {
+      if (!response.ok) throw new Error("commentary " + response.status);
+      return response.json();
+    });
+  }
+
   // "Rashi on this page": the comments on the result's page, fetched the first
   // time the section is opened (a failed fetch can be retried by reopening it).
   function commentaryBlock(result) {
@@ -415,17 +424,7 @@
       if (!details.open || loaded) return;
       loaded = true;
       body.textContent = t(locale, "commentary.loading");
-      var params = new URLSearchParams({
-        book: result.book,
-        tractate: result.tractate.he,
-        daf: String(result.daf),
-        amud: result.amud,
-      });
-      apiFetch("/api/commentary?" + params.toString())
-        .then(function (response) {
-          if (!response.ok) throw new Error("commentary " + response.status);
-          return response.json();
-        })
+      fetchCommentary(result.book, result.tractate.he, result.daf, result.amud)
         .then(function (data) { renderCommentary(body, data); })
         .catch(function () {
           loaded = false;
@@ -500,6 +499,7 @@
     link.className = "copy";
     link.textContent = t(locale, "openInSefaria");
     foot.appendChild(link);
+    if (result.book === READER_BOOK && result.daf) foot.appendChild(readerLink(result));
     // Same row, same size, as copy/Sefaria above -- a third pill-shaped
     // control rather than a separate label sitting above the card, which
     // read as unrelated to this card's own actions.
@@ -1228,6 +1228,8 @@
 
     if (lastBooks) populateBookSelect();
     if (lastTractates) populateTractateSelect(lastTractates);
+    if (readerTractates) populateReaderTractates();
+    if (readerData) renderReaderPage(readerData);
 
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
     // other way to learn about a locale switch (see frontend/src/main.tsx).
@@ -1393,6 +1395,7 @@
 
     input.value = query;
     autosizeInput();
+    showView("search");
     if (pushHash !== false) {
       var encoded = "#q=" + encodeURIComponent(query);
       if (location.hash !== encoded) history.pushState(null, "", encoded);
@@ -1454,6 +1457,369 @@
       });
   }
 
+  // --- Reader ------------------------------------------------------------
+  //
+  // One page of the Bavli read straight through (GET /api/daf), with Rashi
+  // under it and the pages on either side one tap away. The page being read is
+  // in the hash (#/daf/<tractate>/<daf>/<a|b>), so it can be linked to and the
+  // back button steps between pages; the last page read is remembered, and
+  // the Read tab reopens it.
+
+  var READER_BOOK = "bavli";
+  var READER_POSITION_KEY = "shas-radar:reader-position";
+  var READER_RASHI_KEY = "shas-radar:reader-rashi";
+
+  var viewTabs = document.getElementById("view-tabs");
+  var readerEl = document.getElementById("reader");
+  var readerTractateSelect = document.getElementById("reader-tractate");
+  var readerDafSelect = document.getElementById("reader-daf");
+  var readerAmudGroup = document.getElementById("reader-amud");
+  var readerRashiToggle = document.getElementById("reader-rashi-toggle");
+  var readerRashiCheckbox = document.getElementById("reader-rashi");
+  var readerPageEl = document.getElementById("reader-page");
+
+  // GET /api/tractates for the Bavli, loaded the first time the reader opens
+  // (the search filter's list is for whichever book is selected there).
+  var readerTractates = null;
+  var readerPosition = null; // {tractate, daf, amud} being shown
+  var readerData = null; // the last /api/daf response, kept to redraw on a language switch
+  var readerRequest = 0; // a slower, older response never replaces a newer one
+  var readerRashiCache = {};
+
+  function isAmud(value) {
+    return value === "a" || value === "b";
+  }
+
+  function loadReaderPosition() {
+    try {
+      var stored = JSON.parse(localStorage.getItem(READER_POSITION_KEY));
+      if (stored && typeof stored.tractate === "string" && Number.isInteger(stored.daf) && isAmud(stored.amud)) {
+        return stored;
+      }
+    } catch (err) {
+      /* private browsing, or a value that is not JSON -- start at the beginning */
+    }
+    return null;
+  }
+
+  function saveReaderPosition(position) {
+    try {
+      localStorage.setItem(READER_POSITION_KEY, JSON.stringify(position));
+    } catch (err) {
+      /* the Read tab just opens at the beginning next visit */
+    }
+  }
+
+  function rashiWanted() {
+    try {
+      return localStorage.getItem(READER_RASHI_KEY) !== "0";
+    } catch (err) {
+      return true;
+    }
+  }
+
+  function saveRashiWanted(wanted) {
+    try {
+      localStorage.setItem(READER_RASHI_KEY, wanted ? "1" : "0");
+    } catch (err) {
+      /* the choice holds until the page is reloaded */
+    }
+  }
+
+  function readerHash(position) {
+    return "#/daf/" + encodeURIComponent(position.tractate) + "/" + position.daf + "/" + position.amud;
+  }
+
+  function readerPositionFromHash() {
+    var match = /^#\/daf\/([^/]+)\/(\d+)\/([ab])$/.exec(location.hash);
+    if (!match) return null;
+    try {
+      return { tractate: decodeURIComponent(match[1]), daf: Number(match[2]), amud: match[3] };
+    } catch (err) {
+      return null; // a malformed %-escape
+    }
+  }
+
+  function readerTractateInfo(he) {
+    if (!readerTractates) return null;
+    for (var i = 0; i < readerTractates.tractates.length; i++) {
+      if (readerTractates.tractates[i].he === he) return readerTractates.tractates[i];
+    }
+    return null;
+  }
+
+  // Dafim count from the first page's daf; side a comes before side b.
+  function pageNumber(page) {
+    return page.daf * 2 + (page.amud === "b" ? 1 : 0);
+  }
+
+  function pageInRange(info, daf, amud) {
+    var number = pageNumber({ daf: daf, amud: amud });
+    return number >= pageNumber(info.pageRange.first) && number <= pageNumber(info.pageRange.last);
+  }
+
+  function readerLink(result) {
+    var position = { tractate: result.tractate.he, daf: result.daf, amud: result.amud };
+    var link = el("a", "copy", t(locale, "reader.openInReader"));
+    link.href = readerHash(position);
+    link.addEventListener("click", function (event) {
+      event.preventDefault();
+      openReader(position, true);
+    });
+    return link;
+  }
+
+  function showView(name) {
+    var reading = name === "read";
+    form.hidden = reading;
+    results.hidden = reading;
+    readerEl.hidden = !reading;
+    viewTabs.querySelectorAll(".view-tab").forEach(function (tab) {
+      var active = tab.dataset.view === name;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  // Grouped by seder, like the search filter; relabelled on a language switch.
+  function populateReaderTractates() {
+    readerTractateSelect.textContent = "";
+    var groups = {};
+    readerTractates.tractates.forEach(function (tr) {
+      var seder = localizedName(tr.sederHe, tr.sederEn);
+      if (!groups[seder]) {
+        groups[seder] = document.createElement("optgroup");
+        groups[seder].label = seder;
+        readerTractateSelect.appendChild(groups[seder]);
+      }
+      var option = document.createElement("option");
+      option.value = tr.he;
+      option.textContent = localizedName(tr.he, tr.en);
+      groups[seder].appendChild(option);
+    });
+    syncReaderPickers();
+  }
+
+  function syncReaderPickers() {
+    if (!readerPosition) return;
+    var info = readerTractateInfo(readerPosition.tractate);
+    readerTractateSelect.value = readerPosition.tractate;
+    readerDafSelect.textContent = "";
+    if (info && info.pageRange) {
+      for (var daf = info.pageRange.first.daf; daf <= info.pageRange.last.daf; daf++) {
+        var option = document.createElement("option");
+        option.value = String(daf);
+        option.textContent = String(daf);
+        readerDafSelect.appendChild(option);
+      }
+      readerDafSelect.value = String(readerPosition.daf);
+    }
+    readerAmudGroup.querySelectorAll("button").forEach(function (button) {
+      button.setAttribute("aria-pressed", button.dataset.amud === readerPosition.amud ? "true" : "false");
+      button.disabled = !(info && info.pageRange) || !pageInRange(info, readerPosition.daf, button.dataset.amud);
+    });
+  }
+
+  function syncReaderNav(data) {
+    readerEl.querySelectorAll(".reader-prev").forEach(function (button) {
+      button.disabled = !(data && data.previous);
+    });
+    readerEl.querySelectorAll(".reader-next").forEach(function (button) {
+      button.disabled = !(data && data.next);
+    });
+  }
+
+  function readerRashiAvailable() {
+    var host = bookById(READER_BOOK);
+    return !!(host && host.commentary);
+  }
+
+  function syncReaderRashiToggle() {
+    readerRashiToggle.hidden = !readerRashiAvailable();
+    readerRashiCheckbox.checked = rashiWanted();
+  }
+
+  function renderReaderRashi(data, request) {
+    var box = el("section", "reader-rashi");
+    box.appendChild(el("h3", "reader-rashi-title", t(locale, "reader.rashi")));
+    var body = el("div", "commentary-body");
+    box.appendChild(body);
+
+    var key = data.tractate.he + "|" + data.daf + data.amud;
+    if (readerRashiCache[key]) {
+      renderCommentary(body, readerRashiCache[key]);
+      return box;
+    }
+    body.textContent = t(locale, "commentary.loading");
+    fetchCommentary(READER_BOOK, data.tractate.he, data.daf, data.amud)
+      .then(function (commentary) {
+        readerRashiCache[key] = commentary;
+        if (request === readerRequest) renderCommentary(body, commentary);
+      })
+      .catch(function () {
+        if (request === readerRequest) body.textContent = t(locale, "commentary.error");
+      });
+    return box;
+  }
+
+  function renderReaderPage(data) {
+    readerPageEl.textContent = "";
+    readerPageEl.appendChild(hebrewSpan("h2", "reader-citation", data.citation));
+    data.segments.forEach(function (segment) {
+      readerPageEl.appendChild(hebrewSpan("p", "reader-segment", segment));
+    });
+    if (readerRashiAvailable() && readerRashiCheckbox.checked) {
+      readerPageEl.appendChild(renderReaderRashi(data, readerRequest));
+    }
+    if (data.license) {
+      readerPageEl.appendChild(el("p", "attribution", t(locale, "reader.credit", { license: data.license })));
+    }
+    if (/^https:\/\//.test(data.sefariaUrl || "")) {
+      var link = el("a", "copy", t(locale, "openInSefaria"));
+      link.href = data.sefariaUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      readerPageEl.appendChild(link);
+    }
+    syncReaderNav(data);
+  }
+
+  function showReaderPage(position, pushHash) {
+    var request = ++readerRequest;
+    readerPosition = position;
+    readerData = null;
+    syncReaderPickers();
+    syncReaderNav(null);
+    if (pushHash && location.hash !== readerHash(position)) {
+      history.pushState(null, "", readerHash(position));
+    }
+
+    readerPageEl.setAttribute("aria-busy", "true");
+    readerPageEl.textContent = "";
+    var skeleton = el("div", "skeleton");
+    for (var i = 0; i < 4; i++) skeleton.appendChild(el("div", "line"));
+    readerPageEl.appendChild(skeleton);
+    var disarm = armWaking();
+
+    var params = new URLSearchParams({
+      book: READER_BOOK,
+      tractate: position.tractate,
+      daf: String(position.daf),
+      amud: position.amud,
+    });
+    apiFetch("/api/daf?" + params.toString())
+      .then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok) {
+            var failure = new Error("daf " + response.status);
+            failure.userMessage = body.code && t(locale, "error.code." + body.code);
+            throw failure;
+          }
+          return body;
+        }, function () {
+          throw new Error("daf " + response.status); // an error body that is not JSON
+        });
+      })
+      .then(function (data) {
+        if (request !== readerRequest) return;
+        readerData = data;
+        saveReaderPosition(position);
+        renderReaderPage(data);
+        readerEl.scrollIntoView({ block: "start" });
+      })
+      .catch(function (error) {
+        if (request !== readerRequest) return;
+        readerPageEl.textContent = "";
+        readerPageEl.appendChild(notice(t(locale, "error.title"), error.userMessage || t(locale, "reader.error"), "error"));
+      })
+      .then(function () {
+        if (request === readerRequest) readerPageEl.setAttribute("aria-busy", "false");
+        disarm();
+      });
+  }
+
+  function ensureReaderTractates() {
+    if (readerTractates) return Promise.resolve();
+    var disarm = armWaking();
+    return apiFetch("/api/tractates?book=" + encodeURIComponent(READER_BOOK))
+      .then(function (response) {
+        if (!response.ok) throw new Error("tractates " + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        readerTractates = data;
+        disarm();
+      }, function (error) {
+        disarm();
+        throw error;
+      });
+  }
+
+  // `position` is where to open; without one, where the visitor left off, or
+  // the first page of the first tractate.
+  function openReader(position, pushHash) {
+    showView("read");
+    ensureReaderTractates()
+      .then(function () {
+        var first = readerTractates.tractates[0];
+        var start = position || readerPosition || loadReaderPosition() ||
+          { tractate: first.he, daf: first.pageRange.first.daf, amud: first.pageRange.first.amud };
+        readerPosition = start;
+        syncReaderRashiToggle();
+        populateReaderTractates();
+        showReaderPage(start, pushHash);
+      })
+      .catch(function () {
+        readerPageEl.textContent = "";
+        readerPageEl.appendChild(notice(t(locale, "error.title"), t(locale, "reader.error"), "error"));
+      });
+  }
+
+  function goToReaderPage(page) {
+    showReaderPage({ tractate: readerPosition.tractate, daf: page.daf, amud: page.amud }, true);
+  }
+
+  viewTabs.addEventListener("click", function (event) {
+    var tab = event.target.closest(".view-tab");
+    if (!tab) return;
+    if (tab.dataset.view === "read") {
+      openReader(null, true);
+    } else if (!readerEl.hidden) {
+      showView("search");
+      history.pushState(null, "", location.pathname + location.search);
+    }
+  });
+
+  readerTractateSelect.addEventListener("change", function () {
+    var first = readerTractateInfo(readerTractateSelect.value).pageRange.first;
+    showReaderPage({ tractate: readerTractateSelect.value, daf: first.daf, amud: first.amud }, true);
+  });
+
+  readerDafSelect.addEventListener("change", function () {
+    var info = readerTractateInfo(readerPosition.tractate);
+    var daf = Number(readerDafSelect.value);
+    // Keep the side if the new daf has it; a tractate's first or last daf may have only one.
+    var amud = pageInRange(info, daf, readerPosition.amud) ? readerPosition.amud : (readerPosition.amud === "a" ? "b" : "a");
+    showReaderPage({ tractate: readerPosition.tractate, daf: daf, amud: amud }, true);
+  });
+
+  readerAmudGroup.addEventListener("click", function (event) {
+    var button = event.target.closest("button");
+    if (!button || button.disabled) return;
+    showReaderPage({ tractate: readerPosition.tractate, daf: readerPosition.daf, amud: button.dataset.amud }, true);
+  });
+
+  readerEl.addEventListener("click", function (event) {
+    if (!readerData) return;
+    if (event.target.closest(".reader-prev") && readerData.previous) goToReaderPage(readerData.previous);
+    if (event.target.closest(".reader-next") && readerData.next) goToReaderPage(readerData.next);
+  });
+
+  readerRashiCheckbox.addEventListener("change", function () {
+    saveRashiWanted(readerRashiCheckbox.checked);
+    if (readerData) renderReaderPage(readerData);
+  });
+
   // --- Wiring ------------------------------------------------------------
 
   clearBtn.addEventListener("click", clearSearch);
@@ -1492,6 +1858,12 @@
   }
 
   window.addEventListener("popstate", function () {
+    var position = readerPositionFromHash();
+    if (position) {
+      openReader(position, false);
+      return;
+    }
+    showView("search");
     var query = fromHash();
     if (query) runSearch(query, false);
   });
@@ -1595,6 +1967,8 @@
     bookDefault = data.default;
     if (!bookById(selectedBook)) selectedBook = bookDefault;
     populateBookSelect();
+    syncReaderRashiToggle();
+    if (readerData) renderReaderPage(readerData);
     // The tractate list was requested before the book list was known; refetch
     // it if the stored choice turned out to be a different (or no longer
     // available) book.
@@ -1642,6 +2016,8 @@
     .catch(function () {})
     .then(disarmHealthWaking);
 
+  var initialPosition = readerPositionFromHash();
   var initial = fromHash();
-  if (initial) runSearch(initial, false);
+  if (initialPosition) openReader(initialPosition, false);
+  else if (initial) runSearch(initial, false);
 })();

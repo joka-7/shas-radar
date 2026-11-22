@@ -15,7 +15,8 @@ exact, with a Hebrew/Aramaic clitic prefix attached to the matched word, and
 exact phrase (with the same prefix allowance on the phrase's first word
 only). Every result carries an authoritative citation (tractate, daf, amud)
 and a Sefaria deep link. A bonus proximity search finds two words within N
-tokens of each other. An optional AI feature ("find connections") looks for
+tokens of each other. The Bavli can also be read a page (daf side) at a time,
+with Rashi under it and the neighbouring pages one step away. An optional AI feature ("find connections") looks for
 what links a set of results the visitor has selected.
 
 **Non-functional.**
@@ -52,6 +53,7 @@ flowchart TD
     Main["app/main.py<br/>FastAPI: routing, CORS, validation, errors"]
     Search["app/search.py<br/>matching + KWIC shaping"]
     Books["app/books.py<br/>which books are enabled and loaded"]
+    Reader["app/reader.py<br/>one page's text and its neighbours"]
     Citation["app/citation.py<br/>locations and citation schemes"]
     Corpus["app/corpus.py<br/>Tractate model + word index"]
     Hebrew["app/hebrew.py<br/>normalization primitives"]
@@ -66,6 +68,9 @@ flowchart TD
     Vercel -->|"server-side proxy, no CORS"| Main
     Main --> Search
     Main --> Books
+    Main -->|"GET /api/daf"| Reader
+    Reader --> Books
+    Reader --> Corpus
     Books --> Corpus
     Main -->|"POST /api/analyze/prompt<br/>(builds the prompt, no call)"| AI
     Search --> Corpus
@@ -85,7 +90,7 @@ visitor's own key, after fetching the prompt from
 `POST /api/analyze/prompt`. The service itself never leaves the process
 at runtime and holds no AI key.
 
-Module boundaries run one way — `main` → `books`/`search`/`ai` → `corpus` →
+Module boundaries run one way — `main` → `books`/`search`/`reader`/`ai` → `corpus` →
 `citation`/`hebrew` — and nothing calls back upward. `hebrew.py` is pure string
 manipulation with no knowledge of the corpus or HTTP.
 
@@ -134,6 +139,10 @@ sequenceDiagram
         end
     end
 ```
+
+Reading a page is two independent requests: `GET /api/daf` for the text, and
+`GET /api/commentary` for Rashi on the same page. The browser asks for Rashi
+only when the visitor has it switched on, so a page paints without waiting on it.
 
 Matching never scans the whole ~1.86M-token corpus for the common cases:
 `Tractate.build_index()` builds `by_word` (normalized word → positions, a
