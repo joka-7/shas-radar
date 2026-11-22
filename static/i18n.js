@@ -26,14 +26,14 @@ var I18N = (function () {
 
   var STRINGS = {
     he: {
-      "meta.description": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס, עם הקשר מתכוונן של מילים לפני ואחרי.",
-      "doc.title": "ש״ס רדאר — חיפוש בש״ס",
+      "meta.description": "חיפוש ולימוד בכל הש״ס: מילים, ביטויים ומשפטים עם הקשר מתכוונן, וקריאת הדף עם רש״י.",
+      "doc.title": "ש״ס רדאר — חיפוש ולימוד",
 
       "header.title": "ש״ס רדאר",
       // A literal newline: .subtitle renders it with white-space: pre-line
       // to force the break here rather than wherever the viewport happens
       // to wrap the text.
-      "header.subtitle": "חיפוש מילים, ביטויים ומשפטים בכל הש״ס\nעם הקשר לפני ואחרי",
+      "header.subtitle": "חיפוש ולימוד בכל הש״ס\nמילים, ביטויים ומשפטים — עם הקשר",
 
       "settings.button": "הגדרות",
       "settings.heading": "הגדרות",
@@ -171,11 +171,11 @@ var I18N = (function () {
     },
 
     en: {
-      "meta.description": "Search all of the Babylonian Talmud for words, names, and phrases, with adjustable context before and after each match.",
-      "doc.title": "Shas Radar — Search the Talmud",
+      "meta.description": "Search and study the Babylonian Talmud: find words, names, and phrases with adjustable context, and read any page with Rashi.",
+      "doc.title": "Shas Radar — Search & Study",
 
       "header.title": "Shas Radar",
-      "header.subtitle": "Search words, names, and phrases across all of Shas\nwith context before and after",
+      "header.subtitle": "Search and study all of Shas\nwords, names, and phrases — with context",
 
       "settings.button": "Settings",
       "settings.heading": "Settings",
@@ -313,11 +313,11 @@ var I18N = (function () {
     },
 
     fr: {
-      "meta.description": "Recherchez des mots, des noms et des expressions dans tout le Talmud de Babylone, avec un contexte ajustable avant et après chaque résultat.",
-      "doc.title": "Shas Radar — Recherche dans le Talmud",
+      "meta.description": "Recherchez et étudiez le Talmud de Babylone : mots, noms et expressions avec contexte ajustable, et lecture de chaque page avec Rachi.",
+      "doc.title": "Shas Radar — Recherche et étude",
 
       "header.title": "Shas Radar",
-      "header.subtitle": "Recherche de mots, de noms et d'expressions dans tout le Chas\navec le contexte avant et après",
+      "header.subtitle": "Recherche et étude dans tout le Chas\nmots, noms et expressions — avec contexte",
 
       "settings.button": "Paramètres",
       "settings.heading": "Paramètres",
