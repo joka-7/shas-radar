@@ -121,8 +121,8 @@ tractate's text, not to the rest of the code or data.
 
 **Memory, measured on the real server.** The Bavli alone: about 168 MB. Plus
 Yerushalmi, Mishnah and Tosefta: about 247 MB. Rashi adds about 137 MB more (Sanhedrin, added later, was not re-measured),
-so all five reach about **384 MB** of a 512 MB limit. `render.yaml` still
-does not enable `rashi`; add it to `ENABLED_BOOKS` to turn it on.
+so all five reach about **384 MB** of a 512 MB limit. `render.yaml` enables all
+five, which the Read tab's Rashi needs.
 
 ### The text turned out to be vocalized, not plain print
 

@@ -20,7 +20,7 @@ services:
       # Which books are searchable (comma-separated ids, app/books.py). Unset
       # means just the Bavli. Every book adds to resident memory once someone
       # selects it -- see docs/HLD.md -- so this is the switch for the 512MB
-      # free plan. "rashi" is not listed yet: it adds about 137MB, so all five
-      # books reach about 384MB. Add it to this list to turn it on.
+      # free plan. Rashi adds about 137MB once used, so all five books reach
+      # about 384MB. The Read tab and the "Rashi on this page" sections need it.
       - key: ENABLED_BOOKS
-        value: bavli,yerushalmi,mishnah,tosefta
+        value: bavli,yerushalmi,mishnah,tosefta,rashi
