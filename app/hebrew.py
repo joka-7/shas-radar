@@ -63,6 +63,32 @@ def strip_marks(text: str) -> str:
     return MARKS.sub("", text)
 
 
+# Modern punctuation the printed page does not have. The colon, geresh and gershayim
+# stay: the print uses them (the end of a statement, abbreviations). A hyphen that
+# sits directly between two letters stays too: it marks a range such as ו-ט, and
+# removing it would split the range into two unrelated letters.
+_MODERN_PUNCTUATION = re.compile(
+    f"[,.;?!\u2013\u2014]|(?<![{HEBREW_LETTERS}])-|-(?![{HEBREW_LETTERS}])"
+)
+
+
+def printed_text(text: str) -> str:
+    """The text as the unpointed, unpunctuated print has it.
+
+    Niqqud and the modern punctuation (comma, period, semicolon, question and
+    exclamation marks, and dashes) are removed and the spacing is tidied. Colon,
+    geresh, gershayim, maqaf, brackets and parentheses stay, and so does a hyphen
+    between two letters (a range such as ו-ט).
+
+    Args:
+        text: Hebrew or Aramaic text, vocalized and punctuated or not.
+
+    Returns:
+        ``text`` on one line, with single spaces between words.
+    """
+    return " ".join(_MODERN_PUNCTUATION.sub(" ", strip_marks(text)).split())
+
+
 def has_hebrew(text: str) -> bool:
     """True if the text contains at least one Hebrew consonant."""
     return bool(NON_LETTERS.sub("", text))

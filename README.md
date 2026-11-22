@@ -107,8 +107,11 @@ Two views, chosen with the buttons above the page (the choice is remembered):
   wider than the screen, so the page scrolls sideways to Rashi, and a hint
   suggests turning the phone. Rashi sits on the inner margin, so it changes sides
   between amud a and amud b.
-  It does not have Tosafot yet, and the text keeps the modern punctuation of the
-  William Davidson edition, which the print does not have.
+  Both columns have no niqqud and none of the modern punctuation of the William
+  Davidson edition (comma, period, semicolon, `?`, `!` and dashes); the colon,
+  geresh and gershayim stay, because the print uses them. Rashi's opening words
+  are not bold as in the print, since the data does not mark them, so they run on
+  into the explanation. There is no Tosafot yet.
 
 An "Original print (PDF)" link opens the scanned printed page on HebrewBooks
 (`app/reader.py`, `print_scan_url`). It is a PDF, so it opens outside the app, and

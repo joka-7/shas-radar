@@ -7,6 +7,7 @@ from app.hebrew import (
     has_hebrew,
     he_number,
     normalize_finals,
+    printed_text,
     strip_marks,
     tokenize,
     words,
@@ -41,6 +42,29 @@ class TestStripMarks:
     )
     def test_removes_niqqud_and_nothing_else(self, text, expected):
         assert strip_marks(text) == expected
+
+
+class TestPrintedText:
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("אמר, רבא. מאי? שפיר!", "אמר רבא מאי שפיר"),  # comma, period, ? and !
+            ("טעו – לא ישלמו; כל שכן", "טעו לא ישלמו כל שכן"),  # dash and semicolon
+            ("רבי — אומר - כך", "רבי אומר כך"),  # em dash and a spaced hyphen
+            ("סימן ו-ט א - ב", "סימן ו-ט א ב"),  # a range keeps its hyphen, a spaced one goes
+            ("אמר רבא:", "אמר רבא:"),  # the colon is the print's own
+            ("רש״י אמר ר׳ יוסי", "רש״י אמר ר׳ יוסי"),  # gershayim and geresh
+            ("אשר־אמר (דף ג) [כך]", "אשר־אמר (דף ג) [כך]"),  # maqaf, parentheses, brackets
+            (
+                "\u05d0\u05b8\u05de\u05b7\u05e8, \u05db\u05b8\u05bc\u05da\u05b0.",
+                "אמר כך",
+            ),  # niqqud too
+            ("אמר   \n רבא", "אמר רבא"),  # spacing is tidied
+            ("", ""),
+        ],
+    )
+    def test_removes_niqqud_and_modern_punctuation_only(self, text, expected):
+        assert printed_text(text) == expected
 
 
 class TestWords:

@@ -28,12 +28,15 @@
   --radius-sm: 9px;
   --shadow: 0 1px 2px rgba(33, 31, 26, .06), 0 4px 16px rgba(33, 31, 26, .05);
 
+  --seg-on-bg: var(--accent);
+  --seg-on-text: #fff;
   --font: "Heebo", system-ui, -apple-system, "Segoe UI", "Noto Sans Hebrew", Arial, sans-serif;
   --font-verse: "Frank Ruhl Libre", "Times New Roman", var(--font);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --seg-on-text: #11151f;
     --bg: #11151f;
     --surface: #1a1f2c;
     --surface-2: #232a3a;
@@ -1035,15 +1038,46 @@ body {
 .view-tab:focus-visible { outline: 2.5px solid #fff; outline-offset: 2px; }
 
 .reader:not([hidden]) { display: block; margin-top: 1.25rem; }
-.reader-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .75rem; }
-.reader-picker .select { flex: 1 1 8rem; min-width: 0; }
-.reader-amud { display: flex; gap: .3rem; }
-.reader-amud .copy[aria-pressed="true"],
-.reader-viewmode .copy[aria-pressed="true"],
-.reader-rashi-toggle:has(input:checked) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
-.reader-rashi-toggle:not([hidden]) { display: inline-flex; }
-.reader-rashi-toggle input { margin: 0; }
-.reader-nav { display: flex; justify-content: space-between; gap: .5rem; margin: .75rem 0; }
+.reader-controls { display: grid; gap: .6rem; margin-bottom: .75rem; }
+.reader-controls .select { width: 100%; min-width: 0; }
+.reader-where { display: flex; gap: .5rem; }
+.reader-where .select { flex: 1 1 auto; }
+.seg { display: flex; background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button {
+  flex: 1;
+  font: 600 .95rem var(--font);
+  color: var(--text-soft);
+  background: transparent;
+  border: 0;
+  min-height: 44px;
+  padding: 0 1rem;
+  cursor: pointer;
+}
+.seg button + button { border-inline-start: 1.5px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--seg-on-bg); color: var(--seg-on-text); }
+.seg button:not([aria-pressed="true"]):not(:disabled):hover { background: var(--surface-2); }
+.seg button:disabled { opacity: .4; cursor: default; }
+.seg button:focus-visible { outline: 2.5px solid var(--accent); outline-offset: -3px; }
+.reader-amud { flex: 0 0 auto; }
+.reader-amud button { flex: 0 0 3.25rem; padding: 0; }
+.reader-options { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 36px; }
+.reader-rashi-toggle:not([hidden]) { display: inline-flex; align-items: center; gap: .45rem; font: 500 .95rem var(--font); color: var(--text); cursor: pointer; }
+.reader-rashi-toggle input { width: 1.2rem; height: 1.2rem; margin: 0; accent-color: var(--accent); }
+.reader-print { margin-inline-start: auto; font: 500 .9rem var(--font); color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+.reader-print::after { content: " \2197"; }
+/* Wide enough for two columns (a phone turned sideways): half the height, so the
+   page itself gets the room. */
+@media (min-width: 640px) {
+  .reader-controls { grid-template-columns: 1fr 1fr; align-items: center; }
+}
+/* A landscape phone: the header's tagline and padding would take a quarter of
+   the height. (Not any short window: a desktop one keeps its tagline.) */
+@media (max-height: 500px) and (max-width: 950px) and (orientation: landscape) {
+  .header { padding-top: calc(.6rem + env(safe-area-inset-top)); padding-bottom: 1rem; }
+  .subtitle { display: none; }
+}
+.reader-nav { display: flex; gap: .5rem; margin: .75rem 0; }
+.reader-nav .copy { flex: 1; justify-content: center; min-height: 44px; font-size: .95rem; }
 .reader-nav .copy:disabled { opacity: .4; cursor: default; }
 
 .reader-page {
@@ -1065,11 +1099,6 @@ body {
 .reader-rashi-para { margin: -.2rem 0 .8rem; }
 .reader-page .attribution { margin-top: .8rem; font-size: .85em; color: var(--text-faint); }
 .reader-page .copy { display: inline-flex; margin-top: .6rem; text-decoration: none; }
-
-.reader-view { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .25rem; }
-.reader-viewmode { display: flex; gap: .3rem; }
-.reader-view a.copy { text-decoration: none; }
-.reader-view a.copy[hidden] { display: none; } /* .copy's display would otherwise win */
 
 /* צורת הדף: the Gemara and Rashi as plain running text, the way the print has
    them, side by side at every width. On a narrow phone the two columns are

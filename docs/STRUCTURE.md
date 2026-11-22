@@ -78,6 +78,7 @@ shas-radar/
 │   ├── test_commentary.py     # Tests for app/commentary.py: a commentary's comments on one page, on the real data.
 │   ├── test_corpus.py         # Tests for app/corpus.py: the compact word index.
 │   ├── test_hebrew.py         # Tests for the Hebrew/Aramaic normalization primitives.
+│   ├── test_manifest.py       # Tests for static/manifest.json: what the installed app is allowed to do.
 │   ├── test_reader.py         # Tests for app/reader.py: reading one page of the Bavli, on the real data.
 │   └── test_search.py         # Tests for the corpus, matching logic, and API -- against the real committed corpus rather than a fixture, the same way פסוק לשם's tests do.
 ├── .ai
