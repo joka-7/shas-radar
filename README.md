@@ -93,6 +93,21 @@ result has an "Open in reader" link to its page. The text comes from
 `GET /api/daf`; the other books are not numbered by daf, so they have no reader
 yet.
 
+Two views, chosen with the buttons above the page (the choice is remembered):
+
+- **With niqqud** (default): the vocalized text a paragraph at a time, with
+  Rashi underneath.
+- **צורת הדף** (page layout): the Gemara without niqqud as one running text, with
+  Rashi beside it, as in the printed page. Below 640px the two stack instead.
+  Rashi sits on the inner margin, so it changes sides between amud a and amud b.
+  It does not have Tosafot yet, and the text keeps the modern punctuation of the
+  William Davidson edition, which the print does not have.
+
+An "Original print" link opens HebrewBooks' Shas index, where the scanned
+printed page can be found. It is the general index, not a link to the daf being
+read: the per-daf address format is not documented anywhere this project could
+verify.
+
 ### Other books
 
 The Bavli is the default; more books can be enabled with `ENABLED_BOOKS`

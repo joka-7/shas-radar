@@ -13,6 +13,7 @@ from typing import Any
 from .books import Book, BookError, BookLibrary
 from .citation import DafScheme, Ref
 from .corpus import Tractate
+from .hebrew import strip_marks
 
 
 class ReaderError(BookError):
@@ -56,6 +57,7 @@ class DafPage:
             "sefariaUrl": self.sefaria_url,
             "license": self.tractate.license,
             "segments": self.segments,
+            "plainSegments": [strip_marks(segment) for segment in self.segments],
             "previous": page_json(self.previous),
             "next": page_json(self.next),
         }

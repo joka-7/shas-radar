@@ -46,6 +46,23 @@ def normalize_finals(text: str) -> str:
     return text.translate(_FINALS_TABLE)
 
 
+def strip_marks(text: str) -> str:
+    """Remove niqqud and cantillation marks, leaving everything else as written.
+
+    That is the ``MARKS`` set (U+0591-U+05BD and U+05BF-U+05C7); letters, spacing,
+    maqaf (־, which joins words) and ordinary punctuation stay. This is for
+    showing the text as the unpointed print has it; matching uses
+    :func:`tokenize`, which also folds final letters.
+
+    Args:
+        text: Hebrew or Aramaic text, vocalized or not.
+
+    Returns:
+        ``text`` without those marks.
+    """
+    return MARKS.sub("", text)
+
+
 def has_hebrew(text: str) -> bool:
     """True if the text contains at least one Hebrew consonant."""
     return bool(NON_LETTERS.sub("", text))

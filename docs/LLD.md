@@ -11,6 +11,7 @@ Pure functions over `str`. No knowledge of the corpus, tractates, or HTTP.
 | --- | --- |
 | `normalize_finals(text)` | Fold ך ם ן ף ץ onto כ מ נ פ צ |
 | `has_hebrew(text)` | Whether any Hebrew consonant is present |
+| `strip_marks(text)` | Niqqud and cantillation marks (`MARKS`) removed; letters, maqaf, spacing and ordinary punctuation stay |
 | `words(text)` | Text split into normalized words on any non-letter run |
 | `tokenize(text)` | `(raw, normalized)` pairs in reading order, off runs of letters plus attached niqqud |
 | `he_number(value)` | Integer → Hebrew numeral (`15 → ט״ו`, not יה) |
@@ -242,7 +243,7 @@ the allowlist stay a plain list rather than a stricter per-request check.
 | `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
 | `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`); read from each dataset's header, so listing never loads a book |
 | `GET /api/tractates` | `book` | That book's tractate list, grouped by seder; each has `pageRange` (`{first, last}` as `{daf, amud}`, or `null` for a book not numbered by daf) |
-| `GET /api/daf` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `daf`, `amud`, `citation`, `sefariaUrl`, `license`, `segments[]` (vocalized paragraphs), `previous` and `next` (`{daf, amud}` or `null`) |
+| `GET /api/daf` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `daf`, `amud`, `citation`, `sefariaUrl`, `license`, `segments[]` (vocalized paragraphs), `plainSegments[]` (the same, without niqqud, for the page layout), `previous` and `next` (`{daf, amud}` or `null`) |
 | `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `sefariaUrl`; a page with no Rashi gives `comments: []` |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
@@ -298,7 +299,7 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 
 | File | Targets |
 | --- | --- |
-| `tests/test_hebrew.py` | Every normalization primitive, including niqqud stripping, maqaf as a separator, and the ט״ו/ט״ז gematria exception |
+| `tests/test_hebrew.py` | Every normalization primitive, including niqqud stripping (`strip_marks` keeps maqaf, finals and punctuation), maqaf as a separator, and the ט״ו/ט״ז gematria exception |
 | `tests/test_search.py` | Index correctness, all four match kinds (exact, with-prefix, phrase, phrase-with-prefix), proximity, offset/limit pagination, and the HTTP surface via `TestClient` — status codes, the error contract, clamping |
 | `tests/test_citation.py` | Ref packing, and the folio and chapter schemes' Hebrew/English/URL output |
 | `tests/test_commentary.py` | A page's comments on the real Bavli and Rashi data, the pages and tractates that have none, and the errors |

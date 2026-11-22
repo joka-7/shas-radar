@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.books import UnknownBookError
-from app.hebrew import tokenize
+from app.hebrew import strip_marks, tokenize
 from app.main import app, library
 from app.reader import (
     NotPagedBookError,
@@ -75,6 +75,7 @@ class TestPageText:
             "sefariaUrl",
             "license",
             "segments",
+            "plainSegments",
             "previous",
             "next",
         }
@@ -83,6 +84,8 @@ class TestPageText:
         assert (body["daf"], body["amud"]) == (2, "b")
         assert body["previous"] == {"daf": 2, "amud": "a"}
         assert body["next"] == {"daf": 3, "amud": "a"}
+        assert body["plainSegments"] == [strip_marks(segment) for segment in body["segments"]]
+        assert body["plainSegments"] != body["segments"]  # the real text has niqqud
 
     def test_json_has_null_neighbours_at_the_ends(self):
         first = page_text(library, "bavli", BERAKHOT, 2, 0).as_dict()

@@ -1468,6 +1468,7 @@
   var READER_BOOK = "bavli";
   var READER_POSITION_KEY = "shas-radar:reader-position";
   var READER_RASHI_KEY = "shas-radar:reader-rashi";
+  var READER_VIEW_KEY = "shas-radar:reader-view";
 
   var viewTabs = document.getElementById("view-tabs");
   var readerEl = document.getElementById("reader");
@@ -1477,6 +1478,7 @@
   var readerRashiToggle = document.getElementById("reader-rashi-toggle");
   var readerRashiCheckbox = document.getElementById("reader-rashi");
   var readerPageEl = document.getElementById("reader-page");
+  var readerViewGroup = document.getElementById("reader-viewmode");
 
   // GET /api/tractates for the Bavli, loaded the first time the reader opens
   // (the search filter's list is for whichever book is selected there).
@@ -1524,6 +1526,32 @@
     } catch (err) {
       /* the choice holds until the page is reloaded */
     }
+  }
+
+  // "vocalized": the text with niqqud, one paragraph at a time, Rashi under it.
+  // "page": צורת הדף -- plain running text with Rashi beside it, as in the print.
+  function loadReaderView() {
+    try {
+      return localStorage.getItem(READER_VIEW_KEY) === "page" ? "page" : "vocalized";
+    } catch (err) {
+      return "vocalized";
+    }
+  }
+
+  function saveReaderView(view) {
+    try {
+      localStorage.setItem(READER_VIEW_KEY, view);
+    } catch (err) {
+      /* the choice holds until the page is reloaded */
+    }
+  }
+
+  var readerView = loadReaderView();
+
+  function syncReaderViewButtons() {
+    readerViewGroup.querySelectorAll("button").forEach(function (button) {
+      button.setAttribute("aria-pressed", button.dataset.view === readerView ? "true" : "false");
+    });
   }
 
   function readerHash(position) {
@@ -1670,37 +1698,81 @@
     readerRashiCheckbox.checked = rashiWanted();
   }
 
+  // Rashi on the page being read, from the cache or the network. Only the
+  // newest page's callbacks run: a slower, older response is dropped.
+  function loadReaderRashi(data, request, onLoaded, onFailed) {
+    var key = data.tractate.he + "|" + data.daf + data.amud;
+    if (readerRashiCache[key]) {
+      onLoaded(readerRashiCache[key]);
+      return;
+    }
+    fetchCommentary(READER_BOOK, data.tractate.he, data.daf, data.amud)
+      .then(function (commentary) {
+        readerRashiCache[key] = commentary;
+        if (request === readerRequest) onLoaded(commentary);
+      })
+      .catch(function () {
+        if (request === readerRequest) onFailed();
+      });
+  }
+
   function renderReaderRashi(data, request) {
     var box = el("section", "reader-rashi");
     box.appendChild(el("h3", "reader-rashi-title", t(locale, "reader.rashi")));
     var body = el("div", "commentary-body");
     box.appendChild(body);
-
-    var key = data.tractate.he + "|" + data.daf + data.amud;
-    if (readerRashiCache[key]) {
-      renderCommentary(body, readerRashiCache[key]);
-      return box;
-    }
     body.textContent = t(locale, "commentary.loading");
-    fetchCommentary(READER_BOOK, data.tractate.he, data.daf, data.amud)
-      .then(function (commentary) {
-        readerRashiCache[key] = commentary;
-        if (request === readerRequest) renderCommentary(body, commentary);
-      })
-      .catch(function () {
-        if (request === readerRequest) body.textContent = t(locale, "commentary.error");
-      });
+    loadReaderRashi(
+      data,
+      request,
+      function (commentary) { renderCommentary(body, commentary); },
+      function () { body.textContent = t(locale, "commentary.error"); }
+    );
     return box;
+  }
+
+  // צורת הדף: the Gemara without niqqud as one running text, and Rashi as
+  // another, laid out beside it (see .daf in styles.css).
+  function renderPrintLayout(data, request) {
+    var withRashi = readerRashiAvailable() && readerRashiCheckbox.checked;
+    var daf = el("div", "daf daf-amud-" + data.amud + (withRashi ? " daf-with-rashi" : ""));
+    daf.appendChild(hebrewSpan("p", "daf-gemara", data.plainSegments.join(" ")));
+    if (!withRashi) return daf;
+
+    var column = hebrewSpan("div", "daf-rashi");
+    column.appendChild(el("h3", "daf-rashi-title", t(locale, "reader.rashi")));
+    var text = hebrewSpan("p", "daf-rashi-text", t(locale, "commentary.loading"));
+    column.appendChild(text);
+    daf.appendChild(column);
+    loadReaderRashi(
+      data,
+      request,
+      function (commentary) {
+        text.textContent = commentary.comments.length
+          ? commentary.comments.map(function (comment) { return comment.text; }).join(" ")
+          : t(locale, "commentary.none");
+        if (commentary.license) {
+          column.appendChild(el("p", "attribution", t(locale, "commentary.credit", { license: commentary.license })));
+        }
+      },
+      function () { text.textContent = t(locale, "commentary.error"); }
+    );
+    return daf;
   }
 
   function renderReaderPage(data) {
     readerPageEl.textContent = "";
     readerPageEl.appendChild(hebrewSpan("h2", "reader-citation", data.citation));
-    data.segments.forEach(function (segment) {
-      readerPageEl.appendChild(hebrewSpan("p", "reader-segment", segment));
-    });
-    if (readerRashiAvailable() && readerRashiCheckbox.checked) {
-      readerPageEl.appendChild(renderReaderRashi(data, readerRequest));
+    // A server that predates plainSegments gets the vocalized view, not a blank page.
+    if (readerView === "page" && Array.isArray(data.plainSegments)) {
+      readerPageEl.appendChild(renderPrintLayout(data, readerRequest));
+    } else {
+      data.segments.forEach(function (segment) {
+        readerPageEl.appendChild(hebrewSpan("p", "reader-segment", segment));
+      });
+      if (readerRashiAvailable() && readerRashiCheckbox.checked) {
+        readerPageEl.appendChild(renderReaderRashi(data, readerRequest));
+      }
     }
     if (data.license) {
       readerPageEl.appendChild(el("p", "attribution", t(locale, "reader.credit", { license: data.license })));
@@ -1845,6 +1917,17 @@
     if (event.target.closest(".reader-prev") && readerData.previous) goToReaderPage(readerData.previous);
     if (event.target.closest(".reader-next") && readerData.next) goToReaderPage(readerData.next);
   });
+
+  readerViewGroup.addEventListener("click", function (event) {
+    var button = event.target.closest("button");
+    if (!button || button.dataset.view === readerView) return;
+    readerView = button.dataset.view;
+    saveReaderView(readerView);
+    syncReaderViewButtons();
+    if (readerData) renderReaderPage(readerData);
+  });
+
+  syncReaderViewButtons();
 
   readerRashiCheckbox.addEventListener("change", function () {
     saveRashiWanted(readerRashiCheckbox.checked);
