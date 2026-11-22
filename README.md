@@ -85,8 +85,8 @@ shows all of the page's comments, not only the one on the matched sentence.
 
 The **Read** tab opens one page of the Bavli (a daf side) to read straight
 through: pick a tractate, daf and side, or step with the previous/next page
-buttons. Rashi appears under the page when `rashi` is enabled, with a toggle
-(on by default). The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
+buttons. Rashi is available when `rashi` is enabled, with a toggle (on by
+default). The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
 so it can be linked to and the back button steps between pages. The last page
 read is kept in `localStorage`, and the Read tab reopens it. Each Bavli search
 result has an "Open in reader" link to its page. The text comes from
@@ -95,11 +95,18 @@ yet.
 
 Two views, chosen with the buttons above the page (the choice is remembered):
 
-- **With niqqud** (default): the vocalized text a paragraph at a time, with
-  Rashi underneath.
+- **With niqqud** (default): the vocalized text a paragraph at a time. A
+  paragraph that has Rashi gets a "Rashi (n)" button that opens his comments on
+  it. Rashi's line number is taken as the paragraph number. That was checked
+  against the data once, when this was built (it is not kept as a test): of the
+  comments whose opening words can be found on the page, nearly all (about 98%)
+  are in the paragraph their line names, so a comment can occasionally sit under
+  a neighbouring paragraph.
 - **צורת הדף** (page layout): the Gemara without niqqud as one running text, with
-  Rashi beside it, as in the printed page. Below 640px the two stack instead.
-  Rashi sits on the inner margin, so it changes sides between amud a and amud b.
+  Rashi beside it, as in the printed page. On a narrow phone the two columns are
+  wider than the screen, so the page scrolls sideways to Rashi, and a hint
+  suggests turning the phone. Rashi sits on the inner margin, so it changes sides
+  between amud a and amud b.
   It does not have Tosafot yet, and the text keeps the modern punctuation of the
   William Davidson edition, which the print does not have.
 

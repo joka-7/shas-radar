@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.books import UnknownBookError
+from app.commentary import commentary_on_page
 from app.hebrew import strip_marks, tokenize
 from app.main import app, library
 from app.reader import (
@@ -31,6 +32,21 @@ class TestPageText:
         assert page.sefaria_url == "https://www.sefaria.org/Berakhot.2a"
         opening = [normalized for _, normalized in tokenize(page.segments[0])][:4]
         assert opening == [normalized for _, normalized in tokenize("מאימתי קורין את שמע")]
+
+    @pytest.mark.parametrize("amud", [0, 1])
+    def test_paragraph_k_is_the_one_rashis_line_k_explains(self, amud):
+        # The reader puts each Rashi comment under the paragraph its line number names.
+        page = page_text(library, "bavli", BERAKHOT, 2, amud)
+        comments = commentary_on_page(library, "bavli", BERAKHOT, 2, amud).comments
+        assert {c.ref[2] for c in comments} <= set(range(1, len(page.segments) + 1))
+        assert comments
+        first = comments[0]
+        opening = " ".join(normalized for _, normalized in tokenize(first.text))
+        opening = " ".join(opening.split()[:3])
+        paragraph = " ".join(
+            normalized for _, normalized in tokenize(page.segments[first.ref[2] - 1])
+        )
+        assert f" {opening} " in f" {paragraph} "  # whole words, not a fragment
 
     def test_the_two_sides_of_a_daf_are_separate(self):
         side_a = page_text(library, "bavli", BERAKHOT, 2, 0)

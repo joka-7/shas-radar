@@ -1725,31 +1725,77 @@
       });
   }
 
-  function renderReaderRashi(data, request) {
-    var box = el("section", "reader-rashi");
-    box.appendChild(el("h3", "reader-rashi-title", t(locale, "reader.rashi")));
-    var body = el("div", "commentary-body");
-    box.appendChild(body);
-    body.textContent = t(locale, "commentary.loading");
+  // The vocalized text a paragraph at a time. Rashi's comments are numbered by the
+  // paragraph they explain (ref[2], the line; no Gemara paragraph is dropped on
+  // load, so line k is paragraph k), so each paragraph that has any gets a button
+  // that opens them, and the rest of the page stays uncluttered.
+  function renderParagraphs(data, request) {
+    var text = el("div", "reader-text");
+    var paragraphs = data.segments.map(function (segment) {
+      var paragraph = hebrewSpan("p", "reader-segment", segment);
+      text.appendChild(paragraph);
+      return paragraph;
+    });
+    if (!(readerRashiAvailable() && readerRashiCheckbox.checked)) return text;
+
+    var status = el("p", "attribution", t(locale, "commentary.loading"));
+    text.appendChild(status);
     loadReaderRashi(
       data,
       request,
-      function (commentary) { renderCommentary(body, commentary); },
-      function () { body.textContent = t(locale, "commentary.error"); }
+      function (commentary) {
+        var byParagraph = [];
+        commentary.comments.forEach(function (comment) {
+          // A comment with no usable line, or past the last paragraph, goes with the
+          // last one rather than vanishing.
+          var line = Number.isInteger(comment.ref[2]) ? comment.ref[2] : paragraphs.length;
+          var index = Math.min(Math.max(line, 1), paragraphs.length) - 1;
+          (byParagraph[index] = byParagraph[index] || []).push(comment);
+        });
+        byParagraph.forEach(function (comments, index) {
+          var details = el("details", "paragraph commentary reader-rashi-para");
+          details.appendChild(el("summary", null, t(locale, "reader.rashiCount", { n: comments.length })));
+          var body = el("div", "commentary-body");
+          comments.forEach(function (comment) {
+            body.appendChild(hebrewSpan("p", "paragraph-text commentary-comment", comment.text));
+          });
+          details.appendChild(body);
+          text.insertBefore(details, paragraphs[index].nextSibling);
+        });
+        status.textContent = !commentary.comments.length
+          ? t(locale, "commentary.none")
+          : commentary.license ? t(locale, "commentary.credit", { license: commentary.license }) : "";
+      },
+      function () { status.textContent = t(locale, "commentary.error"); }
     );
-    return box;
+    return text;
   }
 
   // צורת הדף: the Gemara without niqqud as one running text, and Rashi as
   // another, laid out beside it (see .daf in styles.css).
+  // The hint is only true when the two columns are wider than the screen.
+  function syncDafHint() {
+    var scroller = readerPageEl.querySelector(".daf-scroll");
+    var hint = readerPageEl.querySelector(".daf-hint");
+    if (scroller && hint) hint.hidden = scroller.scrollWidth <= scroller.clientWidth + 1;
+  }
+
   function renderPrintLayout(data, request) {
     var withRashi = readerRashiAvailable() && readerRashiCheckbox.checked;
+    var wrapper = el("div", "daf-wrapper");
+    var scroller = el("div", "daf-scroll");
     var daf = el("div", "daf daf-amud-" + data.amud + (withRashi ? " daf-with-rashi" : ""));
     daf.appendChild(hebrewSpan("p", "daf-gemara", data.plainSegments.join(" ")));
-    if (!withRashi) return daf;
+    scroller.appendChild(daf);
+    if (withRashi) {
+      var hint = el("p", "daf-hint", t(locale, "reader.rotateHint"));
+      hint.hidden = true; // shown by syncDafHint once the width is known
+      wrapper.appendChild(hint);
+    }
+    wrapper.appendChild(scroller);
+    if (!withRashi) return wrapper;
 
     var column = hebrewSpan("div", "daf-rashi");
-    column.appendChild(el("h3", "daf-rashi-title", t(locale, "reader.rashi")));
     var text = hebrewSpan("p", "daf-rashi-text", t(locale, "commentary.loading"));
     column.appendChild(text);
     daf.appendChild(column);
@@ -1766,7 +1812,7 @@
       },
       function () { text.textContent = t(locale, "commentary.error"); }
     );
-    return daf;
+    return wrapper;
   }
 
   function renderReaderPage(data) {
@@ -1776,13 +1822,13 @@
     // A server that predates plainSegments gets the vocalized view, not a blank page.
     if (readerView === "page" && Array.isArray(data.plainSegments)) {
       readerPageEl.appendChild(renderPrintLayout(data, readerRequest));
+      // On amud b Rashi is the column on the right, which is where a right-to-left
+      // scroller starts; scroll over to the Gemara so it is what you see first.
+      var scroller = readerPageEl.querySelector(".daf-scroll");
+      if (data.amud === "b") scroller.scrollLeft = -(scroller.scrollWidth - scroller.clientWidth);
+      syncDafHint();
     } else {
-      data.segments.forEach(function (segment) {
-        readerPageEl.appendChild(hebrewSpan("p", "reader-segment", segment));
-      });
-      if (readerRashiAvailable() && readerRashiCheckbox.checked) {
-        readerPageEl.appendChild(renderReaderRashi(data, readerRequest));
-      }
+      readerPageEl.appendChild(renderParagraphs(data, readerRequest));
     }
     if (data.license) {
       readerPageEl.appendChild(el("p", "attribution", t(locale, "reader.credit", { license: data.license })));
@@ -1928,6 +1974,8 @@
     if (event.target.closest(".reader-prev") && readerData.previous) goToReaderPage(readerData.previous);
     if (event.target.closest(".reader-next") && readerData.next) goToReaderPage(readerData.next);
   });
+
+  window.addEventListener("resize", syncDafHint);
 
   readerViewGroup.addEventListener("click", function (event) {
     var button = event.target.closest("button");

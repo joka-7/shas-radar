@@ -1062,8 +1062,7 @@ body {
   direction: rtl;
   unicode-bidi: isolate;
 }
-.reader-rashi { margin-top: 1.2rem; padding-top: .8rem; border-top: 1px solid var(--line); }
-.reader-rashi-title { margin: 0 0 .4rem; font-size: .95rem; color: var(--text-soft); }
+.reader-rashi-para { margin: -.2rem 0 .8rem; }
 .reader-page .attribution { margin-top: .8rem; font-size: .85em; color: var(--text-faint); }
 .reader-page .copy { display: inline-flex; margin-top: .6rem; text-decoration: none; }
 
@@ -1073,11 +1072,19 @@ body {
 .reader-view a.copy[hidden] { display: none; } /* .copy's display would otherwise win */
 
 /* צורת הדף: the Gemara and Rashi as plain running text, the way the print has
-   them. Side by side from 640px; below that two columns would be too narrow to
-   read, so Rashi follows the Gemara under its own heading. Rashi sits on the
-   inner margin, which is the side of the Gemara toward the spine, so it swaps
-   sides between amud a and amud b. */
+   them, side by side at every width. On a narrow phone the two columns are
+   wider than the screen, so the page scrolls sideways to reach Rashi (and the
+   hint, shown only then, suggests turning the phone). Rashi sits on the inner margin, which is the
+   side of the Gemara toward the spine, so it swaps sides between amud a and
+   amud b. */
+.daf-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; direction: rtl; } /* the page is Hebrew whatever the UI language, and the scroll code relies on it */
 .daf { display: grid; gap: 1.25rem; direction: rtl; }
+.daf-with-rashi {
+  grid-template-columns: minmax(16rem, 1.25fr) minmax(14rem, 1fr);
+  min-width: 32rem;
+  align-items: start;
+}
+.daf-with-rashi.daf-amud-b .daf-rashi { order: -1; }
 .daf-gemara, .daf-rashi-text {
   margin: 0;
   font-family: var(--font-verse);
@@ -1086,10 +1093,5 @@ body {
 }
 .daf-gemara { font-size: 1.3rem; line-height: 1.75; }
 .daf-rashi-text { font-size: .98rem; line-height: 1.65; color: var(--text-soft); }
-.daf-rashi-title { margin: 0 0 .4rem; font-size: .95rem; color: var(--text-soft); }
 .daf-rashi .attribution { margin-top: .6rem; }
-@media (min-width: 640px) {
-  .daf-with-rashi { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start; }
-  .daf-with-rashi.daf-amud-b .daf-rashi { order: -1; }
-  .daf-rashi-title { display: none; }
-}
+.daf-hint { margin: 0 0 .6rem; font-size: .85rem; color: var(--text-faint); }
