@@ -114,28 +114,28 @@
 
     <section class="reader" id="reader" hidden>
       <div class="reader-controls">
-        <select class="select" id="reader-tractate" data-i18n-aria-label="reader.tractate" aria-label="מסכת"></select>
-        <div class="reader-where">
-          <select class="select" id="reader-daf" data-i18n-aria-label="reader.daf" aria-label="דף"></select>
+        <div class="reader-row">
+          <select class="select reader-tractate" id="reader-tractate" data-i18n-aria-label="reader.tractate" aria-label="מסכת"></select>
+          <select class="select reader-daf" id="reader-daf" data-i18n-aria-label="reader.daf" aria-label="דף"></select>
           <div class="seg reader-amud" id="reader-amud" role="group" data-i18n-aria-label="reader.amud" aria-label="עמוד">
             <button type="button" data-amud="a" aria-pressed="false" data-i18n="reader.amud.a">א</button>
             <button type="button" data-amud="b" aria-pressed="false" data-i18n="reader.amud.b">ב</button>
           </div>
         </div>
-        <div class="seg" id="reader-viewmode" role="group" data-i18n-aria-label="reader.view" aria-label="תצוגה">
-          <button type="button" data-view="vocalized" aria-pressed="true" data-i18n="reader.view.vocalized">עם ניקוד</button>
-          <button type="button" data-view="page" aria-pressed="false" data-i18n="reader.view.page">צורת הדף</button>
-        </div>
-        <div class="reader-options">
-          <label class="reader-rashi-toggle" id="reader-rashi-toggle" hidden>
-            <input type="checkbox" id="reader-rashi" checked>
-            <span data-i18n="reader.rashi">רש״י</span>
-          </label>
+        <div class="reader-row reader-views">
+          <div class="seg" id="reader-viewmode" role="group" data-i18n-aria-label="reader.view" aria-label="תצוגה">
+            <button type="button" data-view="vocalized" aria-pressed="true" data-i18n="reader.view.vocalized">עם ניקוד</button>
+            <button type="button" data-view="page" aria-pressed="false" data-i18n="reader.view.page">צורת הדף</button>
+          </div>
           <a class="reader-print" id="reader-print-link" target="_blank" rel="noopener noreferrer" data-i18n="reader.view.print" hidden>הדפוס המקורי (PDF)</a>
         </div>
       </div>
       <div class="reader-nav">
         <button type="button" class="copy reader-prev" data-i18n="reader.previous">העמוד הקודם</button>
+        <label class="reader-rashi-toggle" id="reader-rashi-toggle" hidden>
+          <input type="checkbox" id="reader-rashi" checked>
+          <span data-i18n="reader.rashi">רש״י</span>
+        </label>
         <button type="button" class="copy reader-next" data-i18n="reader.next">העמוד הבא</button>
       </div>
       <article class="reader-page" id="reader-page" aria-live="polite" aria-busy="false"></article>
