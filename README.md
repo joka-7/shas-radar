@@ -81,12 +81,33 @@ section. Opening it fetches Rashi's comments on the result's page (daf and
 amud) from `/api/commentary` and links to that page's Rashi on Sefaria. It
 shows all of the page's comments, not only the one on the matched sentence.
 
+### Steinsaltz beside a page
+
+Steinsaltz's Hebrew commentary on every Bavli tractate (the William Davidson
+edition's, from Sefaria, CC-BY-NC, the same license as the Gemara text) is shown
+beside the page in the reader. Unlike Rashi it is **not searchable**, so it has no
+word index and is cheap to hold: it ships as `data/steinsaltz.zip` (12 MB), one
+member per tractate, and `app/commentary_store.py` reads a tractate when a page of
+it is first asked for and keeps the last four. Measured on the real server process,
+it adds about 26 MB on top of all five books (392 MB to 418 MB). Enable it with
+`ENABLED_COMMENTARIES=steinsaltz` (unset means none); `GET /api/commentary` takes
+`commentary=steinsaltz`, and `GET /api/books` lists each book's `commentaries`.
+
+Its paragraphs are numbered like the Gemara's, and it bolds the Gemara words it
+quotes (`<b>`), which the reader shows. On 98.2% of pages (5,252 of 5,349) it has
+exactly as many paragraph slots as the Gemara. On the other 97, each off by one,
+the response says `aligned: false` and the reader shows its comments as one
+"on the whole page" button rather than under paragraphs that may be the wrong
+ones. That check was made when this was built, against the whole of Sefaria's
+export; the 98.2% is not kept as a test. Rebuild the file with
+`python scripts/build_dataset.py --book steinsaltz`.
+
 ### Reading a page
 
 The **Read** tab opens one page of the Bavli (a daf side) to read straight
 through: pick a tractate, daf and side, or step with the previous/next page
-buttons. Rashi is available when `rashi` is enabled, with a toggle (on by
-default). The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
+buttons. A "פירושים" dropdown ticks the commentaries to show: Rashi (on by
+default) and Steinsaltz, each when enabled. The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
 so it can be linked to and the back button steps between pages. The last page
 read is kept in `localStorage`, and the Read tab reopens it. Each Bavli search
 result has an "Open in reader" link to its page. The text comes from
@@ -97,7 +118,8 @@ Two views, chosen with the buttons above the page (the choice is remembered):
 
 - **With niqqud** (default): the vocalized text a paragraph at a time. A
   paragraph that has Rashi gets a "Rashi (n)" button that opens his comments on
-  it. Rashi's line number is taken as the paragraph number. That was checked
+  it, and one that has Steinsaltz gets a "Steinsaltz" button, for each ticked
+  commentary. Rashi's line number is taken as the paragraph number. That was checked
   against the data once, when this was built (it is not kept as a test): of the
   comments whose opening words can be found on the page, nearly all (about 98%)
   are in the paragraph their line names, so a comment can occasionally sit under
@@ -111,7 +133,8 @@ Two views, chosen with the buttons above the page (the choice is remembered):
   Davidson edition (comma, period, semicolon, `?`, `!` and dashes); the colon,
   geresh and gershayim stay, because the print uses them. Rashi's opening words
   are not bold as in the print, since the data does not mark them, so they run on
-  into the explanation. There is no Tosafot yet.
+  into the explanation. There is no Tosafot yet, and Steinsaltz is not shown in
+  this view (it is a modern explanation, not part of the printed page).
 
 An "Original print (PDF)" link opens the scanned printed page on HebrewBooks
 (`app/reader.py`, `print_scan_url`). It is a PDF, so it opens outside the app, and

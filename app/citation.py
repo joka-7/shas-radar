@@ -164,6 +164,7 @@ class ChapterScheme:
 
 CITATION_SCHEMES: dict[str, CitationScheme] = {
     "daf": DafScheme(),
+    "daf-line": DafScheme(3),
     "daf-comment": DafScheme(4),
     "chapter": ChapterScheme(2),
     "chapter-segment": ChapterScheme(3),

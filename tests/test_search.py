@@ -465,6 +465,24 @@ class TestCommentaryApi:
             "rashi": None,
         }
 
+    def test_books_list_every_commentary_on_them_rashi_first(self, client):
+        books = {b["id"]: b["commentaries"] for b in client.get("/api/books").json()["books"]}
+        assert [c["id"] for c in books["bavli"]] == ["rashi", "steinsaltz"]
+        assert books["bavli"][1] == {"id": "steinsaltz", "he": "ביאור שטיינזלץ", "en": "Steinsaltz"}
+        assert books["mishnah"] == []
+
+    def test_gives_the_named_commentary_on_a_page_and_whether_it_lines_up(self, client):
+        params = {"tractate": "ברכות", "daf": 34, "amud": "b", "commentary": "steinsaltz"}
+        body = client.get("/api/commentary", params=params).json()
+        assert body["book"]["id"] == "steinsaltz"
+        assert (len(body["comments"]), body["aligned"]) == (31, False)
+
+    def test_rejects_a_commentary_that_does_not_exist(self, client):
+        params = {"tractate": "ברכות", "daf": 2, "amud": "a", "commentary": "nope"}
+        response = client.get("/api/commentary", params=params)
+        assert response.status_code == 400
+        assert response.json()["code"] == "unknown_commentary"
+
     def test_gives_the_comments_on_a_bavli_page(self, client):
         params = {"book": "bavli", "tractate": "ברכות", "daf": 2, "amud": "a"}
         body = client.get("/api/commentary", params=params).json()

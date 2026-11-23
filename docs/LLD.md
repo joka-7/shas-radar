@@ -73,6 +73,34 @@ the base has no such tractate), and returns a `PageCommentary` with that page's
 the commentary does not cover gives no comments, not an error. `as_dict()` is
 the JSON shape of `GET /api/commentary`.
 
+`stored_commentary_on_page(library, stores, commentary_id, book_id, tractate_he, daf,
+amud)` is the same for a display-only commentary: a `StoredPageCommentary` with one
+`Comment` per paragraph (`ref` is `(daf, amud, paragraph)`, `sefaria_url` is `None`),
+and `aligned`, which is true when the commentary has as many paragraph slots on the
+page as the Gemara has paragraphs (or has nothing there). `commentary_for_page(...,
+commentary_id)` dispatches: an enabled display-only id, else Rashi (named or not);
+`UnknownCommentaryError` for anything else.
+
+## `app/commentary_store.py` — display-only commentaries
+
+For a commentary that is only read beside a page, never searched (Steinsaltz). A
+`StoredCommentary` is a frozen record (`id`, `he`, `en`, `data_file`,
+`commentary_on`, `title_prefix`); `KNOWN_COMMENTARIES` lists them.
+`CommentaryStore(info)` opens the zip, reads `header.json` once, and `tractate(base_en)`
+returns the `StoredTractate` for `title_prefix + base_en` (or `None`), reading that
+member on first use and keeping the last `cache_size` (4) under a lock.
+
+A `StoredTractate` has `pages`, `(daf, amud)` to `[(paragraph, text)]`, where the
+paragraph number is the Gemara paragraph the text explains and a paragraph with no
+text is simply absent; and `slots`, `(daf, amud)` to how many paragraph slots the
+commentary has there, empty ones included. `parse_tractate(member, default_license)`
+shapes one member.
+
+`CommentaryStores.from_environ(environ)` reads `ENABLED_COMMENTARIES`: unset means
+none, an unknown id or a missing data file raises `BookConfigError` at startup.
+`ids()`, `store(id)` (`UnknownCommentaryError`, rooted at `BookError`, if not
+enabled) and `for_book(book_id)` look them up.
+
 ## `app/reader.py` — one page of the Bavli
 
 `page_text(library, book_id, tractate_he, daf, amud)` returns a `DafPage`: the
@@ -242,10 +270,10 @@ the allowlist stay a plain list rather than a stricter per-request check.
 | Route | Query / body | Response |
 | --- | --- | --- |
 | `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
-| `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`); read from each dataset's header, so listing never loads a book |
+| `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`), `commentaries[]` of `id`, `he`, `en` (every enabled commentary on its pages, Rashi first); read from each dataset's header, so listing never loads a book |
 | `GET /api/tractates` | `book` | That book's tractate list, grouped by seder; each has `pageRange` (`{first, last}` as `{daf, amud}`, or `null` for a book not numbered by daf) |
 | `GET /api/daf` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `daf`, `amud`, `citation`, `sefariaUrl`, `license`, `segments[]` (vocalized paragraphs), `plainSegments[]` (the same as the print has it: no niqqud, no modern punctuation, via `printed_text`, for the page layout), `printUrl` (HebrewBooks' PDF address for the page, or `null` for Tamid; see the note in `app/reader.py` on which numbers are confirmed), `previous` and `next` (`{daf, amud}` or `null`) |
-| `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `plain` (`text` as the print has it, via `printed_text`), `sefariaUrl`; a page with no Rashi gives `comments: []` |
+| `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book`, `commentary` (optional: `rashi`, the default, or an enabled display-only id) | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `plain` (`text` as the print has it, via `printed_text`), `sefariaUrl`; a page with no Rashi gives `comments: []`. For a display-only commentary: no `plain`, `sefariaUrl` is `null`, `text` may carry `<b>`, `<small>` and `<big>`, and `aligned` says whether its paragraph numbers can be trusted |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
 | `GET /api/proximity` | `a`, `b`, `within`, `limit`, `book` | `total`, `results[]` |
 | `POST /api/analyze/prompt` | `AnalyzeBody` (`groups`, `locale`, `history`; unknown fields → 422) | `{system, messages}` — no model call; the browser sends it with the visitor's own key |
@@ -262,7 +290,7 @@ and rendered by `http_exception_handler`:
 ```
 
 `code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_commentary`,
-`unknown_tractate`, `not_paged`, `page_not_found`. The frontend's `error.code.*` lookup keys off these. The
+`unknown_tractate`, `not_paged`, `page_not_found`, `unknown_commentary`. The frontend's `error.code.*` lookup keys off these. The
 AI analysis's own codes (`no_credential`, `own_key_failed`,
 `provider_error`) are raised in the browser, not by the server.
 
@@ -279,13 +307,15 @@ Build-time only; never imported by the running service.
 | `tractate_url(seder, name)` | Builds the export URL for one tractate |
 | `fetch_tractate(entry)` | Downloads one tractate, derives `daf`/`amud` from Sefaria's flat `text` array index (`daf = index // 2 + 1`, `amud = "a" if even else "b"`), cleans and shapes its pages |
 | `build_bavli()` | Fetches all 37 tractates (`ThreadPoolExecutor(max_workers=8)`), restores canonical order |
-| `BookSpec` / `SPECS` | For each chaptered book: table-of-contents path, nesting depth, the exact Sefaria version, the licenses allowed, and the header strings |
+| `BookSpec` / `SPECS` | For each chaptered book: table-of-contents path, nesting depth, the exact Sefaria version, the licenses allowed, and the header strings; `keep_markup` keeps `<b>`/`<small>`/`<big>` (Steinsaltz), `archive` writes a zip read a tractate at a time |
+| `clean_markup(text)` | Like `clean_segment` but keeps `<b>`, `<small>` and `<big>` (lower-cased, no attributes); filters tags again after unescaping, because the source has one broken tag written as escaped text |
+| `write_archive(target, dataset)` | Writes a zip: `header.json` and one JSON member per tractate (named by its English title, which must be unique) |
 | `toc_leaves(contents, path, skip)` | The texts under a category path in Sefaria's table of contents, in order; `KeyError` if the path is missing |
 | `walk_sections(text, arity)` | Yields `(ref, segment)` with 1-based indices; `ValueError` if the text is not `arity` levels deep |
 | `fetch_chaptered_tractate(spec, leaf)` | Fetches the chosen version file (not `merged.json`), stops if its license is not allowed, shapes the sections |
 | `daf_ref(ref)` | A leading 1-based daf index to `daf, amud` (index 1 is 1a, 3 is 2a); used for Rashi |
 | `build_chaptered_book(spec)` | Builds Mishnah, Tosefta, Yerushalmi or Rashi; stops if tractate names repeat. A spec with `omit_disallowed` (Rashi) leaves out a tractate whose license is not allowed (`OmittedTractate`) and lists it under `omitted` in the dataset header; `tractate_licenses` (Rashi on Sanhedrin: CC-BY-SA) allows one named tractate another license and stores it as that tractate's `license` |
-| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi` / `rashi`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
+| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi` / `rashi` / `steinsaltz`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
 
 ## Logging
 
@@ -303,10 +333,11 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | `tests/test_hebrew.py` | Every normalization primitive, including niqqud stripping (`strip_marks` keeps maqaf, finals and punctuation), maqaf as a separator, and the ט״ו/ט״ז gematria exception |
 | `tests/test_search.py` | Index correctness, all four match kinds (exact, with-prefix, phrase, phrase-with-prefix), proximity, offset/limit pagination, and the HTTP surface via `TestClient` — status codes, the error contract, clamping |
 | `tests/test_citation.py` | Ref packing, and the folio and chapter schemes' Hebrew/English/URL output |
-| `tests/test_commentary.py` | A page's comments on the real Bavli and Rashi data, the pages and tractates that have none, and the errors |
+| `tests/test_commentary.py` | A page's comments on the real Bavli and Rashi data, the pages and tractates that have none, and the errors; a display-only commentary's comments, whether a page lines up, and the dispatch between Rashi and the others |
+| `tests/test_commentary_store.py` | Shaping a tractate member, reading a tractate from the real archive and the cache, and enabling commentaries from the environment |
 | `tests/test_reader.py` | A page's text and its neighbours at the start, middle and end of a tractate (including one that begins on side b), the page range, every error, and the `/api/daf` and `/api/tractates` JSON on the real data |
 | `tests/test_books.py` | The registry and `ENABLED_BOOKS` parsing, per-book lazy loading under a lock, and every shipped dataset (header matches corpus, unique tractate names, no markup or entities left in the text) |
-| `tests/test_build_dataset.py` | The build script's pure helpers: cleaning, the nested-text walk, table-of-contents lookup |
+| `tests/test_build_dataset.py` | The build script's pure helpers: cleaning (with and without markup), the nested-text walk, table-of-contents lookup, and writing the zip |
 | `tests/test_ai.py` | `build_prompt` (language, group/result/word caps, history order and cap) and `POST /api/analyze/prompt` (success, invalid bodies including a visitor key, and that the old server-side AI endpoints are gone) — pure, no network |
 
 `tests/conftest.py` enables all five books, so the real datasets load once per session and are shared by `test_search.py` and `test_books.py`. The real ~1.86M-token Bavli corpus is among them. The

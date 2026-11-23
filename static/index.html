@@ -132,10 +132,10 @@
       </div>
       <div class="reader-nav">
         <button type="button" class="copy reader-prev" data-i18n="reader.previous">העמוד הקודם</button>
-        <label class="reader-rashi-toggle" id="reader-rashi-toggle" hidden>
-          <input type="checkbox" id="reader-rashi" checked>
-          <span data-i18n="reader.rashi">רש״י</span>
-        </label>
+        <details class="reader-commentaries" id="reader-commentaries" hidden>
+          <summary data-i18n="reader.commentaries">פירושים</summary>
+          <div class="reader-commentaries-panel" id="reader-commentaries-panel"></div>
+        </details>
         <button type="button" class="copy reader-next" data-i18n="reader.next">העמוד הבא</button>
       </div>
       <article class="reader-page" id="reader-page" aria-live="polite" aria-busy="false"></article>

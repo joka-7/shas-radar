@@ -3,9 +3,18 @@
 import pytest
 
 from app.books import KNOWN_BOOKS, UnknownBookError
-from app.commentary import NoCommentaryError, UnknownTractateError, commentary_on_page
+from app.commentary import (
+    NoCommentaryError,
+    PageCommentary,
+    StoredPageCommentary,
+    UnknownTractateError,
+    commentary_for_page,
+    commentary_on_page,
+    stored_commentary_on_page,
+)
+from app.commentary_store import UnknownCommentaryError
 from app.hebrew import printed_text
-from app.main import library
+from app.main import commentary_stores, library
 
 BERAKHOT = "ברכות"
 
@@ -94,3 +103,84 @@ class TestCommentaryRelationship:
 
     def test_only_rashi_comments_on_the_bavli(self):
         assert [b.id for b in KNOWN_BOOKS if b.commentary_on] == ["rashi"]
+
+
+class TestStoredCommentaryOnPage:
+    def test_gives_one_comment_per_paragraph_in_order_with_its_citation(self):
+        page = stored_commentary_on_page(
+            library, commentary_stores, "steinsaltz", "bavli", BERAKHOT, 2, 0
+        )
+        assert page.citation == "ביאור שטיינזלץ על ברכות ב."
+        assert [c.ref for c in page.comments] == [(2, 0, n) for n in range(1, 15)]
+        assert page.comments[1].text.startswith("<b>וחכמים אומרים:</b>")
+        assert page.aligned is True
+
+    @pytest.mark.parametrize(
+        ("daf", "amud", "comments", "aligned"),
+        [
+            (2, 0, 14, True),
+            (34, 1, 31, False),  # 31 paragraph slots against the Gemara's 32
+            (900, 0, 0, True),  # past the end of the tractate: nothing to line up
+        ],
+    )
+    def test_says_whether_a_page_lines_up_with_the_gemaras_paragraphs(
+        self, daf, amud, comments, aligned
+    ):
+        page = stored_commentary_on_page(
+            library, commentary_stores, "steinsaltz", "bavli", BERAKHOT, daf, amud
+        )
+        assert (len(page.comments), page.aligned) == (comments, aligned)
+
+    def test_json_shape(self):
+        body = stored_commentary_on_page(
+            library, commentary_stores, "steinsaltz", "bavli", BERAKHOT, 2, 0
+        ).as_dict()
+        assert body.keys() == {
+            "book",
+            "tractate",
+            "citation",
+            "sefariaUrl",
+            "license",
+            "aligned",
+            "comments",
+        }
+        assert body["book"] == {"id": "steinsaltz", "he": "ביאור שטיינזלץ", "en": "Steinsaltz"}
+        assert body["tractate"] == {"he": "ביאור שטיינזלץ על ברכות", "en": "Steinsaltz on Berakhot"}
+        assert (body["license"], body["sefariaUrl"]) == ("CC-BY-NC", None)
+        assert body["comments"][0] == {
+            "ref": [2, 0, 1],
+            "text": body["comments"][0]["text"],
+            "sefariaUrl": None,
+        }
+
+    @pytest.mark.parametrize(
+        ("commentary", "book", "tractate", "error"),
+        [
+            ("nope", "bavli", BERAKHOT, UnknownCommentaryError),
+            ("steinsaltz", "nope", BERAKHOT, UnknownBookError),
+            ("steinsaltz", "mishnah", "משנה ברכות", NoCommentaryError),  # not on that book
+            ("steinsaltz", "bavli", "not a tractate", UnknownTractateError),
+        ],
+    )
+    def test_rejects_what_it_cannot_answer(self, commentary, book, tractate, error):
+        with pytest.raises(error):
+            stored_commentary_on_page(library, commentary_stores, commentary, book, tractate, 2, 0)
+
+
+class TestCommentaryForPage:
+    @pytest.mark.parametrize(
+        ("commentary", "kind", "book_id"),
+        [
+            (None, PageCommentary, "rashi"),  # no commentary named: Rashi, as before
+            ("rashi", PageCommentary, "rashi"),
+            ("steinsaltz", StoredPageCommentary, "steinsaltz"),
+        ],
+    )
+    def test_serves_the_commentary_asked_for(self, commentary, kind, book_id):
+        page = commentary_for_page(library, commentary_stores, "bavli", BERAKHOT, 2, 0, commentary)
+        assert isinstance(page, kind)
+        assert page.as_dict()["book"]["id"] == book_id
+
+    def test_rejects_a_commentary_that_is_not_enabled(self):
+        with pytest.raises(UnknownCommentaryError):
+            commentary_for_page(library, commentary_stores, "bavli", BERAKHOT, 2, 0, "nope")

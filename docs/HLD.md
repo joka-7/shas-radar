@@ -16,7 +16,7 @@ exact phrase (with the same prefix allowance on the phrase's first word
 only). Every result carries an authoritative citation (tractate, daf, amud)
 and a Sefaria deep link. A bonus proximity search finds two words within N
 tokens of each other. The Bavli can also be read a page (daf side) at a time,
-with Rashi under it and the neighbouring pages one step away. An optional AI feature ("find connections") looks for
+with Rashi and Steinsaltz beside it on demand and the neighbouring pages one step away. An optional AI feature ("find connections") looks for
 what links a set of results the visitor has selected.
 
 **Non-functional.**
@@ -34,8 +34,10 @@ what links a set of results the visitor has selected.
   the Bavli alone is about 168MB, and the four enabled books (Bavli,
   Yerushalmi, Mishnah, Tosefta) about 247MB once each has been used.
   `ENABLED_BOOKS` is the switch: Rashi adds about 137MB (all five books reach
-  about 384MB), which fits, so `render.yaml` enables it.
-  Tosafot is not included: it would add well over 100MB more.
+  about 384MB, re-measured at 392MB), which fits, so `render.yaml` enables it.
+  Steinsaltz is held differently, since it is never searched: a tractate at a
+  time from a zip, with no index, which measured about 26MB more (418MB).
+  Tosafot is not included.
 - *Installable, not offline.* The PWA shell lets a phone add the app to its
   home screen and paints instantly from the cached shell, but every search
   is still a live API call — there is no offline corpus on the client.
@@ -54,6 +56,7 @@ flowchart TD
     Search["app/search.py<br/>matching + KWIC shaping"]
     Books["app/books.py<br/>which books are enabled and loaded"]
     Reader["app/reader.py<br/>one page's text and its neighbours"]
+    Store["app/commentary_store.py<br/>display-only commentary, a tractate at a time"]
     Citation["app/citation.py<br/>locations and citation schemes"]
     Corpus["app/corpus.py<br/>Tractate model + word index"]
     Hebrew["app/hebrew.py<br/>normalization primitives"]
@@ -71,6 +74,7 @@ flowchart TD
     Main -->|"GET /api/daf"| Reader
     Reader --> Books
     Reader --> Corpus
+    Main -->|"GET /api/commentary?commentary=steinsaltz"| Store
     Books --> Corpus
     Main -->|"POST /api/analyze/prompt<br/>(builds the prompt, no call)"| AI
     Search --> Corpus
@@ -140,9 +144,10 @@ sequenceDiagram
     end
 ```
 
-Reading a page is two independent requests: `GET /api/daf` for the text, and
-`GET /api/commentary` for Rashi on the same page. The browser asks for Rashi
-only when the visitor has it switched on, so a page paints without waiting on it.
+Reading a page is independent requests: `GET /api/daf` for the text, and one
+`GET /api/commentary` per ticked commentary (Rashi, Steinsaltz) for the same page.
+The browser asks only for the ones the visitor has ticked, so a page paints
+without waiting on them.
 
 Matching never scans the whole ~1.86M-token corpus for the common cases:
 `Tractate.build_index()` builds `by_word` (normalized word → positions, a
@@ -164,6 +169,10 @@ per other book (`yerushalmi`, `mishnah`, `tosefta`, `rashi`; ~8.8 MB together), 
 into process memory at startup by `BookLibrary.corpus()`, which keeps one
 instance so every request shares it. Other enabled books are read the first
 time a request asks for one and then stay resident.
+
+`steinsaltz.zip` (~12 MB) is the one store that is not loaded that way: it is a
+zip with a member per tractate, `CommentaryStore` opens it and reads one member
+when a page of that tractate is asked for, and keeps the last four in memory.
 
 In memory, `Tractate` trades the naive representation (four plain Python
 lists per tractate) for two things, both keyed off the fact that a token
