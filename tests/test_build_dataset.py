@@ -1,7 +1,10 @@
 """Tests for scripts/build_dataset.py: the pure helpers, not the network fetches."""
 
 import importlib.util
+import io
+import json
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -29,6 +32,80 @@ class TestCleanSegment:
     )
     def test_strips_markup_and_unescapes_entities(self, raw, cleaned):
         assert build_dataset.clean_segment(raw) == cleaned
+
+
+ARCHIVE_DATASET = {
+    "book": "steinsaltz",
+    "license": "CC-BY-NC",
+    "tractateCount": 2,
+    "tractates": [
+        {"en": "Steinsaltz on Berakhot", "he": "ברכות", "sections": [], "slots": []},
+        {
+            "en": "Steinsaltz on Shabbat",
+            "he": "שבת",
+            "license": "CC-BY-SA",
+            "sections": [],
+            "slots": [],
+        },
+    ],
+}
+
+
+class TestCleanMarkup:
+    @pytest.mark.parametrize(
+        ("raw", "cleaned"),
+        [
+            ("<b>וחכמים:</b> זמן", "<b>וחכמים:</b> זמן"),  # bold is kept
+            ("א <small>[ב]</small> ג <big>ד</big>", "א <small>[ב]</small> ג <big>ד</big>"),
+            ("<B>א</B>", "<b>א</b>"),  # kept tags are lower-cased
+            ('<b class="x">א</b>', "<b>א</b>"),  # attributes go, the pair stays together
+            ("<i>א</i><span>ב</span>", "אב"),  # every other tag goes
+            ("א<br>ב", "א ב"),  # a line break must not fuse the words around it
+            ('א&lt;small],&lt; small=""&gt; ב', "א ב"),  # the broken escaped tag in Bava Batra
+            ("א &amp; ב", "א & ב"),
+            ("א   ב\n\tג", "א ב ג"),
+        ],
+    )
+    def test_keeps_only_bold_small_and_big(self, raw, cleaned):
+        assert build_dataset.clean_markup(raw) == cleaned
+
+
+class TestCountWords:
+    @pytest.mark.parametrize(
+        ("markup", "expected"),
+        [
+            (False, 3),  # the tag is counted as a token of its own
+            (True, 2),  # a tag is not a word
+        ],
+    )
+    def test_counts_words_and_optionally_ignores_tags(self, markup, expected):
+        tractates = [{"sections": [{"segments": ["א <b> ב"]}]}]
+        assert build_dataset.count_words(tractates, markup=markup) == expected
+
+
+class TestWriteArchive:
+    def test_writes_a_header_and_one_member_per_tractate(self):
+        target = io.BytesIO()
+        build_dataset.write_archive(target, ARCHIVE_DATASET)
+        with zipfile.ZipFile(target) as archive:
+            assert archive.namelist() == [
+                "header.json",
+                "Steinsaltz on Berakhot.json",
+                "Steinsaltz on Shabbat.json",
+            ]
+            header = json.loads(archive.read("header.json"))
+            member = json.loads(archive.read("Steinsaltz on Shabbat.json"))
+        assert header["tractates"] == [
+            {"en": "Steinsaltz on Berakhot", "he": "ברכות"},
+            {"en": "Steinsaltz on Shabbat", "he": "שבת", "license": "CC-BY-SA"},
+        ]
+        assert header["license"] == "CC-BY-NC"
+        assert member["he"] == "שבת"
+
+    def test_rejects_two_tractates_with_one_name(self):
+        twice = {"tractates": [{"en": "A", "he": "א"}, {"en": "A", "he": "ב"}]}
+        with pytest.raises(ValueError, match="not unique"):
+            build_dataset.write_archive(io.BytesIO(), twice)
 
 
 class TestWalkSections:
@@ -109,6 +186,12 @@ class TestSpecs:
         rashi = build_dataset.SPECS["rashi"]
         assert (rashi.arity, rashi.depth) == (4, 3)
         assert build_dataset.SPECS["mishnah"].depth == 2
+
+    def test_steinsaltz_keeps_its_markup_and_is_read_a_tractate_at_a_time(self):
+        steinsaltz = build_dataset.SPECS["steinsaltz"]
+        assert (steinsaltz.keep_markup, steinsaltz.archive) == (True, True)
+        assert (steinsaltz.arity, steinsaltz.depth) == (3, 2)  # daf, amud, paragraph
+        assert steinsaltz.allowed_licenses == {"CC-BY-NC"}
 
 
 RASHI_CATEGORIES = ["Talmud", "Bavli", "Rishonim on Talmud", "Rashi", "Seder Nezikin"]

@@ -400,8 +400,9 @@
   }
 
   // The commentary on one page of a book, as GET /api/commentary answers it.
-  function fetchCommentary(book, tractate, daf, amud) {
+  function fetchCommentary(book, tractate, daf, amud, commentary) {
     var params = new URLSearchParams({ book: book, tractate: tractate, daf: String(daf), amud: amud });
+    if (commentary) params.set("commentary", commentary);
     return apiFetch("/api/commentary?" + params.toString()).then(function (response) {
       if (!response.ok) throw new Error("commentary " + response.status);
       return response.json();
@@ -1229,6 +1230,7 @@
     if (lastBooks) populateBookSelect();
     if (lastTractates) populateTractateSelect(lastTractates);
     if (readerTractates) populateReaderTractates();
+    syncReaderCommentaries();
     if (readerData) renderReaderPage(readerData);
 
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
@@ -1467,6 +1469,8 @@
 
   var READER_BOOK = "bavli";
   var READER_POSITION_KEY = "shas-radar:reader-position";
+  var READER_COMMENTARIES_KEY = "shas-radar:reader-commentaries";
+  // Before there were several commentaries this was one on/off switch for Rashi.
   var READER_RASHI_KEY = "shas-radar:reader-rashi";
   var READER_VIEW_KEY = "shas-radar:reader-view";
 
@@ -1475,8 +1479,8 @@
   var readerTractateSelect = document.getElementById("reader-tractate");
   var readerDafSelect = document.getElementById("reader-daf");
   var readerAmudGroup = document.getElementById("reader-amud");
-  var readerRashiToggle = document.getElementById("reader-rashi-toggle");
-  var readerRashiCheckbox = document.getElementById("reader-rashi");
+  var readerCommentariesEl = document.getElementById("reader-commentaries");
+  var readerCommentariesPanel = document.getElementById("reader-commentaries-panel");
   var readerPageEl = document.getElementById("reader-page");
   var readerViewGroup = document.getElementById("reader-viewmode");
   var readerPrintLink = document.getElementById("reader-print-link");
@@ -1487,7 +1491,7 @@
   var readerPosition = null; // {tractate, daf, amud} being shown
   var readerData = null; // the last /api/daf response, kept to redraw on a language switch
   var readerRequest = 0; // a slower, older response never replaces a newer one
-  var readerRashiCache = {};
+  var readerCommentaryCache = {};
 
   function isAmud(value) {
     return value === "a" || value === "b";
@@ -1513,21 +1517,29 @@
     }
   }
 
-  function rashiWanted() {
+  // Which commentaries the visitor ticked, by id. The old single Rashi switch is read
+  // once if the new choice has not been saved yet.
+  function loadReaderCommentaries() {
     try {
-      return localStorage.getItem(READER_RASHI_KEY) !== "0";
+      var stored = JSON.parse(localStorage.getItem(READER_COMMENTARIES_KEY));
+      if (Array.isArray(stored)) {
+        return stored.filter(function (id) { return typeof id === "string"; });
+      }
+      return localStorage.getItem(READER_RASHI_KEY) === "0" ? [] : ["rashi"];
     } catch (err) {
-      return true;
+      return ["rashi"];
     }
   }
 
-  function saveRashiWanted(wanted) {
+  function saveReaderCommentaries(ids) {
     try {
-      localStorage.setItem(READER_RASHI_KEY, wanted ? "1" : "0");
+      localStorage.setItem(READER_COMMENTARIES_KEY, JSON.stringify(ids));
     } catch (err) {
       /* the choice holds until the page is reloaded */
     }
   }
+
+  var readerCommentaryChoice = loadReaderCommentaries();
 
   // "vocalized": the text with niqqud, one paragraph at a time, Rashi under it.
   // "page": צורת הדף -- plain running text with Rashi beside it, as in the print.
@@ -1697,27 +1709,66 @@
     });
   }
 
-  function readerRashiAvailable() {
+  // The commentaries the reader can show beside a page: what /api/books lists for the
+  // Bavli, Rashi first. A server that predates the list names only Rashi.
+  function readerCommentaryList() {
     var host = bookById(READER_BOOK);
-    return !!(host && host.commentary);
+    if (!host) return [];
+    if (Array.isArray(host.commentaries)) return host.commentaries;
+    return host.commentary ? [{ id: host.commentary, he: "רש״י", en: "Rashi" }] : [];
   }
 
-  function syncReaderRashiToggle() {
-    readerRashiToggle.hidden = !readerRashiAvailable();
-    readerRashiCheckbox.checked = rashiWanted();
+  // The ticked commentaries that exist, in the order the server lists them.
+  function chosenCommentaries() {
+    return readerCommentaryList().filter(function (commentary) {
+      return readerCommentaryChoice.indexOf(commentary.id) !== -1;
+    });
   }
 
-  // Rashi on the page being read, from the cache or the network. Only the
+  // A string for one commentary: Rashi's keep their plain keys, the others are suffixed.
+  function commentaryText(base, id, vars) {
+    return t(locale, id === "rashi" ? base : base + "." + id, vars);
+  }
+
+  function commentaryName(commentary) {
+    var key = "reader." + commentary.id;
+    var label = t(locale, key);
+    return label === key ? commentary[locale] || commentary.he : label;
+  }
+
+  function syncReaderCommentaries() {
+    var list = readerCommentaryList();
+    readerCommentariesEl.hidden = !list.length;
+    readerCommentariesPanel.textContent = "";
+    // The page layout is the printed page, which has Rashi and no other commentary.
+    var rashiOnly = readerView === "page";
+    list.forEach(function (commentary) {
+      var option = el("label", "reader-commentary-option");
+      var box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = commentary.id;
+      box.checked = readerCommentaryChoice.indexOf(commentary.id) !== -1;
+      box.disabled = rashiOnly && commentary.id !== "rashi";
+      option.appendChild(box);
+      option.appendChild(el("span", null, commentaryName(commentary)));
+      readerCommentariesPanel.appendChild(option);
+    });
+    if (rashiOnly && list.length > 1) {
+      readerCommentariesPanel.appendChild(el("p", "reader-commentaries-hint", t(locale, "reader.pageViewOnlyRashi")));
+    }
+  }
+
+  // One commentary on the page being read, from the cache or the network. Only the
   // newest page's callbacks run: a slower, older response is dropped.
-  function loadReaderRashi(data, request, onLoaded, onFailed) {
-    var key = data.tractate.he + "|" + data.daf + data.amud;
-    if (readerRashiCache[key]) {
-      onLoaded(readerRashiCache[key]);
+  function loadReaderCommentary(id, data, request, onLoaded, onFailed) {
+    var key = id + "|" + data.tractate.he + "|" + data.daf + data.amud;
+    if (readerCommentaryCache[key]) {
+      onLoaded(readerCommentaryCache[key]);
       return;
     }
-    fetchCommentary(READER_BOOK, data.tractate.he, data.daf, data.amud)
+    fetchCommentary(READER_BOOK, data.tractate.he, data.daf, data.amud, id)
       .then(function (commentary) {
-        readerRashiCache[key] = commentary;
+        readerCommentaryCache[key] = commentary;
         if (request === readerRequest) onLoaded(commentary);
       })
       .catch(function () {
@@ -1725,49 +1776,120 @@
       });
   }
 
-  // The vocalized text a paragraph at a time. Rashi's comments are numbered by the
-  // paragraph they explain (ref[2], the line; no Gemara paragraph is dropped on
-  // load, so line k is paragraph k), so each paragraph that has any gets a button
-  // that opens them, and the rest of the page stays uncluttered.
+  // Steinsaltz's text carries <b> (the Gemara he quotes), <small> and <big>, and nothing
+  // else. It is read tag by tag into elements, never through innerHTML, and a tag that
+  // is never closed (the source has one) lasts only to the end of its paragraph.
+  function markupNodes(text) {
+    var open = { b: false, small: false, big: false };
+    var nodes = [];
+    text.split(/(<\/?(?:b|small|big)>)/i).forEach(function (part) {
+      var tag = /^<(\/?)(b|small|big)>$/i.exec(part);
+      if (tag) {
+        open[tag[2].toLowerCase()] = tag[1] === "";
+        return;
+      }
+      if (!part) return;
+      var node = document.createTextNode(part);
+      ["big", "small", "b"].forEach(function (name) {
+        if (!open[name]) return;
+        var wrapper = document.createElement(name);
+        wrapper.appendChild(node);
+        node = wrapper;
+      });
+      nodes.push(node);
+    });
+    return nodes;
+  }
+
+  // One comment: Rashi's is plain text; the others carry the markup above.
+  function commentParagraph(commentary, comment) {
+    var paragraph = hebrewSpan("p", "paragraph-text commentary-comment", null);
+    if (commentary.id === "rashi") {
+      paragraph.textContent = comment.text;
+    } else {
+      markupNodes(comment.text).forEach(function (node) { paragraph.appendChild(node); });
+    }
+    return paragraph;
+  }
+
+  function noteDetails(summary, commentary, comments, order) {
+    var details = el("details", "paragraph commentary reader-note");
+    details.dataset.order = String(order);
+    details.appendChild(el("summary", null, summary));
+    var body = el("div", "commentary-body");
+    comments.forEach(function (comment) { body.appendChild(commentParagraph(commentary, comment)); });
+    details.appendChild(body);
+    return details;
+  }
+
+  // Put a note among its paragraph's other notes in the order the commentaries are listed,
+  // whichever answered first.
+  function insertNote(container, details, order) {
+    var later = null;
+    container.childNodes.forEach(function (child) {
+      if (!later && Number(child.dataset.order) > order) later = child;
+    });
+    container.insertBefore(details, later);
+  }
+
+  // Show a loaded commentary: a button under each paragraph it has something on. Where
+  // it does not line up with the Gemara's paragraphs (``aligned`` is false) its comments
+  // are for the page as a whole, so they are one button under the page instead, and are
+  // never put under the wrong paragraph.
+  function showCommentary(commentary, order, loaded, view) {
+    var comments = loaded.comments;
+    if (loaded.aligned === false) {
+      var whole = t(locale, "reader.pageNote", { name: commentaryName(commentary) });
+      view.text.insertBefore(noteDetails(whole, commentary, comments, order), view.credits);
+    } else {
+      var byParagraph = [];
+      comments.forEach(function (comment) {
+        // A comment with no usable line, or past the last paragraph, goes with the
+        // last one rather than vanishing.
+        var line = Number.isInteger(comment.ref[2]) ? comment.ref[2] : view.notes.length;
+        var index = Math.min(Math.max(line, 1), view.notes.length) - 1;
+        (byParagraph[index] = byParagraph[index] || []).push(comment);
+      });
+      byParagraph.forEach(function (here, index) {
+        var summary = commentary.id === "rashi"
+          ? t(locale, "reader.rashiCount", { n: here.length })
+          : commentaryName(commentary);
+        insertNote(view.notes[index], noteDetails(summary, commentary, here, order), order);
+      });
+    }
+    view.credit.textContent = !comments.length
+      ? commentaryText("commentary.none", commentary.id)
+      : loaded.license
+        ? commentaryText("commentary.credit", commentary.id, { license: loaded.license })
+        : "";
+  }
+
+  // The vocalized text a paragraph at a time. A commentary's comments are numbered by
+  // the paragraph they explain (ref[2], the line or paragraph; no Gemara paragraph is
+  // dropped on load, so number k is paragraph k), so each paragraph that has any gets a
+  // button per ticked commentary, and the rest of the page stays uncluttered.
   function renderParagraphs(data, request) {
     var text = el("div", "reader-text");
-    var paragraphs = data.segments.map(function (segment) {
-      var paragraph = hebrewSpan("p", "reader-segment", segment);
-      text.appendChild(paragraph);
-      return paragraph;
+    var notes = data.segments.map(function (segment) {
+      text.appendChild(hebrewSpan("p", "reader-segment", segment));
+      var container = el("div", "reader-notes");
+      text.appendChild(container);
+      return container;
     });
-    if (!(readerRashiAvailable() && readerRashiCheckbox.checked)) return text;
-
-    var status = el("p", "attribution", t(locale, "commentary.loading"));
-    text.appendChild(status);
-    loadReaderRashi(
-      data,
-      request,
-      function (commentary) {
-        var byParagraph = [];
-        commentary.comments.forEach(function (comment) {
-          // A comment with no usable line, or past the last paragraph, goes with the
-          // last one rather than vanishing.
-          var line = Number.isInteger(comment.ref[2]) ? comment.ref[2] : paragraphs.length;
-          var index = Math.min(Math.max(line, 1), paragraphs.length) - 1;
-          (byParagraph[index] = byParagraph[index] || []).push(comment);
-        });
-        byParagraph.forEach(function (comments, index) {
-          var details = el("details", "paragraph commentary reader-rashi-para");
-          details.appendChild(el("summary", null, t(locale, "reader.rashiCount", { n: comments.length })));
-          var body = el("div", "commentary-body");
-          comments.forEach(function (comment) {
-            body.appendChild(hebrewSpan("p", "paragraph-text commentary-comment", comment.text));
-          });
-          details.appendChild(body);
-          text.insertBefore(details, paragraphs[index].nextSibling);
-        });
-        status.textContent = !commentary.comments.length
-          ? t(locale, "commentary.none")
-          : commentary.license ? t(locale, "commentary.credit", { license: commentary.license }) : "";
-      },
-      function () { status.textContent = t(locale, "commentary.error"); }
-    );
+    var credits = el("div", "reader-credits");
+    text.appendChild(credits);
+    chosenCommentaries().forEach(function (commentary, order) {
+      var credit = el("p", "attribution", t(locale, "commentary.loading"));
+      credits.appendChild(credit);
+      var view = { text: text, notes: notes, credits: credits, credit: credit };
+      loadReaderCommentary(
+        commentary.id,
+        data,
+        request,
+        function (loaded) { showCommentary(commentary, order, loaded, view); },
+        function () { credit.textContent = commentaryText("commentary.error", commentary.id); }
+      );
+    });
     return text;
   }
 
@@ -1781,7 +1903,9 @@
   }
 
   function renderPrintLayout(data, request) {
-    var withRashi = readerRashiAvailable() && readerRashiCheckbox.checked;
+    var withRashi = chosenCommentaries().some(function (commentary) {
+      return commentary.id === "rashi";
+    });
     var wrapper = el("div", "daf-wrapper");
     var scroller = el("div", "daf-scroll");
     var daf = el("div", "daf daf-amud-" + data.amud + (withRashi ? " daf-with-rashi" : ""));
@@ -1799,7 +1923,8 @@
     var text = hebrewSpan("p", "daf-rashi-text", t(locale, "commentary.loading"));
     column.appendChild(text);
     daf.appendChild(column);
-    loadReaderRashi(
+    loadReaderCommentary(
+      "rashi",
       data,
       request,
       function (commentary) {
@@ -1929,7 +2054,7 @@
         var start = position || readerPosition || loadReaderPosition() ||
           { tractate: first.he, daf: first.pageRange.first.daf, amud: first.pageRange.first.amud };
         readerPosition = start;
-        syncReaderRashiToggle();
+        syncReaderCommentaries();
         populateReaderTractates();
         showReaderPage(start, pushHash);
       })
@@ -1987,14 +2112,33 @@
     readerView = button.dataset.view;
     saveReaderView(readerView);
     syncReaderViewButtons();
+    syncReaderCommentaries();
     if (readerData) renderReaderPage(readerData);
   });
 
   syncReaderViewButtons();
 
-  readerRashiCheckbox.addEventListener("change", function () {
-    saveRashiWanted(readerRashiCheckbox.checked);
+  readerCommentariesPanel.addEventListener("change", function (event) {
+    var id = event.target.value;
+    readerCommentaryChoice = readerCommentaryChoice.filter(function (chosen) { return chosen !== id; });
+    if (event.target.checked) readerCommentaryChoice.push(id);
+    saveReaderCommentaries(readerCommentaryChoice);
     if (readerData) renderReaderPage(readerData);
+  });
+
+  // The dropdown closes when the visitor taps anywhere else, presses Escape, or tabs out of it.
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest("#reader-commentaries")) readerCommentariesEl.open = false;
+  });
+  readerCommentariesEl.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    readerCommentariesEl.open = false;
+    readerCommentariesEl.querySelector("summary").focus();
+  });
+  readerCommentariesEl.addEventListener("focusout", function (event) {
+    if (event.relatedTarget && !readerCommentariesEl.contains(event.relatedTarget)) {
+      readerCommentariesEl.open = false;
+    }
   });
 
   // --- Wiring ------------------------------------------------------------
@@ -2144,7 +2288,7 @@
     bookDefault = data.default;
     if (!bookById(selectedBook)) selectedBook = bookDefault;
     populateBookSelect();
-    syncReaderRashiToggle();
+    syncReaderCommentaries();
     if (readerData) renderReaderPage(readerData);
     // The tractate list was requested before the book list was known; refetch
     // it if the stored choice turned out to be a different (or no longer

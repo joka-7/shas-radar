@@ -12,7 +12,7 @@ refresh a corpus); the resulting file is committed to the repository, and
 the running application never touches the network.
 
     python scripts/build_dataset.py                  # the Bavli
-    python scripts/build_dataset.py --book mishnah   # or tosefta, yerushalmi, rashi
+    python scripts/build_dataset.py --book mishnah   # or tosefta, yerushalmi, rashi, steinsaltz
 
 The other books are chaptered texts (Rashi is keyed to the Bavli's folios). For
 each tractate the script fetches one specific Sefaria version and checks that
@@ -35,10 +35,11 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 EXPORT = "https://storage.googleapis.com/sefaria-export"
 BUCKET = f"{EXPORT}/json/Talmud/Bavli"
@@ -132,6 +133,30 @@ def clean_segment(text: str) -> str:
     return WHITESPACE.sub(" ", text).strip()
 
 
+# Steinsaltz bolds the Gemara words it quotes and sets side notes small; those three
+# tags are the only markup the reader renders, so they are the only markup kept.
+KEPT_TAG = re.compile(r"<(/?)(b|small|big)(?:\s[^>]*)?>", re.IGNORECASE)
+
+
+def _kept_or_dropped(tag: re.Match[str]) -> str:
+    kept = KEPT_TAG.fullmatch(tag.group(0))
+    return f"<{kept.group(1)}{kept.group(2).lower()}>" if kept else ""
+
+
+def clean_markup(text: str) -> str:
+    """Like :func:`clean_segment`, but keep ``<b>``, ``<small>`` and ``<big>``.
+
+    Every other tag is dropped, and the kept ones are lower-cased with their
+    attributes removed, so an opening and its closing tag stay a pair. Tags are filtered again after
+    unescaping, because the source has one broken tag written as escaped text
+    (``&lt;small],&lt; small=""&gt;``, in Bava Batra) that would otherwise show up.
+    """
+    text = BR_TAG.sub(" ", text)
+    text = HTML_TAG.sub(_kept_or_dropped, text)
+    text = HTML_TAG.sub(_kept_or_dropped, html.unescape(text))
+    return WHITESPACE.sub(" ", text).strip()
+
+
 def tractate_url(seder: str, name: str) -> str:
     """Build the export URL for one tractate, quoting spaces."""
     path = f"{seder}/{name}/Hebrew/{VERSION_FILE}"
@@ -198,9 +223,13 @@ def write_dataset(path: Path, dataset: dict[str, Any]) -> None:
     )
 
 
-def count_words(tractates: Sequence[dict[str, Any]]) -> int:
+def count_words(tractates: Sequence[dict[str, Any]], markup: bool = False) -> int:
+    """Words in the segments; ``markup`` says they carry tags, which are not words."""
     return sum(
-        len(seg.split()) for t in tractates for sec in t["sections"] for seg in sec["segments"]
+        len((HTML_TAG.sub(" ", seg) if markup else seg).split())
+        for t in tractates
+        for sec in t["sections"]
+        for seg in sec["segments"]
     )
 
 
@@ -253,6 +282,11 @@ class BookSpec:
     # Licenses allowed for named tractates only, kept on that tractate so the
     # app can credit it. Everything else must match ``allowed_licenses``.
     tractate_licenses: Mapping[str, str] = field(default_factory=dict)
+    # Keep ``<b>``/``<small>``/``<big>`` in the text (see :func:`clean_markup`).
+    keep_markup: bool = False
+    # Write one zip, a member per tractate, read one tractate at a time (see
+    # ``app/commentary_store.py``), rather than one gzip read whole.
+    archive: bool = False
 
     @property
     def depth(self) -> int:
@@ -321,6 +355,21 @@ SPECS: dict[str, BookSpec] = {
             omit_disallowed=True,
             # Sefaria's only Hebrew text of Sanhedrin is typed in on Wikisource.
             tractate_licenses={"Rashi on Sanhedrin": "CC-BY-SA"},
+        ),
+        BookSpec(
+            id="steinsaltz",
+            output="steinsaltz.zip",
+            scheme="daf-line",
+            arity=3,
+            toc_path=("Talmud", "Bavli", "Modern Commentary on Talmud", "Steinsaltz"),
+            skip_categories=(),
+            version="William Davidson Edition - Hebrew",
+            allowed_licenses=frozenset({"CC-BY-NC"}),
+            text_source="William Davidson Edition (Koren), Steinsaltz's commentary",
+            license="CC-BY-NC",
+            daf_index=True,
+            keep_markup=True,
+            archive=True,
         ),
     )
 }
@@ -426,11 +475,12 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
             f"not one of {sorted(spec.allowed_licenses)}"
         )
 
+    clean = clean_markup if spec.keep_markup else clean_segment
     try:
         sections = [
             {"ref": list(daf_ref(ref) if spec.daf_index else ref), "segments": [segment]}
             for ref, raw in walk_sections(data["text"], spec.depth)
-            if (segment := clean_segment(raw))
+            if (segment := clean(raw))
         ]
     except ValueError as exc:
         raise SystemExit(f"{title}: {exc}") from exc
@@ -449,6 +499,14 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
     }
     if tractate_license:
         tractate["license"] = tractate_license
+    if spec.archive:
+        # How many paragraphs the commentary has on each page, empty ones included: the
+        # app compares it with the Gemara's own count to know whether a page lines up.
+        tractate["slots"] = [
+            [*daf_ref((index,)), len(page)]
+            for index, page in enumerate(data["text"], start=1)
+            if page
+        ]
     return tractate
 
 
@@ -485,12 +543,39 @@ def build_chaptered_book(spec: BookSpec) -> dict[str, Any]:
         "textSource": spec.text_source,
         "license": spec.license,
         "tractateCount": len(tractates),
-        "wordCount": count_words(tractates),
+        "wordCount": count_words(tractates, markup=spec.keep_markup),
     }
     if omitted:
         dataset["omitted"] = omitted  # still ahead of tractates, as read_header requires
     dataset["tractates"] = tractates
     return dataset
+
+
+def write_archive(target: Path | BinaryIO, dataset: dict[str, Any]) -> None:
+    """Write ``dataset`` as a zip with a ``header.json`` and one JSON member per tractate.
+
+    Args:
+        target: The file to write, or a binary file object.
+        dataset: A book as built by :func:`build_chaptered_book`.
+
+    Raises:
+        ValueError: If two tractates share an English name, which names their member.
+    """
+    names = [t["en"] for t in dataset["tractates"]]
+    if len(set(names)) != len(names):
+        raise ValueError("tractate English names are not unique")
+    header = {key: value for key, value in dataset.items() if key != "tractates"}
+    header["tractates"] = [
+        {"en": t["en"], "he": t["he"], **({"license": t["license"]} if "license" in t else {})}
+        for t in dataset["tractates"]
+    ]
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        archive.writestr(
+            "header.json", json.dumps(header, ensure_ascii=False, separators=(",", ":"))
+        )
+        for tractate in dataset["tractates"]:
+            member = json.dumps(tractate, ensure_ascii=False, separators=(",", ":"))
+            archive.writestr(f"{tractate['en']}.json", member)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -502,7 +587,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         write_dataset(DATA_PATH, build_bavli())
     else:
         spec = SPECS[args.book]
-        write_dataset(DATA_DIR / spec.output, build_chaptered_book(spec))
+        dataset = build_chaptered_book(spec)
+        if spec.archive:
+            path = DATA_DIR / spec.output
+            write_archive(path, dataset)
+            size_mb = path.stat().st_size / 1024 / 1024
+            print(
+                f"\nWrote {path}: {dataset['tractateCount']} tractates, "
+                f"{dataset['wordCount']:,} words, {size_mb:.2f} MB zipped",
+                file=sys.stderr,
+            )
+        else:
+            write_dataset(DATA_DIR / spec.output, dataset)
     return 0
 
 

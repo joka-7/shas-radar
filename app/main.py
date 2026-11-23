@@ -26,7 +26,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import ai
 from .books import DEFAULT_BOOK, BookLibrary, UnknownBookError
-from .commentary import NoCommentaryError, UnknownTractateError, commentary_on_page
+from .commentary import NoCommentaryError, UnknownTractateError, commentary_for_page
+from .commentary_store import CommentaryStores, UnknownCommentaryError
 from .corpus import Corpus
 from .reader import (
     NotPagedBookError,
@@ -58,6 +59,7 @@ MAX_QUERIES = 5
 # Built at import, so a bad ENABLED_BOOKS or a missing data file stops the
 # server at startup rather than failing a visitor's request.
 library = BookLibrary.from_environ(os.environ)
+commentary_stores = CommentaryStores.from_environ(os.environ)
 
 
 @asynccontextmanager
@@ -193,6 +195,19 @@ def health() -> dict[str, Any]:
     }
 
 
+def commentaries_on(book_id: str) -> list[dict[str, str]]:
+    """Every enabled commentary on a book's pages, the searchable one (Rashi) first."""
+    listed = [
+        {"id": searchable.id, "he": searchable.he, "en": searchable.en}
+        for searchable in [library.commentary_for(book_id)]
+        if searchable
+    ]
+    return listed + [
+        {"id": info.id, "he": info.he, "en": info.en}
+        for info in commentary_stores.for_book(book_id)
+    ]
+
+
 @app.get("/api/books")
 def books_endpoint() -> dict[str, Any]:
     """The enabled books and what each one is, without loading any of them."""
@@ -213,6 +228,7 @@ def books_endpoint() -> dict[str, Any]:
                 "commentary": commentary.id
                 if (commentary := library.commentary_for(book.id))
                 else None,
+                "commentaries": commentaries_on(book.id),
             }
         )
     return {"default": library.default, "books": books}
@@ -224,10 +240,19 @@ def commentary_endpoint(
     daf: int = Query(..., ge=1, le=65535, description="Page number"),
     amud: Literal["a", "b"] = Query(..., description="Side of the page"),
     book: str = Query(DEFAULT_BOOK, description="The book whose page it is; see /api/books"),
+    commentary: str | None = Query(
+        None, description="Which commentary, from /api/books; Rashi when omitted"
+    ),
 ) -> dict[str, Any]:
-    """The commentary (Rashi, for the Bavli) on one page of a book."""
+    """A commentary (Rashi, unless another is named) on one page of a book."""
     try:
-        page = commentary_on_page(library, book, tractate, daf, 0 if amud == "a" else 1)
+        page = commentary_for_page(
+            library, commentary_stores, book, tractate, daf, 0 if amud == "a" else 1, commentary
+        )
+    except UnknownCommentaryError:
+        raise HTTPException(
+            status_code=400, detail=error("unknown_commentary", "הפירוש המבוקש אינו קיים")
+        ) from None
     except UnknownBookError:
         raise HTTPException(
             status_code=400, detail=error("unknown_book", "הספר המבוקש אינו קיים")

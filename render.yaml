@@ -24,3 +24,8 @@ services:
       # about 384MB. The Read tab and the "Rashi on this page" sections need it.
       - key: ENABLED_BOOKS
         value: bavli,yerushalmi,mishnah,tosefta,rashi
+      # Commentaries shown beside a page but not searched (app/commentary_store.py).
+      # Each is read a tractate at a time, so it is cheap: Steinsaltz measured at
+      # about 26MB on top of all five books (about 418MB of the 512MB).
+      - key: ENABLED_COMMENTARIES
+        value: steinsaltz
