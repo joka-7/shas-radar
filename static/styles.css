@@ -1038,10 +1038,15 @@ body {
 .view-tab:focus-visible { outline: 2.5px solid #fff; outline-offset: 2px; }
 
 .reader:not([hidden]) { display: block; margin-top: 1.25rem; }
-.reader-controls { display: grid; gap: .6rem; margin-bottom: .75rem; }
-.reader-controls .select { width: 100%; min-width: 0; }
-.reader-where { display: flex; gap: .5rem; }
-.reader-where .select { flex: 1 1 auto; }
+/* minmax(0, 1fr), not auto: an auto column grows to the longest option inside a
+   <select>, which pushes the row past the screen in English and French. */
+.reader-controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; margin-bottom: .6rem; }
+.reader-row { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.reader-controls .select { min-width: 0; }
+.reader-tractate { flex: 1 1 0; }
+.reader-daf { flex: 0 0 4.75rem; }
+.reader-views .seg { flex: 1 1 auto; }
+.reader-views .seg button { padding: 0 .6rem; font-size: .9rem; }
 .seg { display: flex; background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
 .seg button {
   flex: 1;
@@ -1059,25 +1064,51 @@ body {
 .seg button:disabled { opacity: .4; cursor: default; }
 .seg button:focus-visible { outline: 2.5px solid var(--accent); outline-offset: -3px; }
 .reader-amud { flex: 0 0 auto; }
-.reader-amud button { flex: 0 0 3.25rem; padding: 0; }
-.reader-options { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 36px; }
-.reader-rashi-toggle:not([hidden]) { display: inline-flex; align-items: center; gap: .45rem; font: 500 .95rem var(--font); color: var(--text); cursor: pointer; }
-.reader-rashi-toggle input { width: 1.2rem; height: 1.2rem; margin: 0; accent-color: var(--accent); }
-.reader-print { margin-inline-start: auto; font: 500 .9rem var(--font); color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
-.reader-print::after { content: " \2197"; }
-/* Wide enough for two columns (a phone turned sideways): half the height, so the
-   page itself gets the room. */
-@media (min-width: 640px) {
-  .reader-controls { grid-template-columns: 1fr 1fr; align-items: center; }
+.reader-amud button { flex: 0 0 2.9rem; padding: 0; }
+.reader-rashi-toggle:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 .75rem;
+  font: 500 .95rem var(--font);
+  color: var(--text);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
 }
+.reader-rashi-toggle input { width: 1.2rem; height: 1.2rem; margin: 0; accent-color: var(--accent); }
+.reader-print {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font: 500 .9rem var(--font);
+  white-space: nowrap;
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reader-print[hidden] { display: none; }
+.reader-print::after { content: " \2197"; }
 /* A landscape phone: the header's tagline and padding would take a quarter of
    the height. (Not any short window: a desktop one keeps its tagline.) */
 @media (max-height: 500px) and (max-width: 950px) and (orientation: landscape) {
   .header { padding-top: calc(.6rem + env(safe-area-inset-top)); padding-bottom: 1rem; }
   .subtitle { display: none; }
 }
-.reader-nav { display: flex; gap: .5rem; margin: .75rem 0; }
-.reader-nav .copy { flex: 1; justify-content: center; min-height: 44px; font-size: .95rem; }
+.reader-nav { display: flex; align-items: center; gap: .5rem; margin: .75rem 0; }
+.reader-nav .copy {
+  flex: 1 1 0;
+  justify-content: center;
+  min-height: 44px;
+  padding: .3rem .4rem;
+  font-size: .95rem;
+  line-height: 1.2;
+  white-space: normal; /* a longer label (French) wraps instead of overflowing */
+}
 .reader-nav .copy:disabled { opacity: .4; cursor: default; }
 
 .reader-page {
