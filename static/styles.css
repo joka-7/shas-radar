@@ -1046,7 +1046,11 @@ body {
 .reader-tractate { flex: 1 1 0; }
 .reader-daf { flex: 0 0 4.75rem; }
 .reader-views .seg { flex: 1 1 auto; }
-.reader-views .seg button { padding: 0 .6rem; font-size: .9rem; }
+.reader-views { gap: .4rem; }
+.reader-views .seg button { padding: 0 .35rem; font-size: .8rem; }
+.reader-views .seg button[hidden] { display: none; }
+.reader-views .reader-print { font-size: .78rem; }
+.reader-loading .reader-controls { opacity: .6; }
 .seg { display: flex; background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
 .seg button {
   flex: 1;
@@ -1177,19 +1181,25 @@ body {
    amud b. */
 .daf-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; direction: rtl; } /* the page is Hebrew whatever the UI language, and the scroll code relies on it */
 .daf { display: grid; gap: 1.25rem; direction: rtl; }
-.daf-with-rashi {
+.daf-columns-1, .daf-columns-2 { align-items: start; }
+.daf-columns-1 {
   grid-template-columns: minmax(16rem, 1.25fr) minmax(14rem, 1fr);
   min-width: 32rem;
-  align-items: start;
 }
-.daf-with-rashi.daf-amud-b .daf-rashi { order: -1; }
-.daf-gemara, .daf-rashi-text {
+.daf-columns-2 {
+  grid-template-columns: minmax(16rem, 1.25fr) minmax(14rem, 1fr) minmax(14rem, 1fr);
+  min-width: 46rem;
+}
+.daf-rashi-first .daf-commentary-rashi { order: -1; }
+.daf-rashi-first.daf-columns-1 { grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.25fr); }
+.daf-rashi-first.daf-columns-2 { grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.25fr) minmax(14rem, 1fr); }
+.daf-gemara, .daf-commentary-text {
   margin: 0;
   font-family: var(--font-verse);
   text-align: justify;
   hyphens: none;
 }
 .daf-gemara { font-size: 1.3rem; line-height: 1.75; }
-.daf-rashi-text { font-size: .98rem; line-height: 1.65; color: var(--text-soft); }
-.daf-rashi .attribution { margin-top: .6rem; }
+.daf-commentary-text { font-size: .98rem; line-height: 1.65; color: var(--text-soft); }
+.daf-commentary .attribution { margin-top: .6rem; }
 .daf-hint { margin: 0 0 .6rem; font-size: .85rem; color: var(--text-faint); }

@@ -26,6 +26,7 @@ services:
         value: bavli,yerushalmi,mishnah,tosefta,rashi
       # Commentaries shown beside a page but not searched (app/commentary_store.py).
       # Each is read a tractate at a time, so it is cheap: Steinsaltz measured at
-      # about 26MB on top of all five books (about 418MB of the 512MB).
+      # about 26MB on top of all five books (about 418MB of the 512MB); with Tosafot
+      # too, touching every tractate of both reached about 425MB.
       - key: ENABLED_COMMENTARIES
-        value: steinsaltz
+        value: steinsaltz,tosafot

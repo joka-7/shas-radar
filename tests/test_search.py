@@ -467,7 +467,7 @@ class TestCommentaryApi:
 
     def test_books_list_every_commentary_on_them_rashi_first(self, client):
         books = {b["id"]: b["commentaries"] for b in client.get("/api/books").json()["books"]}
-        assert [c["id"] for c in books["bavli"]] == ["rashi", "steinsaltz"]
+        assert [c["id"] for c in books["bavli"]] == ["rashi", "steinsaltz", "tosafot"]
         assert books["bavli"][1] == {"id": "steinsaltz", "he": "ביאור שטיינזלץ", "en": "Steinsaltz"}
         assert books["mishnah"] == []
 

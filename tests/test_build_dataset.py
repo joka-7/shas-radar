@@ -192,6 +192,15 @@ class TestSpecs:
         assert (steinsaltz.keep_markup, steinsaltz.archive) == (True, True)
         assert (steinsaltz.arity, steinsaltz.depth) == (3, 2)  # daf, amud, paragraph
         assert steinsaltz.allowed_licenses == {"CC-BY-NC"}
+        assert steinsaltz.slots is True
+
+    def test_tosafot_is_numbered_like_rashi_but_read_a_tractate_at_a_time(self):
+        tosafot = build_dataset.SPECS["tosafot"]
+        assert (tosafot.arity, tosafot.depth) == (4, 3)  # daf, amud, line, comment
+        assert (tosafot.keep_markup, tosafot.archive, tosafot.slots) == (True, True, False)
+        # Shabbat has a second version of unknown license: the name picks the right one.
+        assert tosafot.version == "Vilna Edition"
+        assert tosafot.tractate_licenses == {"Tosafot on Sanhedrin": "CC-BY-SA"}
 
 
 RASHI_CATEGORIES = ["Talmud", "Bavli", "Rishonim on Talmud", "Rashi", "Seder Nezikin"]
@@ -219,6 +228,34 @@ class TestFetchChaptered:
     def test_a_tractate_under_the_books_license_carries_none_of_its_own(self, monkeypatch):
         tractate = self.fetch(monkeypatch, "Rashi on Berakhot", "Public Domain")
         assert "license" not in tractate
+
+    @pytest.mark.parametrize(
+        ("book", "version", "license", "text", "slots"),
+        [
+            # Steinsaltz is [daf][paragraph]; its empty paragraph still counts as a slot.
+            (
+                "steinsaltz",
+                "William Davidson Edition - Hebrew",
+                "CC-BY-NC",
+                [["a", ""]],
+                [[1, 0, 2]],
+            ),
+            # Tosafot is [daf][line][comment]: a count of its trimmed lists means nothing.
+            ("tosafot", "Vilna Edition", "Public Domain", [[["a"], ["b"]]], None),
+        ],
+    )
+    def test_slots_are_recorded_only_for_a_commentary_numbered_by_paragraph(
+        self, monkeypatch, book, version, license, text, slots
+    ):
+        def fetch(url):
+            if url.endswith("merged.json"):
+                return {"versions": [[version, "src"]], "heTitle": "x", "title": "T"}
+            return {"license": license, "text": text}
+
+        monkeypatch.setattr(build_dataset, "fetch_json", fetch)
+        leaf = {"title": "T", "categories": RASHI_CATEGORIES}
+        tractate = build_dataset.fetch_chaptered_tractate(build_dataset.SPECS[book], leaf)
+        assert tractate.get("slots") == slots
 
     def test_another_tractate_under_that_license_is_still_left_out(self, monkeypatch):
         with pytest.raises(build_dataset.OmittedTractate):

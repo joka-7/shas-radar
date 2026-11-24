@@ -75,15 +75,15 @@ the JSON shape of `GET /api/commentary`.
 
 `stored_commentary_on_page(library, stores, commentary_id, book_id, tractate_he, daf,
 amud)` is the same for a display-only commentary: a `StoredPageCommentary` with one
-`Comment` per paragraph (`ref` is `(daf, amud, paragraph)`, `sefaria_url` is `None`),
+`Comment` per comment (`ref` is `(daf, amud, paragraph)`, `sefaria_url` is `None`),
 and `aligned`, which is true when the commentary has as many paragraph slots on the
-page as the Gemara has paragraphs (or has nothing there). `commentary_for_page(...,
+page as the Gemara has paragraphs (or has nothing there, or records no count, as Tosafot). `commentary_for_page(...,
 commentary_id)` dispatches: an enabled display-only id, else Rashi (named or not);
 `UnknownCommentaryError` for anything else.
 
 ## `app/commentary_store.py` — display-only commentaries
 
-For a commentary that is only read beside a page, never searched (Steinsaltz). A
+For a commentary that is only read beside a page, never searched (Steinsaltz, Tosafot). A
 `StoredCommentary` is a frozen record (`id`, `he`, `en`, `data_file`,
 `commentary_on`, `title_prefix`); `KNOWN_COMMENTARIES` lists them.
 `CommentaryStore(info)` opens the zip, reads `header.json` once, and `tractate(base_en)`
@@ -93,8 +93,9 @@ member on first use and keeping the last `cache_size` (4) under a lock.
 A `StoredTractate` has `pages`, `(daf, amud)` to `[(paragraph, text)]`, where the
 paragraph number is the Gemara paragraph the text explains and a paragraph with no
 text is simply absent; and `slots`, `(daf, amud)` to how many paragraph slots the
-commentary has there, empty ones included. `parse_tractate(member, default_license)`
-shapes one member.
+commentary has there, empty ones included (empty for Tosafot, which records none).
+`parse_tractate(member, default_license)` shapes one member; a section's ref may
+carry a comment number after the paragraph (Tosafot has several comments on a line).
 
 `CommentaryStores.from_environ(environ)` reads `ENABLED_COMMENTARIES`: unset means
 none, an unknown id or a missing data file raises `BookConfigError` at startup.
@@ -315,7 +316,7 @@ Build-time only; never imported by the running service.
 | `fetch_chaptered_tractate(spec, leaf)` | Fetches the chosen version file (not `merged.json`), stops if its license is not allowed, shapes the sections |
 | `daf_ref(ref)` | A leading 1-based daf index to `daf, amud` (index 1 is 1a, 3 is 2a); used for Rashi |
 | `build_chaptered_book(spec)` | Builds Mishnah, Tosefta, Yerushalmi or Rashi; stops if tractate names repeat. A spec with `omit_disallowed` (Rashi) leaves out a tractate whose license is not allowed (`OmittedTractate`) and lists it under `omitted` in the dataset header; `tractate_licenses` (Rashi on Sanhedrin: CC-BY-SA) allows one named tractate another license and stores it as that tractate's `license` |
-| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi` / `rashi` / `steinsaltz`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
+| `main(argv)` | `--book bavli` (default) / `mishnah` / `tosefta` / `yerushalmi` / `rashi` / `steinsaltz` / `tosafot`; writes the book's file under `data/` via `write_dataset` (header fields first, which `read_header` relies on) |
 
 ## Logging
 

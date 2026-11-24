@@ -1,4 +1,4 @@
-"""Commentaries shown beside a page but never searched: Steinsaltz.
+"""Commentaries shown beside a page but never searched: Steinsaltz and Tosafot.
 
 Rashi is a book in its own right. It is held in memory with a word index so that it
 can be searched, which costs several times its text. A commentary that is only ever
@@ -48,6 +48,7 @@ KNOWN_COMMENTARIES: tuple[StoredCommentary, ...] = (
     StoredCommentary(
         "steinsaltz", "ביאור שטיינזלץ", "Steinsaltz", "steinsaltz.zip", "bavli", "Steinsaltz on "
     ),
+    StoredCommentary("tosafot", "תוספות", "Tosafot", "tosafot.zip", "bavli", "Tosafot on "),
 )
 
 
@@ -62,7 +63,8 @@ class StoredTractate:
     # where number is the 1-based paragraph of the Gemara the text explains.
     pages: Mapping[tuple[int, int], Sequence[tuple[int, str]]]
     # (daf, amud) -> how many paragraph slots the commentary has on that page, empty
-    # ones included: what to compare with the Gemara's own paragraph count.
+    # ones included: what to compare with the Gemara's own paragraph count. Empty for a
+    # commentary that records none (Tosafot's lists are trimmed, so a count means nothing).
     slots: Mapping[tuple[int, int], int]
 
 
@@ -75,9 +77,9 @@ def parse_tractate(member: Mapping[str, Any], default_license: str | None) -> St
     """
     pages: dict[tuple[int, int], list[tuple[int, str]]] = {}
     for section in member["sections"]:
-        daf, amud, paragraph = section["ref"]
+        daf, amud, paragraph, *_ = section["ref"]
         pages.setdefault((daf, amud), []).append((paragraph, section["segments"][0]))
-    slots = {(daf, amud): count for daf, amud, count in member["slots"]}
+    slots = {(daf, amud): count for daf, amud, count in member.get("slots", [])}
     return StoredTractate(
         he=member["he"],
         en=member["en"],

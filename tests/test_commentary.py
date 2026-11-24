@@ -167,6 +167,38 @@ class TestStoredCommentaryOnPage:
             stored_commentary_on_page(library, commentary_stores, commentary, book, tractate, 2, 0)
 
 
+class TestTosafotOnPage:
+    def test_gives_each_comment_with_the_paragraph_its_line_names(self):
+        page = stored_commentary_on_page(
+            library, commentary_stores, "tosafot", "bavli", BERAKHOT, 2, 0
+        )
+        paragraphs = len(library.corpus("bavli").tractate_by_name(BERAKHOT).segments_under((2, 0)))
+        assert page.citation == "תוספות על ברכות ב."
+        assert page.comments[0].text.startswith("מאימתי קורין וכו' – ")
+        assert {c.ref[2] for c in page.comments} <= set(range(1, paragraphs + 1))
+        assert [c.ref[2] for c in page.comments] == sorted(c.ref[2] for c in page.comments)
+        assert page.aligned is True  # Tosafot records no slot count to disagree with
+
+    @pytest.mark.parametrize(
+        ("tractate", "license"),
+        [
+            (BERAKHOT, "Public Domain"),
+            ("סנהדרין", "CC-BY-SA"),
+        ],  # Sanhedrin is typed in on Wikisource
+    )
+    def test_credits_the_tractates_own_license(self, tractate, license):
+        page = stored_commentary_on_page(
+            library, commentary_stores, "tosafot", "bavli", tractate, 3, 0
+        )
+        assert page.as_dict()["license"] == license
+
+    def test_a_tractate_it_does_not_cover_has_no_comments(self):
+        page = stored_commentary_on_page(
+            library, commentary_stores, "tosafot", "bavli", "תמיד", 26, 0
+        )
+        assert page.comments == [] and page.tractate is None
+
+
 class TestCommentaryForPage:
     @pytest.mark.parametrize(
         ("commentary", "kind", "book_id"),
@@ -174,6 +206,7 @@ class TestCommentaryForPage:
             (None, PageCommentary, "rashi"),  # no commentary named: Rashi, as before
             ("rashi", PageCommentary, "rashi"),
             ("steinsaltz", StoredPageCommentary, "steinsaltz"),
+            ("tosafot", StoredPageCommentary, "tosafot"),
         ],
     )
     def test_serves_the_commentary_asked_for(self, commentary, kind, book_id):

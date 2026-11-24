@@ -18,7 +18,7 @@ shas-radar/
 │   ├── books.py             # The books the app can search, which are enabled, and which are loaded.
 │   ├── citation.py          # Where a passage sits in its book, and how that location is cited.
 │   ├── commentary.py        # A commentary's comments on one page of the book it is keyed to.
-│   ├── commentary_store.py  # Commentaries shown beside a page but never searched: Steinsaltz.
+│   ├── commentary_store.py  # Commentaries shown beside a page but never searched: Steinsaltz and Tosafot.
 │   ├── corpus.py            # Loading and indexing the Talmud corpus.
 │   ├── hebrew.py            # Hebrew/Aramaic text normalization primitives.
 │   ├── main.py              # FastAPI application.
@@ -29,6 +29,7 @@ shas-radar/
 │   ├── rashi.json.gz
 │   ├── shas.json.gz
 │   ├── steinsaltz.zip
+│   ├── tosafot.zip
 │   ├── tosefta.json.gz
 │   └── yerushalmi.json.gz
 ├── docs/

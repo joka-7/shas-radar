@@ -287,6 +287,9 @@ class BookSpec:
     # Write one zip, a member per tractate, read one tractate at a time (see
     # ``app/commentary_store.py``), rather than one gzip read whole.
     archive: bool = False
+    # Record how many paragraph slots the commentary has on each page, for the app to
+    # compare with the Gemara's own count. Only a commentary numbered by paragraph has them.
+    slots: bool = False
 
     @property
     def depth(self) -> int:
@@ -368,6 +371,25 @@ SPECS: dict[str, BookSpec] = {
             text_source="William Davidson Edition (Koren), Steinsaltz's commentary",
             license="CC-BY-NC",
             daf_index=True,
+            keep_markup=True,
+            archive=True,
+            slots=True,
+        ),
+        BookSpec(
+            id="tosafot",
+            output="tosafot.zip",
+            scheme="daf-comment",
+            arity=4,
+            toc_path=("Talmud", "Bavli", "Rishonim on Talmud", "Tosafot"),
+            skip_categories=(),
+            # Shabbat has a second version of unknown license, so the name is exact.
+            version="Vilna Edition",
+            allowed_licenses=frozenset({"Public Domain"}),
+            text_source="Vilna edition (Sanhedrin: Wikisource)",
+            license="Public Domain",
+            daf_index=True,
+            omit_disallowed=True,
+            tractate_licenses={"Tosafot on Sanhedrin": "CC-BY-SA"},
             keep_markup=True,
             archive=True,
         ),
@@ -499,7 +521,7 @@ def fetch_chaptered_tractate(spec: BookSpec, leaf: dict[str, Any]) -> dict[str, 
     }
     if tractate_license:
         tractate["license"] = tractate_license
-    if spec.archive:
+    if spec.slots:
         # How many paragraphs the commentary has on each page, empty ones included: the
         # app compares it with the Gemara's own count to know whether a page lines up.
         tractate["slots"] = [
