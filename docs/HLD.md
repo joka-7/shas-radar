@@ -36,8 +36,8 @@ what links a set of results the visitor has selected.
   `ENABLED_BOOKS` is the switch: Rashi adds about 137MB (all five books reach
   about 384MB, re-measured at 392MB), which fits, so `render.yaml` enables it.
   Steinsaltz is held differently, since it is never searched: a tractate at a
-  time from a zip, with no index, which measured about 26MB more (418MB).
-  Tosafot is not included.
+  time from a zip, with no index, which measured about 26MB more (418MB); Tosafot
+  is held the same way, and with both the process reached about 425MB.
 - *Installable, not offline.* The PWA shell lets a phone add the app to its
   home screen and paints instantly from the cached shell, but every search
   is still a live API call — there is no offline corpus on the client.
@@ -145,7 +145,7 @@ sequenceDiagram
 ```
 
 Reading a page is independent requests: `GET /api/daf` for the text, and one
-`GET /api/commentary` per ticked commentary (Rashi, Steinsaltz) for the same page.
+`GET /api/commentary` per ticked commentary (Rashi, Steinsaltz, Tosafot) for the same page.
 The browser asks only for the ones the visitor has ticked, so a page paints
 without waiting on them.
 
@@ -170,7 +170,7 @@ into process memory at startup by `BookLibrary.corpus()`, which keeps one
 instance so every request shares it. Other enabled books are read the first
 time a request asks for one and then stay resident.
 
-`steinsaltz.zip` (~12 MB) is the one store that is not loaded that way: it is a
+`steinsaltz.zip` (~12 MB) and `tosafot.zip` (~5 MB) are the stores that are not loaded that way: each is a
 zip with a member per tractate, `CommentaryStore` opens it and reads one member
 when a page of that tractate is asked for, and keeps the last four in memory.
 

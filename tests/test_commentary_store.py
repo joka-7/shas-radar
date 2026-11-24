@@ -12,7 +12,7 @@ from app.commentary_store import (
     parse_tractate,
 )
 
-STEINSALTZ = KNOWN_COMMENTARIES[0]
+STEINSALTZ, TOSAFOT = KNOWN_COMMENTARIES
 
 MEMBER = {
     "he": "ביאור שטיינזלץ על ברכות",
@@ -32,6 +32,20 @@ class TestParseTractate:
         assert tractate.pages == {(2, 0): [(1, "<b>א</b>"), (3, "ג")], (2, 1): [(1, "ד")]}
         assert tractate.slots == {(2, 0): 3, (2, 1): 1}
         assert (tractate.he, tractate.en) == ("ביאור שטיינזלץ על ברכות", "Steinsaltz on Berakhot")
+
+    def test_a_commentary_numbered_by_line_has_a_comment_part_and_no_slots(self):
+        member = {
+            "he": "תוספות על ברכות",
+            "en": "Tosafot on Berakhot",
+            "sections": [
+                {"ref": [2, 0, 1, 1], "segments": ["<b>א</b>"]},
+                {"ref": [2, 0, 1, 2], "segments": ["ב"]},  # a second comment on line 1
+                {"ref": [2, 0, 4, 1], "segments": ["ג"]},
+            ],
+        }
+        tractate = parse_tractate(member, "Public Domain")
+        assert tractate.pages == {(2, 0): [(1, "<b>א</b>"), (1, "ב"), (4, "ג")]}
+        assert tractate.slots == {}
 
     @pytest.mark.parametrize(
         ("member_license", "expected"),
@@ -74,6 +88,7 @@ class TestCommentaryStores:
             ({"ENABLED_COMMENTARIES": ""}, []),
             ({"ENABLED_COMMENTARIES": "steinsaltz"}, ["steinsaltz"]),
             ({"ENABLED_COMMENTARIES": " steinsaltz ,"}, ["steinsaltz"]),
+            ({"ENABLED_COMMENTARIES": "tosafot,steinsaltz"}, ["tosafot", "steinsaltz"]),
         ],
     )
     def test_enables_what_the_environment_lists(self, environ, ids):
@@ -98,6 +113,7 @@ class TestCommentaryStores:
         stores = CommentaryStores([STEINSALTZ])
         assert stores.store("steinsaltz").info is STEINSALTZ
         assert stores.for_book("bavli") == [STEINSALTZ]
+        assert CommentaryStores([TOSAFOT, STEINSALTZ]).for_book("bavli") == [TOSAFOT, STEINSALTZ]
         assert stores.for_book("mishnah") == []
         with pytest.raises(UnknownCommentaryError):
             stores.store("rashi")

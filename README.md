@@ -90,7 +90,7 @@ word index and is cheap to hold: it ships as `data/steinsaltz.zip` (12 MB), one
 member per tractate, and `app/commentary_store.py` reads a tractate when a page of
 it is first asked for and keeps the last four. Measured on the real server process,
 it adds about 26 MB on top of all five books (392 MB to 418 MB). Enable it with
-`ENABLED_COMMENTARIES=steinsaltz` (unset means none); `GET /api/commentary` takes
+`ENABLED_COMMENTARIES=steinsaltz,tosafot` (unset means none); `GET /api/commentary` takes
 `commentary=steinsaltz`, and `GET /api/books` lists each book's `commentaries`.
 
 Its paragraphs are numbered like the Gemara's, and it bolds the Gemara words it
@@ -102,39 +102,61 @@ ones. That check was made when this was built, against the whole of Sefaria's
 export; the 98.2% is not kept as a test. Rebuild the file with
 `python scripts/build_dataset.py --book steinsaltz`.
 
+### Tosafot beside a page
+
+Tosafot on 36 Bavli tractates (every one but Tamid), from Sefaria's Vilna edition:
+Public Domain, except Sanhedrin, whose only Hebrew text is typed in on Wikisource
+(CC-BY-SA, credited on that tractate). It is held the same way as Steinsaltz:
+`data/tosafot.zip` (5 MB), a tractate at a time, not searchable. Tosafot is numbered
+like Rashi, by the Gemara line a comment follows, so it goes under that paragraph.
+No comment's line is past the last paragraph of its page (checked across all 5,150
+pages with Tosafot when this was built; not kept as a test). The source marks the
+opening words (the "dibbur hamatchil") bold in some places only, so the reader
+bolds the words before the first dash (within the first 90 characters) of a comment
+that has no bold at all; it does not check that they really are the opening words. With both commentaries
+enabled and every tractate of both read, the server process reached about 425 MB.
+Rebuild the file with `python scripts/build_dataset.py --book tosafot`.
+
 ### Reading a page
 
 The **Read** tab opens one page of the Bavli (a daf side) to read straight
 through: pick a tractate, daf and side, or step with the previous/next page
 buttons. A "פירושים" dropdown ticks the commentaries to show: Rashi (on by
-default) and Steinsaltz, each when enabled. The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
+default), Steinsaltz and Tosafot, each when enabled. While the server is waking, the
+pickers read "Loading…" and the page shows a placeholder instead of empty boxes. The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
 so it can be linked to and the back button steps between pages. The last page
 read is kept in `localStorage`, and the Read tab reopens it. Each Bavli search
 result has an "Open in reader" link to its page. The text comes from
 `GET /api/daf`; the other books are not numbered by daf, so they have no reader
 yet.
 
-Two views, chosen with the buttons above the page (the choice is remembered):
+Three views, chosen with the buttons above the page (the choice is remembered):
 
 - **With niqqud** (default): the vocalized text a paragraph at a time. A
   paragraph that has Rashi gets a "Rashi (n)" button that opens his comments on
-  it, and one that has Steinsaltz gets a "Steinsaltz" button, for each ticked
-  commentary. Rashi's line number is taken as the paragraph number. That was checked
+  it, and one that has Steinsaltz or Tosafot gets a button for it, for each ticked
+  commentary. Where Steinsaltz does not line up with the paragraphs, its comments are
+  one block at the top of the page, with a line saying why. Rashi's line number is taken as the paragraph number. That was checked
   against the data once, when this was built (it is not kept as a test): of the
   comments whose opening words can be found on the page, nearly all (about 98%)
   are in the paragraph their line names, so a comment can occasionally sit under
   a neighbouring paragraph.
+- **Steinsaltz**: the same paragraph-by-paragraph text with Steinsaltz open under
+  each paragraph (it is shown whether or not it is ticked in the dropdown). It is
+  the third button, beside the other two and the PDF link, and appears only where
+  the server has Steinsaltz.
 - **צורת הדף** (page layout): the Gemara without niqqud as one running text, with
-  Rashi beside it, as in the printed page. On a narrow phone the two columns are
-  wider than the screen, so the page scrolls sideways to Rashi, and a hint
-  suggests turning the phone. Rashi sits on the inner margin, so it changes sides
-  between amud a and amud b.
-  Both columns have no niqqud and none of the modern punctuation of the William
-  Davidson edition (comma, period, semicolon, `?`, `!` and dashes); the colon,
-  geresh and gershayim stay, because the print uses them. Rashi's opening words
+  Rashi beside it and, if ticked, Tosafot in an outer column, as in the printed page.
+  On a narrow phone the columns are wider than the screen, so the page scrolls
+  sideways, starting at the Gemara, and a hint suggests turning the phone. Rashi
+  sits on the inner margin, so it changes sides between amud a and amud b.
+  The Gemara and Rashi columns have no niqqud and none of the modern punctuation of
+  the William Davidson edition (comma, period, semicolon, `?`, `!` and dashes); the
+  colon, geresh and gershayim stay, because the print uses them. The Tosafot column
+  is the source's text as it is, so it keeps that punctuation. Rashi's opening words
   are not bold as in the print, since the data does not mark them, so they run on
-  into the explanation. There is no Tosafot yet, and Steinsaltz is not shown in
-  this view (it is a modern explanation, not part of the printed page).
+  into the explanation. Steinsaltz is not shown in this view (it is a modern
+  explanation, not part of the printed page).
 
 An "Original print (PDF)" link opens the scanned printed page on HebrewBooks
 (`app/reader.py`, `print_scan_url`). It is a PDF, so it opens outside the app, and

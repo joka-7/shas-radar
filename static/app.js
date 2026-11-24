@@ -1230,6 +1230,7 @@
     if (lastBooks) populateBookSelect();
     if (lastTractates) populateTractateSelect(lastTractates);
     if (readerTractates) populateReaderTractates();
+    else if (readerEl.classList.contains("reader-loading")) showReaderLoading();
     syncReaderCommentaries();
     if (readerData) renderReaderPage(readerData);
 
@@ -1541,11 +1542,16 @@
 
   var readerCommentaryChoice = loadReaderCommentaries();
 
-  // "vocalized": the text with niqqud, one paragraph at a time, Rashi under it.
-  // "page": צורת הדף -- plain running text with Rashi beside it, as in the print.
+  // The commentaries that stand in a column beside the Gemara in צורת הדף, as in the print.
+  var PRINTED_COLUMNS = ["rashi", "tosafot"];
+
+  // "vocalized": the text with niqqud, one paragraph at a time, the commentaries under it.
+  // "page": צורת הדף -- plain running text with Rashi and Tosafot beside it, as in the print.
+  // "steinsaltz": the vocalized text with Steinsaltz open under each paragraph.
   function loadReaderView() {
     try {
-      return localStorage.getItem(READER_VIEW_KEY) === "page" ? "page" : "vocalized";
+      var saved = localStorage.getItem(READER_VIEW_KEY);
+      return saved === "page" || saved === "steinsaltz" ? saved : "vocalized";
     } catch (err) {
       return "vocalized";
     }
@@ -1561,9 +1567,21 @@
 
   var readerView = loadReaderView();
 
+  // The Steinsaltz tab exists only where the server has Steinsaltz; without it that
+  // saved choice reads as the plain vocalized view.
+  function effectiveReaderView() {
+    return readerView === "steinsaltz" && !steinsaltzListed() ? "vocalized" : readerView;
+  }
+
+  function steinsaltzListed() {
+    return readerCommentaryList().some(function (commentary) { return commentary.id === "steinsaltz"; });
+  }
+
   function syncReaderViewButtons() {
+    var shown = effectiveReaderView();
     readerViewGroup.querySelectorAll("button").forEach(function (button) {
-      button.setAttribute("aria-pressed", button.dataset.view === readerView ? "true" : "false");
+      if (button.dataset.view === "steinsaltz") button.hidden = !steinsaltzListed();
+      button.setAttribute("aria-pressed", button.dataset.view === shown ? "true" : "false");
     });
   }
 
@@ -1655,6 +1673,9 @@
 
   // Grouped by seder, like the search filter; relabelled on a language switch.
   function populateReaderTractates() {
+    readerEl.classList.remove("reader-loading");
+    readerTractateSelect.disabled = false;
+    readerDafSelect.disabled = false;
     readerTractateSelect.textContent = "";
     var groups = {};
     readerTractates.tractates.forEach(function (tr) {
@@ -1720,8 +1741,10 @@
 
   // The ticked commentaries that exist, in the order the server lists them.
   function chosenCommentaries() {
+    var steinsaltzView = effectiveReaderView() === "steinsaltz";
     return readerCommentaryList().filter(function (commentary) {
-      return readerCommentaryChoice.indexOf(commentary.id) !== -1;
+      return readerCommentaryChoice.indexOf(commentary.id) !== -1 ||
+        (steinsaltzView && commentary.id === "steinsaltz");
     });
   }
 
@@ -1737,24 +1760,28 @@
   }
 
   function syncReaderCommentaries() {
+    syncReaderViewButtons();
     var list = readerCommentaryList();
     readerCommentariesEl.hidden = !list.length;
     readerCommentariesPanel.textContent = "";
-    // The page layout is the printed page, which has Rashi and no other commentary.
-    var rashiOnly = readerView === "page";
+    // The page layout is the printed page, which has Rashi and Tosafot and no other commentary.
+    var printed = effectiveReaderView() === "page";
+    var steinsaltzView = effectiveReaderView() === "steinsaltz";
     list.forEach(function (commentary) {
       var option = el("label", "reader-commentary-option");
       var box = document.createElement("input");
       box.type = "checkbox";
       box.value = commentary.id;
-      box.checked = readerCommentaryChoice.indexOf(commentary.id) !== -1;
-      box.disabled = rashiOnly && commentary.id !== "rashi";
+      box.checked = readerCommentaryChoice.indexOf(commentary.id) !== -1 ||
+        (steinsaltzView && commentary.id === "steinsaltz");
+      box.disabled = (printed && PRINTED_COLUMNS.indexOf(commentary.id) === -1) ||
+        (steinsaltzView && commentary.id === "steinsaltz");
       option.appendChild(box);
       option.appendChild(el("span", null, commentaryName(commentary)));
       readerCommentariesPanel.appendChild(option);
     });
-    if (rashiOnly && list.length > 1) {
-      readerCommentariesPanel.appendChild(el("p", "reader-commentaries-hint", t(locale, "reader.pageViewOnlyRashi")));
+    if (printed && list.length > PRINTED_COLUMNS.length) {
+      readerCommentariesPanel.appendChild(el("p", "reader-commentaries-hint", t(locale, "reader.pageViewOnlyPrinted")));
     }
   }
 
@@ -1801,22 +1828,39 @@
     return nodes;
   }
 
+  // Tosafot's text opens with the words it comments on, then a dash (a hyphen or an en
+  // dash, depending on the tractate). Where the source did not mark them bold, they are,
+  // so each comment can be found by its opening.
+  var OPENING_END = /\s[-\u2013]\s/;
+  function boldOpening(text) {
+    var found = OPENING_END.exec(text);
+    if (text.indexOf("<b>") !== -1 || !found || found.index < 1 || found.index > 90) return text;
+    var end = found.index + found[0].length;
+    return "<b>" + text.slice(0, end) + "</b>" + text.slice(end);
+  }
+
+  function commentNodes(commentary, text) {
+    return markupNodes(commentary.id === "tosafot" ? boldOpening(text) : text);
+  }
+
   // One comment: Rashi's is plain text; the others carry the markup above.
   function commentParagraph(commentary, comment) {
     var paragraph = hebrewSpan("p", "paragraph-text commentary-comment", null);
     if (commentary.id === "rashi") {
       paragraph.textContent = comment.text;
     } else {
-      markupNodes(comment.text).forEach(function (node) { paragraph.appendChild(node); });
+      commentNodes(commentary, comment.text).forEach(function (node) { paragraph.appendChild(node); });
     }
     return paragraph;
   }
 
-  function noteDetails(summary, commentary, comments, order) {
+  function noteDetails(summary, commentary, comments, order, open, explanation) {
     var details = el("details", "paragraph commentary reader-note");
     details.dataset.order = String(order);
+    details.open = open;
     details.appendChild(el("summary", null, summary));
     var body = el("div", "commentary-body");
+    if (explanation) body.appendChild(el("p", "attribution", explanation));
     comments.forEach(function (comment) { body.appendChild(commentParagraph(commentary, comment)); });
     details.appendChild(body);
     return details;
@@ -1840,7 +1884,10 @@
     var comments = loaded.comments;
     if (loaded.aligned === false) {
       var whole = t(locale, "reader.pageNote", { name: commentaryName(commentary) });
-      view.text.insertBefore(noteDetails(whole, commentary, comments, order), view.credits);
+      var why = t(locale, "reader.pageNoteWhy", { name: commentaryName(commentary) });
+      if (comments.length) {
+        insertNote(view.top, noteDetails(whole, commentary, comments, order, view.open, why), order);
+      }
     } else {
       var byParagraph = [];
       comments.forEach(function (comment) {
@@ -1854,7 +1901,7 @@
         var summary = commentary.id === "rashi"
           ? t(locale, "reader.rashiCount", { n: here.length })
           : commentaryName(commentary);
-        insertNote(view.notes[index], noteDetails(summary, commentary, here, order), order);
+        insertNote(view.notes[index], noteDetails(summary, commentary, here, order, view.open), order);
       });
     }
     view.credit.textContent = !comments.length
@@ -1870,6 +1917,8 @@
   // button per ticked commentary, and the rest of the page stays uncluttered.
   function renderParagraphs(data, request) {
     var text = el("div", "reader-text");
+    var top = el("div", "reader-notes");
+    text.appendChild(top);
     var notes = data.segments.map(function (segment) {
       text.appendChild(hebrewSpan("p", "reader-segment", segment));
       var container = el("div", "reader-notes");
@@ -1881,7 +1930,12 @@
     chosenCommentaries().forEach(function (commentary, order) {
       var credit = el("p", "attribution", t(locale, "commentary.loading"));
       credits.appendChild(credit);
-      var view = { text: text, notes: notes, credits: credits, credit: credit };
+      var view = {
+        top: top,
+        notes: notes,
+        credit: credit,
+        open: effectiveReaderView() === "steinsaltz" && commentary.id === "steinsaltz",
+      };
       loadReaderCommentary(
         commentary.id,
         data,
@@ -1902,45 +1956,58 @@
     if (scroller && hint) hint.hidden = scroller.scrollWidth <= scroller.clientWidth + 1;
   }
 
+  // One commentary's column beside the Gemara: its comments run on as one text.
+  function printColumn(commentary, data, request) {
+    var column = hebrewSpan("div", "daf-commentary daf-commentary-" + commentary.id);
+    var text = hebrewSpan("p", "daf-commentary-text", t(locale, "commentary.loading"));
+    column.appendChild(text);
+    loadReaderCommentary(
+      commentary.id,
+      data,
+      request,
+      function (loaded) {
+        text.textContent = "";
+        if (!loaded.comments.length) {
+          text.textContent = commentaryText("commentary.none", commentary.id);
+        } else if (commentary.id === "rashi") {
+          // The page can be newer than the API (they deploy separately): an older
+          // server sends no `plain`, so fall back to the text as it is.
+          text.textContent = loaded.comments.map(function (comment) {
+            return typeof comment.plain === "string" ? comment.plain : comment.text;
+          }).filter(function (plain) { return plain.length > 0; }).join(" ");
+        } else {
+          loaded.comments.forEach(function (comment, index) {
+            if (index) text.appendChild(document.createTextNode(" "));
+            commentNodes(commentary, comment.text).forEach(function (node) { text.appendChild(node); });
+          });
+        }
+        if (loaded.license) {
+          column.appendChild(el("p", "attribution", commentaryText("commentary.credit", commentary.id, { license: loaded.license })));
+        }
+      },
+      function () { text.textContent = commentaryText("commentary.error", commentary.id); }
+    );
+    return column;
+  }
+
   function renderPrintLayout(data, request) {
-    var withRashi = chosenCommentaries().some(function (commentary) {
-      return commentary.id === "rashi";
+    var columns = chosenCommentaries().filter(function (commentary) {
+      return PRINTED_COLUMNS.indexOf(commentary.id) !== -1;
     });
     var wrapper = el("div", "daf-wrapper");
     var scroller = el("div", "daf-scroll");
-    var daf = el("div", "daf daf-amud-" + data.amud + (withRashi ? " daf-with-rashi" : ""));
+    // On amud b Rashi is the column on the right, so the widest track is the Gemara's, second.
+    var rashiFirst = data.amud === "b" && columns.some(function (commentary) { return commentary.id === "rashi"; });
+    var daf = el("div", "daf daf-columns-" + columns.length + (rashiFirst ? " daf-rashi-first" : ""));
     daf.appendChild(hebrewSpan("p", "daf-gemara", data.plainSegments.join(" ")));
     scroller.appendChild(daf);
-    if (withRashi) {
+    if (columns.length) {
       var hint = el("p", "daf-hint", t(locale, "reader.rotateHint"));
       hint.hidden = true; // shown by syncDafHint once the width is known
       wrapper.appendChild(hint);
     }
     wrapper.appendChild(scroller);
-    if (!withRashi) return wrapper;
-
-    var column = hebrewSpan("div", "daf-rashi");
-    var text = hebrewSpan("p", "daf-rashi-text", t(locale, "commentary.loading"));
-    column.appendChild(text);
-    daf.appendChild(column);
-    loadReaderCommentary(
-      "rashi",
-      data,
-      request,
-      function (commentary) {
-        text.textContent = commentary.comments.length
-          ? commentary.comments.map(function (comment) {
-            // The page can be newer than the API (they deploy separately): an older
-            // server sends no `plain`, so fall back to the text as it is.
-            return typeof comment.plain === "string" ? comment.plain : comment.text;
-          }).filter(function (plain) { return plain.length > 0; }).join(" ")
-          : t(locale, "commentary.none");
-        if (commentary.license) {
-          column.appendChild(el("p", "attribution", t(locale, "commentary.credit", { license: commentary.license })));
-        }
-      },
-      function () { text.textContent = t(locale, "commentary.error"); }
-    );
+    columns.forEach(function (commentary) { daf.appendChild(printColumn(commentary, data, request)); });
     return wrapper;
   }
 
@@ -1949,12 +2016,15 @@
     syncReaderPrintLink(data);
     readerPageEl.appendChild(hebrewSpan("h2", "reader-citation", data.citation));
     // A server that predates plainSegments gets the vocalized view, not a blank page.
-    if (readerView === "page" && Array.isArray(data.plainSegments)) {
+    if (effectiveReaderView() === "page" && Array.isArray(data.plainSegments)) {
       readerPageEl.appendChild(renderPrintLayout(data, readerRequest));
       // On amud b Rashi is the column on the right, which is where a right-to-left
       // scroller starts; scroll over to the Gemara so it is what you see first.
       var scroller = readerPageEl.querySelector(".daf-scroll");
-      if (data.amud === "b") scroller.scrollLeft = -(scroller.scrollWidth - scroller.clientWidth);
+      var gemara = scroller.querySelector(".daf-gemara");
+      if (data.amud === "b") {
+        scroller.scrollLeft += gemara.getBoundingClientRect().right - scroller.getBoundingClientRect().right;
+      }
       syncDafHint();
     } else {
       readerPageEl.appendChild(renderParagraphs(data, readerRequest));
@@ -1983,11 +2053,7 @@
       history.pushState(null, "", readerHash(position));
     }
 
-    readerPageEl.setAttribute("aria-busy", "true");
-    readerPageEl.textContent = "";
-    var skeleton = el("div", "skeleton");
-    for (var i = 0; i < 4; i++) skeleton.appendChild(el("div", "line"));
-    readerPageEl.appendChild(skeleton);
+    showReaderSkeleton();
     var disarm = armWaking();
 
     var params = new URLSearchParams({
@@ -2027,6 +2093,30 @@
       });
   }
 
+  function showReaderSkeleton() {
+    readerPageEl.setAttribute("aria-busy", "true");
+    readerPageEl.textContent = "";
+    var skeleton = el("div", "skeleton");
+    for (var i = 0; i < 4; i++) skeleton.appendChild(el("div", "line"));
+    readerPageEl.appendChild(skeleton);
+  }
+
+  // Before the tractate list arrives (a sleeping server) the pickers have nothing to
+  // offer: say so, rather than showing empty boxes above an empty card.
+  function showReaderLoading() {
+    [readerTractateSelect, readerDafSelect].forEach(function (select) {
+      select.textContent = "";
+      var option = document.createElement("option");
+      option.textContent = t(locale, "commentary.loading");
+      select.appendChild(option);
+      select.disabled = true;
+    });
+    readerEl.classList.add("reader-loading");
+    readerAmudGroup.querySelectorAll("button").forEach(function (button) { button.disabled = true; });
+    syncReaderNav(null);
+    showReaderSkeleton();
+  }
+
   function ensureReaderTractates() {
     if (readerTractates) return Promise.resolve();
     var disarm = armWaking();
@@ -2048,6 +2138,7 @@
   // the first page of the first tractate.
   function openReader(position, pushHash) {
     showView("read");
+    if (!readerTractates) showReaderLoading();
     ensureReaderTractates()
       .then(function () {
         var first = readerTractates.tractates[0];
@@ -2059,6 +2150,9 @@
         showReaderPage(start, pushHash);
       })
       .catch(function () {
+        // Nothing to pick from: drop the "Loading…" labels. Opening the tab again retries.
+        readerEl.classList.remove("reader-loading");
+        [readerTractateSelect, readerDafSelect].forEach(function (select) { select.textContent = ""; });
         readerPageEl.textContent = "";
         readerPageEl.appendChild(notice(t(locale, "error.title"), t(locale, "reader.error"), "error"));
       });
