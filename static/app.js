@@ -1547,7 +1547,7 @@
 
   // "vocalized": the text with niqqud, one paragraph at a time, the commentaries under it.
   // "page": צורת הדף -- plain running text with Rashi and Tosafot beside it, as in the print.
-  // "steinsaltz": the vocalized text with Steinsaltz open under each paragraph.
+  // "steinsaltz": Steinsaltz's commentary alone.
   function loadReaderView() {
     try {
       var saved = localStorage.getItem(READER_VIEW_KEY);
@@ -1741,10 +1741,8 @@
 
   // The ticked commentaries that exist, in the order the server lists them.
   function chosenCommentaries() {
-    var steinsaltzView = effectiveReaderView() === "steinsaltz";
     return readerCommentaryList().filter(function (commentary) {
-      return readerCommentaryChoice.indexOf(commentary.id) !== -1 ||
-        (steinsaltzView && commentary.id === "steinsaltz");
+      return readerCommentaryChoice.indexOf(commentary.id) !== -1;
     });
   }
 
@@ -1762,20 +1760,18 @@
   function syncReaderCommentaries() {
     syncReaderViewButtons();
     var list = readerCommentaryList();
-    readerCommentariesEl.hidden = !list.length;
+    // The Steinsaltz view shows his commentary alone, so there is nothing to tick.
+    readerCommentariesEl.hidden = !list.length || effectiveReaderView() === "steinsaltz";
     readerCommentariesPanel.textContent = "";
     // The page layout is the printed page, which has Rashi and Tosafot and no other commentary.
     var printed = effectiveReaderView() === "page";
-    var steinsaltzView = effectiveReaderView() === "steinsaltz";
     list.forEach(function (commentary) {
       var option = el("label", "reader-commentary-option");
       var box = document.createElement("input");
       box.type = "checkbox";
       box.value = commentary.id;
-      box.checked = readerCommentaryChoice.indexOf(commentary.id) !== -1 ||
-        (steinsaltzView && commentary.id === "steinsaltz");
-      box.disabled = (printed && PRINTED_COLUMNS.indexOf(commentary.id) === -1) ||
-        (steinsaltzView && commentary.id === "steinsaltz");
+      box.checked = readerCommentaryChoice.indexOf(commentary.id) !== -1;
+      box.disabled = printed && PRINTED_COLUMNS.indexOf(commentary.id) === -1;
       option.appendChild(box);
       option.appendChild(el("span", null, commentaryName(commentary)));
       readerCommentariesPanel.appendChild(option);
@@ -1854,10 +1850,9 @@
     return paragraph;
   }
 
-  function noteDetails(summary, commentary, comments, order, open, explanation) {
+  function noteDetails(summary, commentary, comments, order, explanation) {
     var details = el("details", "paragraph commentary reader-note");
     details.dataset.order = String(order);
-    details.open = open;
     details.appendChild(el("summary", null, summary));
     var body = el("div", "commentary-body");
     if (explanation) body.appendChild(el("p", "attribution", explanation));
@@ -1886,7 +1881,7 @@
       var whole = t(locale, "reader.pageNote", { name: commentaryName(commentary) });
       var why = t(locale, "reader.pageNoteWhy", { name: commentaryName(commentary) });
       if (comments.length) {
-        insertNote(view.top, noteDetails(whole, commentary, comments, order, view.open, why), order);
+        insertNote(view.top, noteDetails(whole, commentary, comments, order, why), order);
       }
     } else {
       var byParagraph = [];
@@ -1901,7 +1896,7 @@
         var summary = commentary.id === "rashi"
           ? t(locale, "reader.rashiCount", { n: here.length })
           : commentaryName(commentary);
-        insertNote(view.notes[index], noteDetails(summary, commentary, here, order, view.open), order);
+        insertNote(view.notes[index], noteDetails(summary, commentary, here, order), order);
       });
     }
     view.credit.textContent = !comments.length
@@ -1909,6 +1904,34 @@
       : loaded.license
         ? commentaryText("commentary.credit", commentary.id, { license: loaded.license })
         : "";
+  }
+
+  // The Steinsaltz view: his commentary alone, a paragraph at a time, with the Gemara
+  // words he quotes in bold. The Gemara itself is not repeated.
+  function renderSteinsaltz(data, request) {
+    var commentary = readerCommentaryList().filter(function (candidate) {
+      return candidate.id === "steinsaltz";
+    })[0];
+    var text = el("div", "reader-text steinsaltz-text");
+    var status = el("p", "attribution", t(locale, "commentary.loading"));
+    text.appendChild(status);
+    loadReaderCommentary(
+      commentary.id,
+      data,
+      request,
+      function (loaded) {
+        loaded.comments.forEach(function (comment) {
+          text.insertBefore(commentParagraph(commentary, comment), status);
+        });
+        status.textContent = !loaded.comments.length
+          ? commentaryText("commentary.none", commentary.id)
+          : loaded.license
+            ? commentaryText("commentary.credit", commentary.id, { license: loaded.license })
+            : "";
+      },
+      function () { status.textContent = commentaryText("commentary.error", commentary.id); }
+    );
+    return text;
   }
 
   // The vocalized text a paragraph at a time. A commentary's comments are numbered by
@@ -1930,12 +1953,7 @@
     chosenCommentaries().forEach(function (commentary, order) {
       var credit = el("p", "attribution", t(locale, "commentary.loading"));
       credits.appendChild(credit);
-      var view = {
-        top: top,
-        notes: notes,
-        credit: credit,
-        open: effectiveReaderView() === "steinsaltz" && commentary.id === "steinsaltz",
-      };
+      var view = { top: top, notes: notes, credit: credit };
       loadReaderCommentary(
         commentary.id,
         data,
@@ -2026,6 +2044,8 @@
         scroller.scrollLeft += gemara.getBoundingClientRect().right - scroller.getBoundingClientRect().right;
       }
       syncDafHint();
+    } else if (effectiveReaderView() === "steinsaltz") {
+      readerPageEl.appendChild(renderSteinsaltz(data, readerRequest));
     } else {
       readerPageEl.appendChild(renderParagraphs(data, readerRequest));
     }

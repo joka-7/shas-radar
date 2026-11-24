@@ -141,9 +141,9 @@ Three views, chosen with the buttons above the page (the choice is remembered):
   comments whose opening words can be found on the page, nearly all (about 98%)
   are in the paragraph their line names, so a comment can occasionally sit under
   a neighbouring paragraph.
-- **Steinsaltz**: the same paragraph-by-paragraph text with Steinsaltz open under
-  each paragraph (it is shown whether or not it is ticked in the dropdown). It is
-  the third button, beside the other two and the PDF link, and appears only where
+- **Steinsaltz**: Steinsaltz's commentary alone, a paragraph at a time with the
+  Gemara words he quotes in bold; the Gemara text itself is not repeated, and the
+  dropdown is hidden. It is the third button, beside the other two and the PDF link, and appears only where
   the server has Steinsaltz.
 - **צורת הדף** (page layout): the Gemara without niqqud as one running text, with
   Rashi beside it and, if ticked, Tosafot in an outer column, as in the printed page.

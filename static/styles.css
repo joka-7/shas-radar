@@ -1078,7 +1078,7 @@ body {
   font: 500 .95rem var(--font);
   color: var(--text);
   background: var(--surface);
-  border: 1.5px solid var(--line);
+  border: 1.5px solid var(--accent);
   border-radius: var(--radius-sm);
   cursor: pointer;
   list-style: none;
@@ -1149,6 +1149,20 @@ body {
   white-space: normal; /* a longer label (French) wraps instead of overflowing */
 }
 .reader-nav .copy:disabled { opacity: .4; cursor: default; }
+/* The step buttons are filled and carry an arrow, so they read as moving, not as a setting. */
+.reader-nav .reader-step {
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.reader-step::before { content: "\2039"; font-size: 1.2em; line-height: 1; margin-inline-end: .2rem; }
+.reader-next::before { content: none; }
+.reader-next::after { content: "\203A"; font-size: 1.2em; line-height: 1; margin-inline-start: .2rem; }
+/* These glyphs are not mirrored for right-to-left text, so point them by hand. */
+:root[dir="rtl"] .reader-prev::before { content: "\203A"; }
+:root[dir="rtl"] .reader-next::after { content: "\2039"; }
 
 .reader-page {
   background: var(--surface);
@@ -1168,8 +1182,11 @@ body {
 }
 .reader-notes:empty { display: none; }
 .reader-note { margin: -.2rem 0 .8rem; }
-.reader-note .commentary-comment small { font-size: .8em; color: var(--text-soft); }
-.reader-note .commentary-comment big { font-size: 1.1em; }
+.reader-note .commentary-comment small, .steinsaltz-text small { font-size: .8em; color: var(--text-soft); }
+.reader-note .commentary-comment big, .steinsaltz-text big { font-size: 1.1em; }
+/* Steinsaltz bolds the Gemara words he explains; against a lighter ground text they must stand out. */
+.steinsaltz-text .commentary-comment { margin: 0 0 .7rem; color: var(--text-soft); }
+.steinsaltz-text b { font-weight: 800; color: var(--text); background: var(--accent-soft); border-radius: 3px; padding: 0 .12em; }
 .reader-page .attribution { margin-top: .8rem; font-size: .85em; color: var(--text-faint); }
 .reader-page .copy { display: inline-flex; margin-top: .6rem; text-decoration: none; }
 
