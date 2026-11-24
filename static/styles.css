@@ -1149,7 +1149,7 @@ body {
   white-space: normal; /* a longer label (French) wraps instead of overflowing */
 }
 .reader-nav .copy:disabled { opacity: .4; cursor: default; }
-/* The step buttons are filled and carry an arrow, so they read as moving, not as a setting. */
+/* The step buttons are filled, so they read as moving, not as a setting. */
 .reader-nav .reader-step {
   font-size: .88rem;
   font-weight: 700;
@@ -1157,13 +1157,6 @@ body {
   background: var(--accent-soft);
   border-color: transparent;
 }
-.reader-step::before { content: "\2039"; font-size: 1.2em; line-height: 1; margin-inline-end: .2rem; }
-.reader-next::before { content: none; }
-.reader-next::after { content: "\203A"; font-size: 1.2em; line-height: 1; margin-inline-start: .2rem; }
-/* These glyphs are not mirrored for right-to-left text, so point them by hand. */
-:root[dir="rtl"] .reader-prev::before { content: "\203A"; }
-:root[dir="rtl"] .reader-next::after { content: "\2039"; }
-
 .reader-page {
   background: var(--surface);
   border: 1px solid var(--line);
