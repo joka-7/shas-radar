@@ -158,7 +158,7 @@ Three views, chosen with the buttons above the page (the choice is remembered):
   into the explanation. Steinsaltz is not shown in this view (it is a modern
   explanation, not part of the printed page).
 
-### Saving, recent pages and download
+### Saving, recent pages, saved searches and download
 
 The Read tab has a **"שמירה"** button, a **"הורדה"** button and a **"שמורים"** list
 (`reader-tools` in `static/index.html`, the "Saved pages" part of `static/app.js`).
@@ -177,7 +177,14 @@ The Read tab has a **"שמירה"** button, a **"הורדה"** button and a **"�
   available the three controls are hidden.
 
 Checked by driving a browser (save, list, download, then the connection cut and a saved page
-opened); the front end has no unit tests. Search and AI results are not saved yet.
+opened); the front end has no unit tests.
+
+The **Search** tab has the same three controls above the results (`search-tools`). A search
+is kept as the response it got, with the AI answer if one was asked for, so it shows again
+with no connection (the "show more" buttons still need one); recent searches are kept as well
+(the last 20 searches and the last 20 pages are counted apart), and the file is
+`search_<date><time>.html`. The two tabs have separate lists. A saved search's answer opens
+with its "continue chatting" button, which needs a connection and the visitor's own key.
 
 An "Original print (PDF)" link opens the scanned printed page on HebrewBooks
 (`app/reader.py`, `print_scan_url`). It is a PDF, so it opens outside the app, and
