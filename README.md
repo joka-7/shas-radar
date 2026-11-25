@@ -158,6 +158,27 @@ Three views, chosen with the buttons above the page (the choice is remembered):
   into the explanation. Steinsaltz is not shown in this view (it is a modern
   explanation, not part of the printed page).
 
+### Saving, recent pages and download
+
+The Read tab has a **"שמירה"** button, a **"הורדה"** button and a **"שמורים"** list
+(`reader-tools` in `static/index.html`, the "Saved pages" part of `static/app.js`).
+
+- **Save** keeps the page on screen in this browser's IndexedDB (database `shas-radar`,
+  store `saved`), with the commentaries ticked for it that loaded. Nothing is sent anywhere.
+  A saved page opens from the list with no connection, with a note that it is a copy kept on
+  the device; saving again un-saves it. It opens in whichever view is chosen at the time.
+- **Recent**: each page read is also remembered, the last 20, listed under "נקראו לאחרונה",
+  unless it was saved. The read and the write of one record are a single transaction, so a
+  save made while a recent copy is being updated is never undone.
+- **Download** writes the page as it is shown, every note open, into one self-contained
+  `.html` file (`Berakhot_2a.html`), styled with the app's stylesheet.
+- With no connection `apiFetch` fails at once instead of retrying as if for a sleeping
+  server, so the reader shows its error and the saved list stays usable. If IndexedDB is not
+  available the three controls are hidden.
+
+Checked by driving a browser (save, list, download, then the connection cut and a saved page
+opened); the front end has no unit tests. Search and AI results are not saved yet.
+
 An "Original print (PDF)" link opens the scanned printed page on HebrewBooks
 (`app/reader.py`, `print_scan_url`). It is a PDF, so it opens outside the app, and
 Tamid has no link because its pages do not open on the site. The address
