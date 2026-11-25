@@ -8,6 +8,9 @@ refresh it, and never edit between the markers by hand.
 ```text
 shas-radar/
 ├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug.yml
+│   │   └── feature.yml
 │   ├── workflows/
 │   │   ├── ci.yml
 │   │   └── security.yml
