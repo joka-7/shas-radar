@@ -58,6 +58,9 @@
   // totals.
   var locale = loadLocale();
   var lastSearchData = null;
+  var searchAnswer = null; // the AI answer shown for the results on screen: {text, groups}
+  var searchShowingSaved = false; // the results on screen are a copy kept on the device
+  var lastSearchQuery = ""; // the query that produced lastSearchData, which the box may no longer show
   var lastSnapshot = null;
   var lastTractates = null;
 
@@ -971,7 +974,7 @@
   // settings nudge and the external-AI links, which always answer.
   var NEEDS_KEY_CODES = ["no_credential", "own_key_failed", "provider_error"];
 
-  function connectionsSection(data, selection) {
+  function connectionsSection(data, selection, restored) {
     var section = el("section", "connections");
 
     var hint = el("p", "connections-hint");
@@ -1028,6 +1031,31 @@
     selection.onChange(updateState);
     updateState();
 
+    // The answer in the body, from a fresh request or a saved one.
+    function showAnswer(connection, groups) {
+      body.appendChild(el("p", "connections-answer-label", t(locale, "connections.answerLabel")));
+      body.appendChild(el("p", "connections-text", connection));
+      var chatBtn = el("button", "connections-btn connections-chat-btn", t(locale, "chat.continueButton"));
+      chatBtn.type = "button";
+      chatBtn.addEventListener("click", function () {
+        openAiChat(groups, connection);
+      });
+      body.appendChild(chatBtn);
+      body.hidden = false;
+      section.classList.add("answered");
+      // Deliberately left visible and re-enabled, not hidden away: the
+      // checkboxes on the result cards are still live, so a visitor can
+      // change what's selected and press this again for a fresh answer
+      // without having to redo the whole search from scratch (this used
+      // to hide button/links/hint outright -- once the "still shows
+      // מחפש קשר" CSS-specificity bug got fixed and `hidden` actually
+      // started working, that read as "the AI panel just disappeared").
+      button.disabled = selection.count() < 2;
+      button.textContent = t(locale, "connections.button");
+    }
+
+    if (restored) showAnswer(restored.text, restored.groups);
+
     button.addEventListener("click", function () {
       var groups = selection.groups();
       if (groups.length === 0) return; // button is disabled below 2, but be defensive
@@ -1039,25 +1067,12 @@
 
       requestAnalysis(groups)
         .then(function (connection) {
-          body.appendChild(el("p", "connections-answer-label", t(locale, "connections.answerLabel")));
-          body.appendChild(el("p", "connections-text", connection));
-          var chatBtn = el("button", "connections-btn connections-chat-btn", t(locale, "chat.continueButton"));
-          chatBtn.type = "button";
-          chatBtn.addEventListener("click", function () {
-            openAiChat(groups, connection);
-          });
-          body.appendChild(chatBtn);
-          body.hidden = false;
-          section.classList.add("answered");
-          // Deliberately left visible and re-enabled, not hidden away: the
-          // checkboxes on the result cards are still live, so a visitor can
-          // change what's selected and press this again for a fresh answer
-          // without having to redo the whole search from scratch (this used
-          // to hide button/links/hint outright -- once the "still shows
-          // מחפש קשר" CSS-specificity bug got fixed and `hidden` actually
-          // started working, that read as "the AI panel just disappeared").
-          button.disabled = selection.count() < 2;
-          button.textContent = t(locale, "connections.button");
+          showAnswer(connection, groups);
+          // The visitor may have searched again while it was thinking: its answer is for
+          // results that are no longer the ones kept.
+          if (lastSearchData !== data) return;
+          searchAnswer = { text: connection, groups: groups };
+          rememberRecentSearch();
         })
         .catch(function (err) {
           var message = analysisErrorMessage(err, "connections.error.generic");
@@ -1186,6 +1201,7 @@
 
   function render(data, snapshot) {
     results.innerHTML = "";
+    if (searchShowingSaved) results.appendChild(el("p", "attribution", t(locale, "reader.savedCopy")));
     // One selection, shared by reference between the connections section
     // and every card in every group (including cards from a later "show
     // more" page) -- a single source of truth for what's currently checked.
@@ -1193,7 +1209,7 @@
     // Above the results, not below: it's the first thing offered on a
     // search worth analyzing, not an afterthought scrolled past.
     if (hasEnoughToConnect(data)) {
-      results.appendChild(connectionsSection(data, selection));
+      results.appendChild(connectionsSection(data, selection, searchAnswer));
     }
     data.groups.forEach(function (group) {
       results.appendChild(renderGroup(group, snapshot, selection));
@@ -1237,6 +1253,7 @@
     else if (readerEl.classList.contains("reader-loading")) showReaderLoading();
     syncReaderCommentaries();
     if (readerTractates) syncReaderTools();
+    syncSearchTools();
     if (readerData) renderReaderPage(readerData);
 
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
@@ -1366,6 +1383,10 @@
     autosizeInput();
     lastSearchData = null;
     lastSnapshot = null;
+    lastSearchQuery = "";
+    searchAnswer = null;
+    searchShowingSaved = false;
+    syncSearchSaveButton();
     results.innerHTML = "";
     results.setAttribute("aria-busy", "false");
     submit.disabled = false;
@@ -1412,6 +1433,8 @@
     if (inFlight) inFlight.abort();
     var controller = new AbortController();
     inFlight = controller;
+    searchAnswer = null;
+    searchShowingSaved = false;
 
     submit.disabled = true;
     results.setAttribute("aria-busy", "true");
@@ -1445,12 +1468,16 @@
       .then(function (data) {
         lastSearchData = data;
         lastSnapshot = snapshot;
+        lastSearchQuery = query;
         render(data, snapshot);
+        rememberRecentSearch();
+        syncSearchSaveButton();
         results.scrollIntoView({ behavior: "smooth", block: "start" });
       })
       .catch(function (error) {
         if (error.name === "AbortError") return;
         lastSearchData = null;
+        syncSearchSaveButton();
         results.innerHTML = "";
         results.appendChild(notice(t(locale, "error.title"), error.message, "error"));
       })
@@ -1632,6 +1659,7 @@
     var loaded = loadedCommentariesFor(data);
     return {
       id: savedKey(data),
+      kind: "daf",
       kept: kept,
       title: data.citation,
       savedAt: Date.now(),
@@ -1650,14 +1678,17 @@
     return merged;
   }
 
-  // Forget the oldest of the merely recent items past RECENT_LIMIT.
+  // Forget the oldest of the merely recent pages, and of the merely recent searches, past
+  // RECENT_LIMIT of each.
   function pruneRecent() {
     return savedRequest("readwrite", function (store) {
       var all = store.getAll();
       all.onsuccess = function () {
-        var recent = all.result.filter(function (item) { return !item.kept; });
-        recent.sort(function (a, b) { return b.savedAt - a.savedAt; });
-        recent.slice(RECENT_LIMIT).forEach(function (old) { store.delete(old.id); });
+        ["daf", "search"].forEach(function (kind) {
+          var recent = all.result.filter(function (item) { return !item.kept && (item.kind || "daf") === kind; });
+          recent.sort(function (a, b) { return b.savedAt - a.savedAt; });
+          recent.slice(RECENT_LIMIT).forEach(function (old) { store.delete(old.id); });
+        });
       };
       return all;
     });
@@ -1744,36 +1775,46 @@
     readerEl.scrollIntoView({ block: "start" });
   }
 
+  // The saved items of one kind, "Saved" then "Recently read", into a panel.
+  function fillSavedPanel(panel, items, kind, open, refresh) {
+    panel.textContent = "";
+    var groups = [
+      ["reader.savedHeading", true],
+      [kind === "search" ? "reader.recentSearchesHeading" : "reader.recentHeading", false],
+    ];
+    var any = false;
+    groups.forEach(function (group) {
+      var chosen = items.filter(function (item) {
+        return (item.kind || "daf") === kind && item.kept === group[1];
+      });
+      chosen.sort(function (a, b) { return b.savedAt - a.savedAt; });
+      if (!chosen.length) return;
+      any = true;
+      panel.appendChild(el("p", "reader-saved-heading", t(locale, group[0])));
+      chosen.forEach(function (item) {
+        var row = el("div", "reader-saved-row");
+        var opener = hebrewSpan("button", "reader-saved-open", item.title);
+        opener.type = "button";
+        opener.addEventListener("click", function () { open(item); });
+        var remove = el("button", "reader-saved-remove", "✕");
+        remove.type = "button";
+        remove.setAttribute("aria-label", t(locale, "reader.delete"));
+        remove.addEventListener("click", function () {
+          savedDelete(item.id).then(refresh).catch(function () {
+            remove.textContent = "!"; // the row is still there: the delete did not happen
+          });
+        });
+        row.appendChild(opener);
+        row.appendChild(remove);
+        panel.appendChild(row);
+      });
+    });
+    if (!any) panel.appendChild(el("p", "reader-saved-heading", t(locale, "reader.savedEmpty")));
+  }
+
   function renderSavedList() {
     savedAll().then(function (items) {
-      readerSavedPanel.textContent = "";
-      var groups = [["reader.savedHeading", true], ["reader.recentHeading", false]];
-      var any = false;
-      groups.forEach(function (group) {
-        var chosen = items.filter(function (item) { return item.kept === group[1]; });
-        chosen.sort(function (a, b) { return b.savedAt - a.savedAt; });
-        if (!chosen.length) return;
-        any = true;
-        readerSavedPanel.appendChild(el("p", "reader-saved-heading", t(locale, group[0])));
-        chosen.forEach(function (item) {
-          var row = el("div", "reader-saved-row");
-          var open = hebrewSpan("button", "reader-saved-open", item.title);
-          open.type = "button";
-          open.addEventListener("click", function () { openSaved(item); });
-          var remove = el("button", "reader-saved-remove", "✕");
-          remove.type = "button";
-          remove.setAttribute("aria-label", t(locale, "reader.delete"));
-          remove.addEventListener("click", function () {
-            savedDelete(item.id).then(function () { renderSavedList(); syncSaveButton(); }).catch(function () {
-              remove.textContent = "!"; // the row is still there: the delete did not happen
-            });
-          });
-          row.appendChild(open);
-          row.appendChild(remove);
-          readerSavedPanel.appendChild(row);
-        });
-      });
-      if (!any) readerSavedPanel.appendChild(el("p", "reader-saved-heading", t(locale, "reader.savedEmpty")));
+      fillSavedPanel(readerSavedPanel, items, "daf", openSaved, function () { renderSavedList(); syncSaveButton(); });
     }).catch(function () {});
   }
 
@@ -1797,9 +1838,14 @@
   // open) in one self-contained .html file, styled with the app's own stylesheet.
   function downloadReaderPage() {
     if (!readerData) return;
-    var title = readerData.citation;
     // An English name: a Hebrew file name is lost in some browsers' downloads.
     var fileName = readerData.tractate.en.replace(/[^A-Za-z0-9]+/g, "_") + "_" + readerData.daf + readerData.amud + ".html";
+    downloadPage(readerPageEl, readerData.citation, fileName, readerDownloadBtn);
+  }
+
+  // `source`'s content as a file, with its title; `button` shows if that fails.
+  // With `plain`, the buttons and boxes in it are dropped: they do nothing in a file.
+  function downloadPage(source, title, fileName, button, plain) {
     fetch("styles.css").then(function (response) {
       if (!response.ok) throw new Error("css " + response.status);
       return response.text();
@@ -1809,14 +1855,16 @@
       doc.documentElement.dir = "rtl";
       doc.head.appendChild(doc.createElement("meta")).setAttribute("charset", "utf-8");
       doc.head.appendChild(doc.createElement("style")).textContent = css;
-      var page = readerPageEl.cloneNode(true);
+      var page = source.cloneNode(true);
       page.removeAttribute("id");
+      page.hidden = false;
+      if (plain) page.querySelectorAll("button, input").forEach(function (control) { control.remove(); });
       page.querySelectorAll("details").forEach(function (details) { details.setAttribute("open", ""); });
       doc.body.appendChild(page);
       downloadFile(fileName, "<!doctype html>\n" + doc.documentElement.outerHTML);
     }).catch(function () {
-      readerDownloadBtn.textContent = t(locale, "reader.downloadFailed");
-      setTimeout(function () { readerDownloadBtn.textContent = t(locale, "reader.download"); }, 3000);
+      button.textContent = t(locale, "reader.downloadFailed");
+      setTimeout(function () { button.textContent = t(locale, "reader.download"); }, 3000);
     });
   }
 
@@ -1827,6 +1875,148 @@
       syncSaveButton();
     }).catch(function () { readerToolsEl.hidden = true; });
   }
+
+  // --- Saved searches ----------------------------------------------------
+  //
+  // The same for the Search tab: the results on screen, with the AI answer if one was asked
+  // for, can be saved, are remembered as recent, and download as a file. A search is kept as
+  // the response it got, so it shows again with no connection ("show more" still needs one).
+
+  var savingSearch = false; // a save or un-save of the results is in progress
+  var searchToolsEl = document.getElementById("search-tools");
+  var searchSaveBtn = document.getElementById("search-save");
+  var searchDownloadBtn = document.getElementById("search-download");
+  var searchSavedEl = document.getElementById("search-saved");
+  var searchSavedPanel = document.getElementById("search-saved-panel");
+
+  function searchSavedKey(query, snapshot) {
+    return "search|" + query + "|" + JSON.stringify([snapshot.tractate || "", snapshot.book || "", snapshot.before, snapshot.after]);
+  }
+
+  function searchItem(kept) {
+    var query = lastSearchQuery;
+    return {
+      id: searchSavedKey(query, lastSnapshot),
+      kind: "search",
+      kept: kept,
+      title: query,
+      savedAt: Date.now(),
+      query: query,
+      data: lastSearchData,
+      snapshot: lastSnapshot,
+      answer: searchAnswer,
+    };
+  }
+
+  // Remember the results just shown, as a recent search; a saved one keeps its saved state and
+  // date (an AI answer belongs to the results it was asked about, so a new run has none).
+  function rememberRecentSearch() {
+    if (!lastSearchData) return;
+    var fresh = searchItem(false);
+    savedRequest("readwrite", function (store) {
+      var read = store.get(fresh.id);
+      read.onsuccess = function () {
+        var existing = read.result;
+        if (existing) {
+          fresh.kept = existing.kept;
+          if (existing.kept) fresh.savedAt = existing.savedAt;
+        }
+        store.put(fresh);
+      };
+      return read;
+    }).then(pruneRecent).then(renderSearchSavedList).catch(function () { /* nothing is remembered */ });
+  }
+
+  function renderSearchSavedList() {
+    savedAll().then(function (items) {
+      fillSavedPanel(searchSavedPanel, items, "search", openSavedSearch, function () {
+        renderSearchSavedList();
+        syncSearchSaveButton();
+      });
+    }).catch(function () {});
+  }
+
+  function syncSearchSaveButton() {
+    searchSaveBtn.disabled = !lastSearchData;
+    searchDownloadBtn.disabled = !lastSearchData;
+    if (!lastSearchData) {
+      searchSaveBtn.setAttribute("aria-pressed", "false");
+      searchSaveBtn.textContent = t(locale, "reader.save");
+      return;
+    }
+    var id = searchItem(false).id;
+    savedAll().then(function (items) {
+      var saved = items.some(function (item) { return item.id === id && item.kept; });
+      searchSaveBtn.setAttribute("aria-pressed", saved ? "true" : "false");
+      searchSaveBtn.textContent = t(locale, saved ? "reader.saved" : "reader.save");
+    }).catch(function () {});
+  }
+
+  // Save, or un-save, the results on screen. Whether it is saved already is read in the same
+  // transaction as the write, not taken from the button, which may not have caught up.
+  function toggleSavedSearch() {
+    if (!lastSearchData || inFlight || savingSearch) return;
+    savingSearch = true;
+    var fresh = searchItem(true);
+    savedRequest("readwrite", function (store) {
+      var read = store.get(fresh.id);
+      read.onsuccess = function () {
+        var wasSaved = Boolean(read.result && read.result.kept);
+        fresh.kept = !wasSaved;
+        store.put(fresh);
+      };
+      return read;
+    }).then(pruneRecent).then(function () {
+      syncSearchSaveButton();
+      renderSearchSavedList();
+    }).catch(function () {
+      searchSaveBtn.textContent = t(locale, "reader.saveFailed");
+    }).then(function () { savingSearch = false; });
+  }
+
+  // Show kept results from the device, whether or not there is a connection.
+  function openSavedSearch(item) {
+    if (inFlight) inFlight.abort();
+    showView("search");
+    input.value = item.query;
+    autosizeInput();
+    lastSearchData = item.data;
+    lastSnapshot = item.snapshot;
+    lastSearchQuery = item.query;
+    searchAnswer = item.answer || null;
+    searchShowingSaved = true;
+    render(item.data, item.snapshot);
+    results.setAttribute("aria-busy", "false");
+    // No "#q=": back, forward or a reload would run that search live and replace the saved copy.
+    history.pushState(null, "", location.pathname + location.search);
+    searchSavedEl.open = false;
+    syncSearchSaveButton();
+    syncClearButton();
+    results.scrollIntoView({ block: "start" });
+  }
+
+  function downloadSearch() {
+    if (!lastSearchData || inFlight) return;
+    var now = new Date();
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    var stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + "_" + pad(now.getHours()) + pad(now.getMinutes());
+    downloadPage(results, lastSearchQuery, "search_" + stamp + ".html", searchDownloadBtn, true);
+  }
+
+  function syncSearchTools() {
+    savedDb().then(function () {
+      searchToolsEl.hidden = false;
+      renderSearchSavedList();
+      syncSearchSaveButton();
+    }).catch(function () { searchToolsEl.hidden = true; });
+  }
+
+  searchSaveBtn.addEventListener("click", toggleSavedSearch);
+  searchDownloadBtn.addEventListener("click", downloadSearch);
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest("#search-saved")) searchSavedEl.open = false;
+  });
+  syncSearchTools();
 
   // The commentaries that stand in a column beside the Gemara in צורת הדף, as in the print.
   var PRINTED_COLUMNS = ["rashi", "tosafot"];
