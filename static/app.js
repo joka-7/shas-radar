@@ -32,6 +32,7 @@
   var submit = document.getElementById("submit");
   var clearBtn = document.getElementById("clear");
   var results = document.getElementById("results");
+  var searchHeadEl = document.getElementById("search-head");
   var toastEl = document.getElementById("toast");
   var wakingEl = document.getElementById("waking");
   var tractateSelect = document.getElementById("tractate");
@@ -1254,6 +1255,7 @@
     syncReaderCommentaries();
     if (readerTractates) syncReaderTools();
     syncSearchTools();
+    setStaticToolLabels();
     if (readerData) renderReaderPage(readerData);
 
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
@@ -1515,6 +1517,7 @@
   var readerCommentariesEl = document.getElementById("reader-commentaries");
   var readerCommentariesPanel = document.getElementById("reader-commentaries-panel");
   var readerPageEl = document.getElementById("reader-page");
+  var readerCitationEl = document.getElementById("reader-citation");
   var readerToolsEl = document.getElementById("reader-tools");
   var readerSaveBtn = document.getElementById("reader-save");
   var readerDownloadBtn = document.getElementById("reader-download");
@@ -1716,15 +1719,17 @@
   }
 
   function syncSaveButton() {
+    readerSaveBtn.disabled = !readerData;
+    readerDownloadBtn.disabled = !readerData;
     if (!readerData) {
       readerSaveBtn.setAttribute("aria-pressed", "false");
-      readerSaveBtn.textContent = t(locale, "reader.save");
+      setSaveLabel(readerSaveBtn, false);
       return;
     }
     savedAll().then(function (items) {
       var saved = items.some(function (item) { return item.id === savedKey(readerData) && item.kept; });
       readerSaveBtn.setAttribute("aria-pressed", saved ? "true" : "false");
-      readerSaveBtn.textContent = t(locale, saved ? "reader.saved" : "reader.save");
+      setSaveLabel(readerSaveBtn, saved);
     }).catch(function () {});
   }
 
@@ -1752,7 +1757,7 @@
       syncSaveButton();
       renderSavedList();
     }).catch(function () {
-      readerSaveBtn.textContent = t(locale, "reader.saveFailed");
+      flashFailed(readerSaveBtn, "reader.saveFailed", syncSaveButton);
     }).then(function () { savingNow = false; });
   }
 
@@ -1769,15 +1774,59 @@
     readerData = data;
     if (readerTractates) syncReaderPickers(); // the list is not there when the server cannot be reached
     renderReaderPage(data);
+    syncSaveButton();
     readerPageEl.setAttribute("aria-busy", "false");
     history.pushState(null, "", readerHash(readerPosition));
     readerSavedEl.open = false;
     readerEl.scrollIntoView({ block: "start" });
   }
 
+  // An icon button has no text of its own: its label is for screen readers and a tooltip.
+  function setToolLabel(button, key) {
+    var label = t(locale, key);
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  }
+
+  // Say a tool failed for a few seconds, then run `restore` to put its label back.
+  // The message is also a toast: a tooltip does not show on a phone, and a colour is not enough.
+  function flashFailed(button, key, restore) {
+    setToolLabel(button, key);
+    toast(t(locale, key));
+    button.classList.add("failed");
+    clearTimeout(button.failedTimer);
+    button.failedTimer = setTimeout(function () {
+      button.classList.remove("failed");
+      if (restore) restore();
+    }, 3000);
+  }
+
+  // The save button's name stays "Save" and aria-pressed says whether it is saved; the
+  // tooltip says which.
+  function setSaveLabel(button, saved) {
+    button.setAttribute("aria-label", t(locale, "reader.save"));
+    button.title = t(locale, saved ? "reader.saved" : "reader.save");
+  }
+
+  // The labels of the buttons whose text never changes, in the current language.
+  function setStaticToolLabels() {
+    [[readerDownloadBtn, readerSavedEl], [searchDownloadBtn, searchSavedEl]].forEach(function (pair) {
+      setToolLabel(pair[0], "reader.download");
+      setToolLabel(pair[1].querySelector("summary"), "reader.savedList");
+    });
+  }
+
+  // The badge on a saved list: how many items of this kind the visitor saved.
+  function setSavedCount(badge, items, kind) {
+    var count = items.filter(function (item) { return item.kept && (item.kind || "daf") === kind; }).length;
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+  }
+
   // The saved items of one kind, "Saved" then "Recently read", into a panel.
-  function fillSavedPanel(panel, items, kind, open, refresh) {
+  function fillSavedPanel(panel, badge, items, kind, open, refresh) {
     panel.textContent = "";
+    setSavedCount(badge, items, kind);
     var groups = [
       ["reader.savedHeading", true],
       [kind === "search" ? "reader.recentSearchesHeading" : "reader.recentHeading", false],
@@ -1814,7 +1863,7 @@
 
   function renderSavedList() {
     savedAll().then(function (items) {
-      fillSavedPanel(readerSavedPanel, items, "daf", openSaved, function () { renderSavedList(); syncSaveButton(); });
+      fillSavedPanel(readerSavedPanel, readerSavedEl.querySelector(".badge"), items, "daf", openSaved, function () { renderSavedList(); syncSaveButton(); });
     }).catch(function () {});
   }
 
@@ -1860,17 +1909,26 @@
       page.hidden = false;
       if (plain) page.querySelectorAll("button, input").forEach(function (control) { control.remove(); });
       page.querySelectorAll("details").forEach(function (details) { details.setAttribute("open", ""); });
-      doc.body.appendChild(page);
+      // The title lives beside the page, not in it: put it back above, in the card it sat in.
+      var card = doc.createElement("div");
+      card.className = "reader-card";
+      var h2 = doc.createElement("h2");
+      h2.className = "reader-citation";
+      h2.textContent = title;
+      card.appendChild(h2);
+      card.appendChild(page);
+      doc.body.appendChild(card);
       downloadFile(fileName, "<!doctype html>\n" + doc.documentElement.outerHTML);
     }).catch(function () {
-      button.textContent = t(locale, "reader.downloadFailed");
-      setTimeout(function () { button.textContent = t(locale, "reader.download"); }, 3000);
+      flashFailed(button, "reader.downloadFailed", function () { setToolLabel(button, "reader.download"); });
     });
   }
 
   function syncReaderTools() {
     savedDb().then(function () {
       readerToolsEl.hidden = false;
+      setToolLabel(readerDownloadBtn, "reader.download");
+      setToolLabel(readerSavedEl.querySelector("summary"), "reader.savedList");
       renderSavedList();
       syncSaveButton();
     }).catch(function () { readerToolsEl.hidden = true; });
@@ -1888,6 +1946,7 @@
   var searchDownloadBtn = document.getElementById("search-download");
   var searchSavedEl = document.getElementById("search-saved");
   var searchSavedPanel = document.getElementById("search-saved-panel");
+  var searchTitleEl = document.getElementById("search-title");
 
   function searchSavedKey(query, snapshot) {
     return "search|" + query + "|" + JSON.stringify([snapshot.tractate || "", snapshot.book || "", snapshot.before, snapshot.after]);
@@ -1929,7 +1988,7 @@
 
   function renderSearchSavedList() {
     savedAll().then(function (items) {
-      fillSavedPanel(searchSavedPanel, items, "search", openSavedSearch, function () {
+      fillSavedPanel(searchSavedPanel, searchSavedEl.querySelector(".badge"), items, "search", openSavedSearch, function () {
         renderSearchSavedList();
         syncSearchSaveButton();
       });
@@ -1937,18 +1996,20 @@
   }
 
   function syncSearchSaveButton() {
+    searchTitleEl.textContent = lastSearchQuery;
+    searchTitleEl.hidden = !lastSearchQuery;
     searchSaveBtn.disabled = !lastSearchData;
     searchDownloadBtn.disabled = !lastSearchData;
     if (!lastSearchData) {
       searchSaveBtn.setAttribute("aria-pressed", "false");
-      searchSaveBtn.textContent = t(locale, "reader.save");
+      setSaveLabel(searchSaveBtn, false);
       return;
     }
     var id = searchItem(false).id;
     savedAll().then(function (items) {
       var saved = items.some(function (item) { return item.id === id && item.kept; });
       searchSaveBtn.setAttribute("aria-pressed", saved ? "true" : "false");
-      searchSaveBtn.textContent = t(locale, saved ? "reader.saved" : "reader.save");
+      setSaveLabel(searchSaveBtn, saved);
     }).catch(function () {});
   }
 
@@ -1970,7 +2031,7 @@
       syncSearchSaveButton();
       renderSearchSavedList();
     }).catch(function () {
-      searchSaveBtn.textContent = t(locale, "reader.saveFailed");
+      flashFailed(searchSaveBtn, "reader.saveFailed", syncSearchSaveButton);
     }).then(function () { savingSearch = false; });
   }
 
@@ -2006,6 +2067,8 @@
   function syncSearchTools() {
     savedDb().then(function () {
       searchToolsEl.hidden = false;
+      setToolLabel(searchDownloadBtn, "reader.download");
+      setToolLabel(searchSavedEl.querySelector("summary"), "reader.savedList");
       renderSearchSavedList();
       syncSearchSaveButton();
     }).catch(function () { searchToolsEl.hidden = true; });
@@ -2139,6 +2202,7 @@
     var reading = name === "read";
     form.hidden = reading;
     results.hidden = reading;
+    searchHeadEl.hidden = reading;
     readerEl.hidden = !reading;
     viewTabs.querySelectorAll(".view-tab").forEach(function (tab) {
       var active = tab.dataset.view === name;
@@ -2511,7 +2575,7 @@
   function renderReaderPage(data) {
     readerPageEl.textContent = "";
     syncReaderPrintLink(data);
-    readerPageEl.appendChild(hebrewSpan("h2", "reader-citation", data.citation));
+    readerCitationEl.textContent = data.citation;
     if (readerShowingSaved) readerPageEl.appendChild(el("p", "attribution", t(locale, "reader.savedCopy")));
     // A server that predates plainSegments gets the vocalized view, not a blank page.
     if (effectiveReaderView() === "page" && Array.isArray(data.plainSegments)) {
@@ -2547,6 +2611,7 @@
     readerShowingSaved = false;
     readerPosition = position;
     readerData = null;
+    if (readerToolsEl) syncSaveButton();
     syncReaderPickers();
     syncReaderNav(null);
     syncReaderPrintLink(null);
@@ -2597,6 +2662,7 @@
   }
 
   function showReaderSkeleton() {
+    readerCitationEl.textContent = "";
     readerPageEl.setAttribute("aria-busy", "true");
     readerPageEl.textContent = "";
     var skeleton = el("div", "skeleton");
