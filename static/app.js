@@ -2080,6 +2080,9 @@
     if (!event.target.closest("#search-saved")) searchSavedEl.open = false;
   });
   syncSearchTools();
+  // The reader's tools too, now: they need the device, not the server, and the server may
+  // take a minute to wake.
+  syncReaderTools();
 
   // The commentaries that stand in a column beside the Gemara in צורת הדף, as in the print.
   var PRINTED_COLUMNS = ["rashi", "tosafot"];
@@ -2707,6 +2710,7 @@
   // the first page of the first tractate.
   function openReader(position, pushHash) {
     showView("read");
+    syncReaderTools();
     if (!readerTractates) showReaderLoading();
     ensureReaderTractates()
       .then(function () {
@@ -2717,6 +2721,8 @@
         syncReaderCommentaries();
         syncReaderTools();
         populateReaderTractates();
+        // A saved page opened while the server was waking stays: do not replace it now.
+        if (readerShowingSaved) return;
         showReaderPage(start, pushHash);
       })
       .catch(function () {

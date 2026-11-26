@@ -165,7 +165,9 @@ The Read tab's card has three icon buttons in its header, beside the page's titl
 **bookmark** to save it (it fills when saved), a **download** arrow, and a **list** of saved
 items with a count of the ones saved. The buttons have no text, so each carries an
 `aria-label` and a tooltip in the page's language; a failed save or download turns its
-button red for a few seconds.
+button red for a few seconds. The icons are drawn as soon as the page loads, not when the server
+answers, so a saved page can be opened while a sleeping server is still waking (up to a
+minute); a page opened that way is not replaced when the server answers.
 
 - **Save** keeps the page on screen in this browser's IndexedDB (database `shas-radar`,
   store `saved`), with the commentaries ticked for it that loaded. Nothing is sent anywhere.
