@@ -273,6 +273,7 @@ the allowlist stay a plain list rather than a stricter per-request check.
 | `GET /api/health` | — | `status`, `words`, `tractates`, `source`, `license`, `books`, `loadedBooks`, `commit` (the counts describe the default book) |
 | `GET /api/books` | — | `default`, `books[]` of `id`, `he`, `en`, `citationScheme`, `tractates`, `source`, `textSource`, `license`, `loaded`, `commentary` (the id of the enabled book that comments on it, or `null`), `commentaries[]` of `id`, `he`, `en` (every enabled commentary on its pages, Rashi first); read from each dataset's header, so listing never loads a book |
 | `GET /api/tractates` | `book` | That book's tractate list, grouped by seder; each has `pageRange` (`{first, last}` as `{daf, amud}`, or `null` for a book not numbered by daf) |
+| `GET /api/dafyomi` | `month` (`YYYY-MM`, required; 400 `month_out_of_range` before 2012-08) | `month`, `days[]` of `date`, `tractate` (`he`, `en`), `daf`, `inBavli` (false for Shekalim, Kinnim and Middot, which the cycle reads but the app has no Bavli page for) — see `app/dafyomi.py` |
 | `GET /api/daf` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book` | `book`, `tractate`, `daf`, `amud`, `citation`, `sefariaUrl`, `license`, `segments[]` (vocalized paragraphs), `plainSegments[]` (the same as the print has it: no niqqud, no modern punctuation, via `printed_text`, for the page layout), `printUrl` (HebrewBooks' PDF address for the page, or `null` for Tamid; see the note in `app/reader.py` on which numbers are confirmed), `previous` and `next` (`{daf, amud}` or `null`) |
 | `GET /api/commentary` | `tractate` (Hebrew name), `daf`, `amud` (`a`/`b`), `book`, `commentary` (optional: `rashi`, the default, or an enabled display-only id) | `book`, `tractate`, `citation`, `sefariaUrl`, `license` (the commentary tractate's own), `comments[]` of `ref`, `text`, `plain` (`text` as the print has it, via `printed_text`), `sefariaUrl`; a page with no Rashi gives `comments: []`. For a display-only commentary: no `plain`, `sefariaUrl` is `null`, `text` may carry `<b>`, `<small>` and `<big>`, and `aligned` says whether its paragraph numbers can be trusted |
 | `GET /api/search` | `q`, `before`, `after`, `limit`, `tractate`, `offset`, `book` | `before`, `after`, `groups[]`; each result carries `book` and `ref` |
@@ -291,7 +292,7 @@ and rendered by `http_exception_handler`:
 ```
 
 `code` values: `empty`, `too_many`, `invalid_query`, `unknown_book`, `no_commentary`,
-`unknown_tractate`, `not_paged`, `page_not_found`, `unknown_commentary`. The frontend's `error.code.*` lookup keys off these. The
+`unknown_tractate`, `not_paged`, `page_not_found`, `unknown_commentary`, `month_out_of_range`. The frontend's `error.code.*` lookup keys off these. The
 AI analysis's own codes (`no_credential`, `own_key_failed`,
 `provider_error`) are raised in the browser, not by the server.
 
@@ -337,6 +338,7 @@ Arrange–Act–Assert throughout, no mocking of the corpus itself.
 | `tests/test_commentary.py` | A page's comments on the real Bavli and Rashi data, the pages and tractates that have none, and the errors; a display-only commentary's comments, whether a page lines up, and the dispatch between Rashi and the others |
 | `tests/test_commentary_store.py` | Shaping a tractate member, reading a tractate from the real archive and the cache, and enabling commentaries from the environment |
 | `tests/test_reader.py` | A page's text and its neighbours at the start, middle and end of a tractate (including one that begins on side b), the page range, every error, and the `/api/daf` and `/api/tractates` JSON on the real data |
+| `tests/test_dafyomi.py` | The cycle length and tractate names against the Bavli the app holds, the daf on the cycle's published boundary dates, every month length, and the `/api/dafyomi` shape and errors |
 | `tests/test_books.py` | The registry and `ENABLED_BOOKS` parsing, per-book lazy loading under a lock, and every shipped dataset (header matches corpus, unique tractate names, no markup or entities left in the text) |
 | `tests/test_build_dataset.py` | The build script's pure helpers: cleaning (with and without markup), the nested-text walk, table-of-contents lookup, and writing the zip |
 | `tests/test_ai.py` | `build_prompt` (language, group/result/word caps, history order and cap) and `POST /api/analyze/prompt` (success, invalid bodies including a visitor key, and that the old server-side AI endpoints are gone) — pure, no network |

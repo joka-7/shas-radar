@@ -37,6 +37,7 @@
       <div class="view-tabs" id="view-tabs" role="group" data-i18n-aria-label="view.ariaLabel" aria-label="תצוגה">
         <button type="button" class="view-tab active" data-view="search" aria-pressed="true" data-i18n="view.search">חיפוש</button>
         <button type="button" class="view-tab" data-view="read" aria-pressed="false" data-i18n="view.read">לימוד</button>
+        <button type="button" class="view-tab" data-view="dafyomi" aria-pressed="false" data-i18n="view.dafyomi">דף יומי</button>
       </div>
     </div>
   </header>
@@ -123,6 +124,16 @@
     </div>
 
     <section id="results" class="results" aria-live="polite" aria-busy="false"></section>
+
+    <section class="dafyomi" id="dafyomi" hidden>
+      <div class="dafyomi-head">
+        <button type="button" class="copy" id="dafyomi-prev" data-i18n="dafyomi.prev">החודש הקודם</button>
+        <button type="button" class="copy" id="dafyomi-today" data-i18n="dafyomi.today">החודש</button>
+        <button type="button" class="copy" id="dafyomi-next" data-i18n="dafyomi.next">החודש הבא</button>
+      </div>
+      <h2 class="dafyomi-title" id="dafyomi-title" aria-live="polite"></h2>
+      <div class="dafyomi-grid" id="dafyomi-grid"></div>
+    </section>
 
     <section class="reader" id="reader" hidden>
       <div class="reader-controls">
