@@ -160,8 +160,12 @@ Three views, chosen with the buttons above the page (the choice is remembered):
 
 ### Saving, recent pages, saved searches and download
 
-The Read tab has a **"שמירה"** button, a **"הורדה"** button and a **"שמורים"** list
-(`reader-tools` in `static/index.html`, the "Saved pages" part of `static/app.js`).
+The Read tab's card has three icon buttons in its header, beside the page's title
+(`reader-head` in `static/index.html`, the "Saved pages" part of `static/app.js`): a
+**bookmark** to save it (it fills when saved), a **download** arrow, and a **list** of saved
+items with a count of the ones saved. The buttons have no text, so each carries an
+`aria-label` and a tooltip in the page's language; a failed save or download turns its
+button red for a few seconds.
 
 - **Save** keeps the page on screen in this browser's IndexedDB (database `shas-radar`,
   store `saved`), with the commentaries ticked for it that loaded. Nothing is sent anywhere.
@@ -179,7 +183,8 @@ The Read tab has a **"שמירה"** button, a **"הורדה"** button and a **"�
 Checked by driving a browser (save, list, download, then the connection cut and a saved page
 opened); the front end has no unit tests.
 
-The **Search** tab has the same three controls above the results (`search-tools`). A search
+The **Search** tab has the same three icons above the results, beside the query
+(`search-head`). A search
 is kept as the response it got, with the AI answer if one was asked for, so it shows again
 with no connection (the "show more" buttons still need one); recent searches are kept as well
 (the last 20 searches and the last 20 pages are counted apart), and the file is
