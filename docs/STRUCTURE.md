@@ -23,6 +23,7 @@ shas-radar/
 │   ├── commentary.py        # A commentary's comments on one page of the book it is keyed to.
 │   ├── commentary_store.py  # Commentaries shown beside a page but never searched: Steinsaltz and Tosafot.
 │   ├── corpus.py            # Loading and indexing the Talmud corpus.
+│   ├── dafyomi.py           # The Daf Yomi calendar: which daf of the Bavli the worldwide cycle reaches on a date.
 │   ├── hebrew.py            # Hebrew/Aramaic text normalization primitives.
 │   ├── main.py              # FastAPI application.
 │   ├── reader.py            # Reading one page of the Bavli: its text, and the pages on either side.
@@ -84,6 +85,7 @@ shas-radar/
 │   ├── test_commentary.py        # Tests for app/commentary.py: a commentary's comments on one page, on the real data.
 │   ├── test_commentary_store.py  # Tests for app/commentary_store.py: display-only commentaries, read a tractate at a time.
 │   ├── test_corpus.py            # Tests for app/corpus.py: the compact word index.
+│   ├── test_dafyomi.py           # Tests for app/dafyomi.py and /api/dafyomi: the Daf Yomi calendar.
 │   ├── test_hebrew.py            # Tests for the Hebrew/Aramaic normalization primitives.
 │   ├── test_manifest.py          # Tests for static/manifest.json: what the installed app is allowed to do.
 │   ├── test_reader.py            # Tests for app/reader.py: reading one page of the Bavli, on the real data.

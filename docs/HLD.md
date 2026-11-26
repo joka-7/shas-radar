@@ -56,6 +56,7 @@ flowchart TD
     Search["app/search.py<br/>matching + KWIC shaping"]
     Books["app/books.py<br/>which books are enabled and loaded"]
     Reader["app/reader.py<br/>one page's text and its neighbours"]
+    DafYomi["app/dafyomi.py<br/>the daf of the worldwide cycle on a date"]
     Store["app/commentary_store.py<br/>display-only commentary, a tractate at a time"]
     Citation["app/citation.py<br/>locations and citation schemes"]
     Corpus["app/corpus.py<br/>Tractate model + word index"]
@@ -72,6 +73,7 @@ flowchart TD
     Main --> Search
     Main --> Books
     Main -->|"GET /api/daf"| Reader
+    Main -->|"GET /api/dafyomi"| DafYomi
     Reader --> Books
     Reader --> Corpus
     Main -->|"GET /api/commentary?commentary=steinsaltz"| Store

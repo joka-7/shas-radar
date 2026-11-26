@@ -1257,6 +1257,7 @@
     syncSearchTools();
     setStaticToolLabels();
     if (readerData) renderReaderPage(readerData);
+    renderDafyomi();
 
     // Tells the mounted <ModelPicker> island to relabel itself -- it has no
     // other way to learn about a locale switch (see frontend/src/main.tsx).
@@ -2240,11 +2241,12 @@
   }
 
   function showView(name) {
-    var reading = name === "read";
-    form.hidden = reading;
-    results.hidden = reading;
-    searchHeadEl.hidden = reading;
-    readerEl.hidden = !reading;
+    var searching = name === "search";
+    form.hidden = !searching;
+    results.hidden = !searching;
+    searchHeadEl.hidden = !searching;
+    readerEl.hidden = name !== "read";
+    dafyomiEl.hidden = name !== "dafyomi";
     viewTabs.querySelectorAll(".view-tab").forEach(function (tab) {
       var active = tab.dataset.view === name;
       tab.classList.toggle("active", active);
@@ -2783,7 +2785,9 @@
     if (!tab) return;
     if (tab.dataset.view === "read") {
       openReader(null, true);
-    } else if (!readerEl.hidden) {
+    } else if (tab.dataset.view === "dafyomi") {
+      openDafyomi(true);
+    } else if (!readerEl.hidden || !dafyomiEl.hidden) {
       showView("search");
       history.pushState(null, "", location.pathname + location.search);
     }
@@ -2895,10 +2899,113 @@
     return match ? decodeURIComponent(match[1]) : "";
   }
 
+  // --- Daf Yomi calendar -------------------------------------------------------
+  // A month of the worldwide cycle, one daf a day. A day shows as done once both sides of its
+  // daf are marked in the progress kept by the reader's done button.
+  var dafyomiEl = document.getElementById("dafyomi");
+  var dafyomiTitleEl = document.getElementById("dafyomi-title");
+  var dafyomiGridEl = document.getElementById("dafyomi-grid");
+  var dafyomiData = null; // the last /api/dafyomi response, kept to redraw on a language switch
+  var dafyomiRequest = 0; // a newer month asked for makes an older answer stale
+  var dafyomiMonth = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month from 0
+
+  function dafyomiIso(date) {
+    return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" +
+      String(date.getDate()).padStart(2, "0");
+  }
+
+  function dafyomiLocale() {
+    return locale === "he" ? "he-IL" : locale;
+  }
+
+  function dafyomiDayCell(day, done, today) {
+    var opens = day.inBavli;
+    var cell = el(opens ? "button" : "div", "dafyomi-day");
+    if (opens) cell.type = "button";
+    else cell.title = t(locale, "dafyomi.notInBavli");
+    if (day.date === today) cell.classList.add("today");
+    var isDone = opens && done[day.tractate.he + "|" + day.daf + "a"] && done[day.tractate.he + "|" + day.daf + "b"];
+    if (isDone) cell.classList.add("done");
+    var number = el("span", "dafyomi-num", String(Number(day.date.slice(8))));
+    if (isDone) number.appendChild(el("span", "dafyomi-done", " ✓"));
+    cell.appendChild(number);
+    var name = locale === "he" ? day.tractate.he : day.tractate.en;
+    cell.appendChild(hebrewSpan("span", "dafyomi-daf", name + " " + day.daf));
+    if (opens) {
+      cell.addEventListener("click", function () {
+        openReader({ tractate: day.tractate.he, daf: day.daf, amud: "a" }, true);
+      });
+    }
+    return cell;
+  }
+
+  function renderDafyomi() {
+    if (!dafyomiData) return;
+    var first = new Date(dafyomiMonth.year, dafyomiMonth.month, 1);
+    dafyomiTitleEl.textContent = first.toLocaleDateString(dafyomiLocale(), { month: "long", year: "numeric" });
+    dafyomiGridEl.textContent = "";
+    for (var weekday = 0; weekday < 7; weekday++) {
+      // 2023-01-01 was a Sunday; the grid runs Sunday to Saturday.
+      var label = new Date(2023, 0, 1 + weekday).toLocaleDateString(dafyomiLocale(), { weekday: "short" });
+      dafyomiGridEl.appendChild(el("span", "dafyomi-weekday", label));
+    }
+    for (var blank = 0; blank < first.getDay(); blank++) dafyomiGridEl.appendChild(el("span"));
+    var done = readDone();
+    var today = dafyomiIso(new Date());
+    dafyomiData.days.forEach(function (day) {
+      dafyomiGridEl.appendChild(dafyomiDayCell(day, done, today));
+    });
+  }
+
+  function showDafyomi() {
+    var request = ++dafyomiRequest;
+    dafyomiData = null;
+    dafyomiGridEl.textContent = "";
+    var month = dafyomiMonth.year + "-" + String(dafyomiMonth.month + 1).padStart(2, "0");
+    apiFetch("/api/dafyomi?month=" + month)
+      .then(function (response) {
+        if (!response.ok) throw new Error("dafyomi " + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        if (request !== dafyomiRequest) return;
+        dafyomiData = data;
+        renderDafyomi();
+      })
+      .catch(function () {
+        if (request !== dafyomiRequest) return;
+        dafyomiTitleEl.textContent = "";
+        dafyomiGridEl.appendChild(notice(t(locale, "error.title"), t(locale, "dafyomi.error"), "error"));
+      });
+  }
+
+  function openDafyomi(pushHash) {
+    showView("dafyomi");
+    if (pushHash && location.hash !== "#/dafyomi") history.pushState(null, "", "#/dafyomi");
+    showDafyomi();
+  }
+
+  function shiftDafyomiMonth(months) {
+    var moved = new Date(dafyomiMonth.year, dafyomiMonth.month + months, 1);
+    dafyomiMonth = { year: moved.getFullYear(), month: moved.getMonth() };
+    showDafyomi();
+  }
+
+  document.getElementById("dafyomi-prev").addEventListener("click", function () { shiftDafyomiMonth(-1); });
+  document.getElementById("dafyomi-next").addEventListener("click", function () { shiftDafyomiMonth(1); });
+  document.getElementById("dafyomi-today").addEventListener("click", function () {
+    dafyomiMonth = { year: new Date().getFullYear(), month: new Date().getMonth() };
+    showDafyomi();
+  });
+
   window.addEventListener("popstate", function () {
     var position = readerPositionFromHash();
     if (position) {
       openReader(position, false);
+      return;
+    }
+    if (location.hash === "#/dafyomi") {
+      openDafyomi(false);
       return;
     }
     showView("search");
@@ -3057,5 +3164,6 @@
   var initialPosition = readerPositionFromHash();
   var initial = fromHash();
   if (initialPosition) openReader(initialPosition, false);
+  else if (location.hash === "#/dafyomi") openDafyomi(false);
   else if (initial) runSearch(initial, false);
 })();

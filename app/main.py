@@ -29,6 +29,7 @@ from .books import DEFAULT_BOOK, BookLibrary, UnknownBookError
 from .commentary import NoCommentaryError, UnknownTractateError, commentary_for_page
 from .commentary_store import CommentaryStores, UnknownCommentaryError
 from .corpus import Corpus
+from .dafyomi import FIRST_SUPPORTED_DAY, month_days
 from .reader import (
     NotPagedBookError,
     PageNotFoundError,
@@ -319,6 +320,37 @@ def tractates_endpoint(
             }
             for t in corpus.tractates
         ]
+    }
+
+
+@app.get("/api/dafyomi")
+def dafyomi_endpoint(
+    month: str = Query(
+        ..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="The Gregorian month, YYYY-MM"
+    ),
+) -> dict[str, Any]:
+    """The Daf Yomi of every day of a month, for the calendar."""
+    year, number = (int(part) for part in month.split("-"))
+    try:
+        days = month_days(year, number)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=error("month_out_of_range", f"החישוב זמין מ-{FIRST_SUPPORTED_DAY}"),
+        ) from None
+    bavli = library.corpus(DEFAULT_BOOK)
+    return {
+        "month": month,
+        "days": [
+            {
+                "date": day.date.isoformat(),
+                "tractate": {"he": day.tractate.he, "en": day.tractate.en},
+                "daf": day.daf,
+                # Shekalim, Kinnim and Middot are in the cycle but are not Bavli pages here.
+                "inBavli": bavli.tractate_by_name(day.tractate.he) is not None,
+            }
+            for day in days
+        ],
     }
 
 
