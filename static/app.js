@@ -2193,6 +2193,37 @@
     return page.daf * 2 + (page.amud === "b" ? 1 : 0);
   }
 
+  var GEMATRIA = [
+    [400, "ת"], [300, "ש"], [200, "ר"], [100, "ק"], [90, "צ"], [80, "פ"], [70, "ע"], [60, "ס"],
+    [50, "נ"], [40, "מ"], [30, "ל"], [20, "כ"], [10, "י"], [9, "ט"], [8, "ח"], [7, "ז"], [6, "ו"],
+    [5, "ה"], [4, "ד"], [3, "ג"], [2, "ב"], [1, "א"],
+  ];
+
+  // The same numerals the citations use (app/hebrew.py he_number): 15 and 16
+  // are ט״ו and ט״ז, and a gershayim goes before the last of two or more letters.
+  function hebrewNumeral(value) {
+    var letters = "";
+    var remainder = value;
+    while (remainder > 0) {
+      if (remainder === 15 || remainder === 16) {
+        letters += remainder === 15 ? "טו" : "טז";
+        break;
+      }
+      for (var i = 0; i < GEMATRIA.length; i++) {
+        if (remainder >= GEMATRIA[i][0]) {
+          letters += GEMATRIA[i][1];
+          remainder -= GEMATRIA[i][0];
+          break;
+        }
+      }
+    }
+    return letters.length === 1 ? letters : letters.slice(0, -1) + "״" + letters.slice(-1);
+  }
+
+  function dafLabel(daf) {
+    return locale === "he" ? hebrewNumeral(daf) : String(daf);
+  }
+
   function pageInRange(info, daf, amud) {
     var number = pageNumber({ daf: daf, amud: amud });
     return number >= pageNumber(info.pageRange.first) && number <= pageNumber(info.pageRange.last);
@@ -2254,7 +2285,7 @@
       for (var daf = info.pageRange.first.daf; daf <= info.pageRange.last.daf; daf++) {
         var option = document.createElement("option");
         option.value = String(daf);
-        option.textContent = String(daf);
+        option.textContent = dafLabel(daf);
         readerDafSelect.appendChild(option);
       }
       readerDafSelect.value = String(readerPosition.daf);
