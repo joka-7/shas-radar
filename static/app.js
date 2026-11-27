@@ -3166,4 +3166,6 @@
   if (initialPosition) openReader(initialPosition, false);
   else if (location.hash === "#/dafyomi") openDafyomi(false);
   else if (initial) runSearch(initial, false);
+  // No link and no search: open where the visitor left off, or at the first page of the Bavli.
+  else openReader(null, false);
 })();

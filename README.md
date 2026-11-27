@@ -125,7 +125,8 @@ buttons. A "פירושים" dropdown ticks the commentaries to show: Rashi (on b
 default), Steinsaltz and Tosafot, each when enabled. While the server is waking, the
 pickers read "Loading…" and the page shows a placeholder instead of empty boxes. The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
 so it can be linked to and the back button steps between pages. The last page
-read is kept in `localStorage`, and the Read tab reopens it. Each Bavli search
+read is kept in `localStorage`, and the Read tab reopens it. Opening the site with no link or search lands there too:
+on the last page read, or Berakhot 2a for a first visit. Each Bavli search
 result has an "Open in reader" link to its page. The text comes from
 `GET /api/daf`; the other books are not numbered by daf, so they have no reader
 yet.
