@@ -2930,7 +2930,7 @@
     if (isDone) number.appendChild(el("span", "dafyomi-done", " ✓"));
     cell.appendChild(number);
     var name = locale === "he" ? day.tractate.he : day.tractate.en;
-    cell.appendChild(hebrewSpan("span", "dafyomi-daf", name + " " + day.daf));
+    cell.appendChild(hebrewSpan("span", "dafyomi-daf", name + " " + dafLabel(day.daf)));
     if (opens) {
       cell.addEventListener("click", function () {
         openReader({ tractate: day.tractate.he, daf: day.daf, amud: "a" }, true);
