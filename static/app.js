@@ -2930,7 +2930,7 @@
     if (isDone) number.appendChild(el("span", "dafyomi-done", " ✓"));
     cell.appendChild(number);
     var name = locale === "he" ? day.tractate.he : day.tractate.en;
-    cell.appendChild(hebrewSpan("span", "dafyomi-daf", name + " " + day.daf));
+    cell.appendChild(hebrewSpan("span", "dafyomi-daf", name + " " + dafLabel(day.daf)));
     if (opens) {
       cell.addEventListener("click", function () {
         openReader({ tractate: day.tractate.he, daf: day.daf, amud: "a" }, true);
@@ -3166,4 +3166,6 @@
   if (initialPosition) openReader(initialPosition, false);
   else if (location.hash === "#/dafyomi") openDafyomi(false);
   else if (initial) runSearch(initial, false);
+  // No link and no search: open where the visitor left off, or at the first page of the Bavli.
+  else openReader(null, false);
 })();
