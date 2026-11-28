@@ -32,4 +32,8 @@
   }
 
   window.API_BASE = override !== null ? override : "";
+
+  // Az Kavanu, the study tracker that links into this app: "done" is sent back to it. A fixed
+  // address, never one taken from a link, so a crafted link cannot send the visitor elsewhere.
+  window.KAVANU_BASE = "https://kavanu-yahad.vercel.app";
 })();

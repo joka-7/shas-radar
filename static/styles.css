@@ -1304,3 +1304,4 @@ button.dafyomi-day:hover { background: var(--surface-2); }
 .dafyomi-num { font-size: .75rem; color: var(--text-faint); }
 .dafyomi-daf { font-size: .8rem; line-height: 1.25; overflow-wrap: anywhere; }
 .dafyomi-done { color: var(--accent); font-weight: 700; }
+.dafyomi-hebrew { color: var(--text-faint); font-size: .72rem; }

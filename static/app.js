@@ -450,7 +450,7 @@
       return;
     }
     data.comments.forEach(function (comment) {
-      body.appendChild(hebrewSpan("p", "paragraph-text commentary-comment", comment.text));
+      body.appendChild(commentParagraph({ id: "rashi" }, comment));
     });
     if (data.license) {
       body.appendChild(el("p", "attribution", t(locale, "commentary.credit", { license: data.license })));
@@ -1740,7 +1740,68 @@
     readerDoneBtn.setAttribute("aria-pressed", done ? "true" : "false");
     readerDoneBtn.setAttribute("aria-label", t(locale, "reader.done"));
     readerDoneBtn.title = t(locale, done ? "reader.doneMarked" : "reader.done");
+    readerKavanuBtn.hidden = !readKavanuContext() || !readerData;
+    readerKavanuBtn.title = t(locale, "reader.kavanuDone");
   }
+
+  // What "done" means for a page sent back to Az Kavanu: both sides of its daf.
+  function markPageDone(data) {
+    var done = readDone();
+    var when = new Date().toISOString();
+    ["a", "b"].forEach(function (side) {
+      var key = data.tractate.he + "|" + data.daf + side;
+      if (!done[key]) done[key] = when;
+    });
+    try {
+      localStorage.setItem(DONE_STORAGE_KEY, JSON.stringify(done));
+    } catch (err) {
+      /* the mark is not kept here; Az Kavanu still gets it */
+    }
+  }
+
+  // --- Az Kavanu: "done" sent back ------------------------------------------------
+  // Az Kavanu opens a page with ?kavanu=<track>&day=<date>. That is kept for this tab only, and
+  // while it is there the reader offers a button that marks the page done and returns to it.
+  var KAVANU_CONTEXT_KEY = "kavanu-return";
+  var readerKavanuBtn = document.getElementById("reader-kavanu");
+
+  (function keepKavanuContext() {
+    var query = new URLSearchParams(location.search);
+    if (!query.has("kavanu")) return;
+    var track = query.get("kavanu");
+    var day = query.get("day");
+    if (/^[\w:.-]{1,100}$/.test(track) && /^\d{4}-\d{2}-\d{2}$/.test(day || "")) {
+      try {
+        sessionStorage.setItem(KAVANU_CONTEXT_KEY, JSON.stringify({ track: track, day: day }));
+      } catch (err) {
+        /* no return button, nothing else is lost */
+      }
+    }
+    history.replaceState(null, "", location.pathname + location.hash);
+  })();
+
+  function readKavanuContext() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(KAVANU_CONTEXT_KEY));
+      return stored && typeof stored.track === "string" && typeof stored.day === "string" ? stored : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function returnToKavanu() {
+    var context = readKavanuContext();
+    if (!context || !readerData) return;
+    markPageDone(readerData);
+    try {
+      sessionStorage.removeItem(KAVANU_CONTEXT_KEY);
+    } catch (err) {
+      /* the button stays until the tab is closed */
+    }
+    location.href = window.KAVANU_BASE + "/#done=" + encodeURIComponent(context.track) + "&day=" + context.day;
+  }
+
+  readerKavanuBtn.addEventListener("click", returnToKavanu);
 
   function toggleDone() {
     if (!readerData) return;
@@ -2422,17 +2483,13 @@
   }
 
   function commentNodes(commentary, text) {
-    return markupNodes(commentary.id === "tosafot" ? boldOpening(text) : text);
+    return markupNodes(commentary.id === "tosafot" || commentary.id === "rashi" ? boldOpening(text) : text);
   }
 
-  // One comment: Rashi's is plain text; the others carry the markup above.
+  // One comment: the markup above, with the words it opens on in bold.
   function commentParagraph(commentary, comment) {
     var paragraph = hebrewSpan("p", "paragraph-text commentary-comment", null);
-    if (commentary.id === "rashi") {
-      paragraph.textContent = comment.text;
-    } else {
-      commentNodes(commentary, comment.text).forEach(function (node) { paragraph.appendChild(node); });
-    }
+    commentNodes(commentary, comment.text).forEach(function (node) { paragraph.appendChild(node); });
     return paragraph;
   }
 
@@ -2934,6 +2991,9 @@
   var dafyomiData = null; // the last /api/dafyomi response, kept to redraw on a language switch
   var dafyomiRequest = 0; // a newer month asked for makes an older answer stale
   var dafyomiMonth = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month from 0
+  var DAFYOMI_CACHE_KEY = "shas-radar:dafyomi-months";
+  var DAFYOMI_CACHE_MONTHS = 14; // how many months are kept on the device
+  var DAFYOMI_PREFETCH = [-1, 1, 2, 3]; // months around the one shown, fetched for the next launch
 
   function dafyomiIso(date) {
     return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" +
@@ -2942,6 +3002,78 @@
 
   function dafyomiLocale() {
     return locale === "he" ? "he-IL" : locale;
+  }
+
+  // Months already fetched, kept on the device: the cycle is fixed, so a kept month is never stale.
+  function readDafyomiCache() {
+    try {
+      var stored = JSON.parse(localStorage.getItem(DAFYOMI_CACHE_KEY));
+      return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+    } catch (err) {
+      return {}; // private browsing, or a value that is not JSON: nothing is kept
+    }
+  }
+
+  function keepDafyomiMonth(month, data) {
+    var cache = readDafyomiCache();
+    cache[month] = data;
+    Object.keys(cache).sort().slice(0, -DAFYOMI_CACHE_MONTHS).forEach(function (old) { delete cache[old]; });
+    try {
+      localStorage.setItem(DAFYOMI_CACHE_KEY, JSON.stringify(cache));
+    } catch (err) {
+      /* the month shows now but is fetched again next time */
+    }
+  }
+
+  function dafyomiMonthKey(year, monthFromZero) {
+    return year + "-" + String(monthFromZero + 1).padStart(2, "0");
+  }
+
+  function fetchDafyomiMonth(month) {
+    return apiFetch("/api/dafyomi?month=" + month)
+      .then(function (response) {
+        if (!response.ok) throw new Error("dafyomi " + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        keepDafyomiMonth(month, data);
+        return data;
+      });
+  }
+
+  // The months around the one shown, so a later launch finds them without waiting on the server.
+  function prefetchDafyomiMonths() {
+    var kept = readDafyomiCache();
+    DAFYOMI_PREFETCH.forEach(function (offset) {
+      var moved = new Date(dafyomiMonth.year, dafyomiMonth.month + offset, 1);
+      var key = dafyomiMonthKey(moved.getFullYear(), moved.getMonth());
+      if (!kept[key]) fetchDafyomiMonth(key).catch(function () { /* the next launch tries again */ });
+    });
+  }
+
+  // A date on the Hebrew calendar, from the browser's own calendar data: no server, works offline.
+  function hebrewDateParts(date) {
+    var tag = locale + "-u-ca-hebrew";
+    var parts = {};
+    new Intl.DateTimeFormat(tag, { day: "numeric", month: "long", year: "numeric" })
+      .formatToParts(date).forEach(function (part) { parts[part.type] = part.value; });
+    return { day: Number(parts.day), month: parts.month, year: Number(parts.relatedYear || parts.year) };
+  }
+
+  function hebrewDayLabel(day) {
+    return locale === "he" ? hebrewNumeral(day) : String(day);
+  }
+
+  function hebrewYearLabel(year) {
+    return locale === "he" ? hebrewNumeral(year % 1000) : String(year);
+  }
+
+  // "כסלו – טבת תשפ״ז": the Hebrew months a Gregorian month spans.
+  function hebrewMonthSpan(year, monthFromZero) {
+    var first = hebrewDateParts(new Date(year, monthFromZero, 1));
+    var last = hebrewDateParts(new Date(year, monthFromZero + 1, 0));
+    var months = first.month === last.month ? first.month : first.month + " – " + last.month;
+    return months + " " + hebrewYearLabel(last.year);
   }
 
   function dafyomiDayCell(day, done, today) {
@@ -2953,6 +3085,10 @@
     var isDone = opens && done[day.tractate.he + "|" + day.daf + "a"] && done[day.tractate.he + "|" + day.daf + "b"];
     if (isDone) cell.classList.add("done");
     var number = el("span", "dafyomi-num", String(Number(day.date.slice(8))));
+    var hebrew = hebrewDateParts(new Date(day.date + "T00:00:00"));
+    // The first of a Hebrew month names it; other days show the day alone.
+    number.appendChild(el("span", "dafyomi-hebrew",
+      " · " + hebrewDayLabel(hebrew.day) + (hebrew.day === 1 ? " " + hebrew.month : "")));
     if (isDone) number.appendChild(el("span", "dafyomi-done", " ✓"));
     cell.appendChild(number);
     var name = locale === "he" ? day.tractate.he : day.tractate.en;
@@ -2968,7 +3104,8 @@
   function renderDafyomi() {
     if (!dafyomiData) return;
     var first = new Date(dafyomiMonth.year, dafyomiMonth.month, 1);
-    dafyomiTitleEl.textContent = first.toLocaleDateString(dafyomiLocale(), { month: "long", year: "numeric" });
+    dafyomiTitleEl.textContent = first.toLocaleDateString(dafyomiLocale(), { month: "long", year: "numeric" }) +
+      " · " + hebrewMonthSpan(dafyomiMonth.year, dafyomiMonth.month);
     dafyomiGridEl.textContent = "";
     for (var weekday = 0; weekday < 7; weekday++) {
       // 2023-01-01 was a Sunday; the grid runs Sunday to Saturday.
@@ -2985,24 +3122,30 @@
 
   function showDafyomi() {
     var request = ++dafyomiRequest;
-    dafyomiData = null;
+    var month = dafyomiMonthKey(dafyomiMonth.year, dafyomiMonth.month);
+    var kept = readDafyomiCache()[month] || null;
+    dafyomiData = kept;
     dafyomiGridEl.textContent = "";
-    var month = dafyomiMonth.year + "-" + String(dafyomiMonth.month + 1).padStart(2, "0");
-    apiFetch("/api/dafyomi?month=" + month)
-      .then(function (response) {
-        if (!response.ok) throw new Error("dafyomi " + response.status);
-        return response.json();
-      })
+    if (kept) renderDafyomi();
+    // A month kept on the device is shown at once; the server is asked only for one that is not.
+    if (kept) {
+      prefetchDafyomiMonths();
+      return;
+    }
+    var disarm = armWaking(); // says the server is waking if the month takes more than a moment
+    fetchDafyomiMonth(month)
       .then(function (data) {
         if (request !== dafyomiRequest) return;
         dafyomiData = data;
         renderDafyomi();
+        prefetchDafyomiMonths();
       })
       .catch(function () {
         if (request !== dafyomiRequest) return;
         dafyomiTitleEl.textContent = "";
         dafyomiGridEl.appendChild(notice(t(locale, "error.title"), t(locale, "dafyomi.error"), "error"));
-      });
+      })
+      .then(disarm);
   }
 
   function openDafyomi(pushHash) {
