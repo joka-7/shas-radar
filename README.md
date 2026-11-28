@@ -126,7 +126,9 @@ default), Steinsaltz and Tosafot, each when enabled. While the server is waking,
 pickers read "Loading…" and the page shows a placeholder instead of empty boxes. The page is in the URL hash (`#/daf/<tractate>/<daf>/<a|b>`),
 so it can be linked to and the back button steps between pages. The last page
 read is kept in `localStorage`, and the Read tab reopens it. Opening the site with no link or search lands there too:
-on the last page read, or Berakhot 2a for a first visit. Each Bavli search
+on the last page read, or Berakhot 2a for a first visit. The copy of the page kept on the
+device is drawn at once, also when the address already names it, so a sleeping server does
+not leave a blank page; the live page replaces it when the server answers. Each Bavli search
 result has an "Open in reader" link to its page. The text comes from
 `GET /api/daf`; the other books are not numbered by daf, so they have no reader
 yet.

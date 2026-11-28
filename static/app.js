@@ -1801,7 +1801,7 @@
   }
 
   // Show a kept page from the device, whether or not there is a connection.
-  function openSaved(item, replace) {
+  function openSaved(item, keepAddress) {
     var data = item.data;
     readerOfflineList = item.commentaryList || [];
     Object.keys(item.commentaries || {}).forEach(function (id) {
@@ -1815,7 +1815,7 @@
     renderReaderPage(data);
     syncSaveButton();
     readerPageEl.setAttribute("aria-busy", "false");
-    history[replace ? "replaceState" : "pushState"](null, "", readerHash(readerPosition));
+    if (!keepAddress) history.pushState(null, "", readerHash(readerPosition));
     readerSavedEl.open = false;
     readerEl.scrollIntoView({ block: "start" });
   }
@@ -2649,8 +2649,13 @@
     syncReaderNav(data);
   }
 
+  // The page drawn from the device at start (openLastRead), kept on screen until its live version arrives.
+  var deviceCopyKey = null;
+
   function showReaderPage(position, pushHash) {
     var request = ++readerRequest;
+    var keepCopy = deviceCopyKey === position.tractate + "|" + position.daf + position.amud;
+    deviceCopyKey = null;
     readerShowingSaved = false;
     readerPosition = position;
     readerData = null;
@@ -2662,7 +2667,7 @@
       history.pushState(null, "", readerHash(position));
     }
 
-    showReaderSkeleton();
+    if (!keepCopy) showReaderSkeleton();
     var disarm = armWaking();
 
     var params = new URLSearchParams({
@@ -2694,7 +2699,7 @@
         readerEl.scrollIntoView({ block: "start" });
       })
       .catch(function (error) {
-        if (request !== readerRequest) return;
+        if (request !== readerRequest || keepCopy) return; // the device copy stays if the server cannot answer
         readerPageEl.textContent = "";
         readerPageEl.appendChild(notice(t(locale, "error.title"), error.userMessage || t(locale, "reader.error"), "error"));
       })
@@ -2773,15 +2778,16 @@
         syncReaderTools();
         readerEl.classList.remove("reader-loading");
         [readerTractateSelect, readerDafSelect].forEach(function (select) { select.textContent = ""; });
+        if (readerShowingSaved) return; // the device copy stays if the server cannot answer
         readerPageEl.textContent = "";
         readerPageEl.appendChild(notice(t(locale, "error.title"), t(locale, "reader.error"), "error"));
       });
   }
 
-  // Open where the visitor left off. The copy of that page kept on the device is drawn at once, so
-  // the first screen does not wait on a server that may be waking; the pickers fill in after.
-  function openLastRead() {
-    var position = loadReaderPosition();
+  // Open `wanted` (a page linked to), or where the visitor left off. The copy of that page kept on the
+  // device is drawn at once, so the first screen does not wait on a server that may be waking.
+  function openLastRead(wanted) {
+    var position = wanted || loadReaderPosition();
     var key = position && position.tractate + "|" + position.daf + position.amud;
     savedAll()
       .then(function (items) { return items.find(function (item) { return item.id === key; }); })
@@ -2790,8 +2796,9 @@
         if (kept) {
           showView("read");
           openSaved(kept, true);
+          deviceCopyKey = key;
         }
-        openReader(null, false, true);
+        openReader(wanted || null, false, true);
       });
   }
 
@@ -3182,7 +3189,7 @@
 
   var initialPosition = readerPositionFromHash();
   var initial = fromHash();
-  if (initialPosition) openReader(initialPosition, false);
+  if (initialPosition) openLastRead(initialPosition);
   else if (location.hash === "#/dafyomi") openDafyomi(false);
   else if (initial) runSearch(initial, false);
   // No link and no search: open where the visitor left off, or at the first page of the Bavli.
