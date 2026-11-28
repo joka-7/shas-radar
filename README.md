@@ -161,6 +161,15 @@ Three views, chosen with the buttons above the page (the choice is remembered):
   into the explanation. Steinsaltz is not shown in this view (it is a modern
   explanation, not part of the printed page).
 
+### The Daf Yomi calendar
+
+The **דף יומי** tab shows a month of the worldwide cycle, one daf a day, with each day's Hebrew
+date (`app/dafyomi.py`, `GET /api/dafyomi`; the cycle's fixed start date, checked against
+`@hebcal/learning` over a whole cycle). A day shows done once both sides of its daf are marked
+with the reader's done button; Shekalim, Kinnim and Middot are in the cycle but are not Bavli
+pages here. The month shown and the ones around it are kept on the device, so the tab opens at
+once even while the server sleeps.
+
 ### Saving, recent pages, saved searches and download
 
 The Read tab's card has three icon buttons in its header, beside the page's title
