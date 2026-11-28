@@ -1740,7 +1740,68 @@
     readerDoneBtn.setAttribute("aria-pressed", done ? "true" : "false");
     readerDoneBtn.setAttribute("aria-label", t(locale, "reader.done"));
     readerDoneBtn.title = t(locale, done ? "reader.doneMarked" : "reader.done");
+    readerKavanuBtn.hidden = !readKavanuContext() || !readerData;
+    readerKavanuBtn.title = t(locale, "reader.kavanuDone");
   }
+
+  // What "done" means for a page sent back to Az Kavanu: both sides of its daf.
+  function markPageDone(data) {
+    var done = readDone();
+    var when = new Date().toISOString();
+    ["a", "b"].forEach(function (side) {
+      var key = data.tractate.he + "|" + data.daf + side;
+      if (!done[key]) done[key] = when;
+    });
+    try {
+      localStorage.setItem(DONE_STORAGE_KEY, JSON.stringify(done));
+    } catch (err) {
+      /* the mark is not kept here; Az Kavanu still gets it */
+    }
+  }
+
+  // --- Az Kavanu: "done" sent back ------------------------------------------------
+  // Az Kavanu opens a page with ?kavanu=<track>&day=<date>. That is kept for this tab only, and
+  // while it is there the reader offers a button that marks the page done and returns to it.
+  var KAVANU_CONTEXT_KEY = "kavanu-return";
+  var readerKavanuBtn = document.getElementById("reader-kavanu");
+
+  (function keepKavanuContext() {
+    var query = new URLSearchParams(location.search);
+    if (!query.has("kavanu")) return;
+    var track = query.get("kavanu");
+    var day = query.get("day");
+    if (/^[\w:.-]{1,100}$/.test(track) && /^\d{4}-\d{2}-\d{2}$/.test(day || "")) {
+      try {
+        sessionStorage.setItem(KAVANU_CONTEXT_KEY, JSON.stringify({ track: track, day: day }));
+      } catch (err) {
+        /* no return button, nothing else is lost */
+      }
+    }
+    history.replaceState(null, "", location.pathname + location.hash);
+  })();
+
+  function readKavanuContext() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(KAVANU_CONTEXT_KEY));
+      return stored && typeof stored.track === "string" && typeof stored.day === "string" ? stored : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function returnToKavanu() {
+    var context = readKavanuContext();
+    if (!context || !readerData) return;
+    markPageDone(readerData);
+    try {
+      sessionStorage.removeItem(KAVANU_CONTEXT_KEY);
+    } catch (err) {
+      /* the button stays until the tab is closed */
+    }
+    location.href = window.KAVANU_BASE + "/#done=" + encodeURIComponent(context.track) + "&day=" + context.day;
+  }
+
+  readerKavanuBtn.addEventListener("click", returnToKavanu);
 
   function toggleDone() {
     if (!readerData) return;

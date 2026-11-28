@@ -161,6 +161,14 @@ Three views, chosen with the buttons above the page (the choice is remembered):
   into the explanation. Steinsaltz is not shown in this view (it is a modern
   explanation, not part of the printed page).
 
+### Coming from Az Kavanu
+
+Az Kavanu's link to a day's daf carries `?kavanu=<track>&day=<date>`. The page keeps that for the
+tab only (`sessionStorage`) and drops it from the address; while it is kept the reader shows a
+"Done · back to Az Kavanu" button. It marks both sides of the daf done, then opens
+`window.KAVANU_BASE` (`static/config.js`, a fixed address, never one taken from a link) with
+`#done=<track>&day=<date>`. A link whose track or day is not well formed is ignored.
+
 ### The Daf Yomi calendar
 
 The **דף יומי** tab shows a month of the worldwide cycle, one daf a day, with each day's Hebrew
